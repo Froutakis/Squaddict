@@ -1,0 +1,2 @@
+# Parea
+App for friendgroups
