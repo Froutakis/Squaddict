@@ -1,7 +1,8 @@
 {
   "type": "module",
   "scripts": {
-    "start": "node --env-file=.env main.ts"
+    "start": "node --env-file=.env main.ts",
+    "test-connection": "node --env-file=.env test-connection.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8"
