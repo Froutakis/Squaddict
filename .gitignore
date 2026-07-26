@@ -1,6 +1,5 @@
 debug.ts
-data.env
-package-lock.json
-package.json
-tsconfig.json
-node_modules
+.env
+
+test-connection.ts
+insert-group.ts

@@ -1,0 +1,12 @@
+{
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env main.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1"
+  }
+}
