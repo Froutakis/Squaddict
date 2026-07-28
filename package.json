@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test-logic": "tsx --env-file=.env debug/test-logic.ts"
+    "test-logic": "tsx --env-file=.env debug/test-logic.ts",
+    "test-chat": "tsx --env-file=.env debug/test-chat.ts",
+    "test-sessions": "tsx --env-file=.env debug/test-sessions.ts",
+    "test-realtime": "tsx --env-file=.env debug/test-realtime.ts",
+    "listen": "tsx --env-file=.env debug/listen.ts",
+    "send": "tsx --env-file=.env debug/send.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8"

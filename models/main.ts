@@ -7,7 +7,6 @@ export class User {
     constructor(id: string, name: string, isOnline: boolean){
         this.id = id;
         this.name = name;
-
         this.isOnline = isOnline;
     }
 }
