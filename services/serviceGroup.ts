@@ -2,6 +2,12 @@ import { supabase } from "./supabaseClient";
 import { Group } from "../models/main";
 
 export async function createGroup(name: string): Promise<Group> {
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  if (!userData.user) {
+    throw new Error("Πρέπει να συνδεθείς για να δημιουργήσεις παρέα.");
+  }
+
   const { data: existing, error: existingError } = await supabase
     .from("groups")
     .select("id")
@@ -16,6 +22,8 @@ export async function createGroup(name: string): Promise<Group> {
     .select()
     .single();
   if (error) throw error;
+
+  await addMember(data.id, userData.user.id);
 
   return new Group(data.id, data.name);
 }

@@ -3,7 +3,12 @@ import { supabase } from "./supabaseClient";
 export async function register(email: string, password: string, displayName: string) {
   const { data, error } = await supabase.auth.signUp({ email, password });
   if (error) throw error;
-  const userId = data.user!.id;
+
+  if (!data.user) {
+    throw new Error("Ο χρήστης δεν δημιουργήθηκε.");
+  }
+
+  const userId = data.user.id;
   const { error: profileError } = await supabase
     .from("profiles")
     .insert({ id: userId, display_name: displayName, email: email});
@@ -19,7 +24,9 @@ export async function login(email: string, password: string) {
 }
 
 export async function getCurrentUser() {
-  const { data } = await supabase.auth.getUser();
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw error;
+
   return data.user;
 }
 
