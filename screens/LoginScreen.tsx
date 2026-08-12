@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Button from '../components/Button';
+import AuthField from '../components/AuthField';
 import { login } from '../services/serviceAuth';
 import { colors, font, radius, space } from '../theme';
 
@@ -20,57 +21,7 @@ type AuthFieldProps = {
   onSubmit?: () => void;
 };
 
-// Κοινό πεδίο φόρμας για να χρησιμοποιείται σε login, register και άλλες auth οθόνες.
-function AuthField({
-  label,
-  icon,
-  value,
-  onChangeText,
-  placeholder,
-  loading,
-  password = false,
-  showPassword = false,
-  onTogglePassword,
-  onSubmit,
-}: AuthFieldProps) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.inputBox}>
-        <Ionicons name={icon} size={20} color={colors.textSoft} />
-        <TextInput
-          accessibilityLabel={label}
-          style={styles.input}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={colors.textFaint}
-          keyboardType={password ? 'default' : 'email-address'}
-          secureTextEntry={password && !showPassword}
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete={password ? 'password' : 'email'}
-          editable={!loading}
-          returnKeyType={password ? 'go' : 'next'}
-          onSubmitEditing={onSubmit}
-          selectionColor={colors.primary}
-        />
-        {password && onTogglePassword ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-            hitSlop={10}
-            onPress={onTogglePassword}
-          >
-            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.textSoft} />
-          </Pressable>
-        ) : null}
-      </View>
-    </View>
-  );
-}
 
-// Μετατρέπει τα τεχνικά μηνύματα του Supabase σε φιλικά μηνύματα για τον χρήστη.
 function authErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : '';
   if (message.includes('invalid login credentials')) return 'The email or password is incorrect.';
