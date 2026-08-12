@@ -1,62 +1,47 @@
-import { useState, useEffect } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold, Poppins_800ExtraBold, useFonts } from '@expo-google-fonts/poppins';
+import type { User } from '@supabase/supabase-js';
+import LoginScreen from './screens/LoginScreen';
 import { supabase } from './services/supabaseClient';
+import { colors, font } from './theme';
 
 export default function App() {
-  // null = δεν υπάρχει συνδεδεμένος χρήστης
-  const [user, setUser] = useState<any>(null);
-
-  // true όσο ρωτάμε τη Supabase αν υπάρχει αποθηκευμένο session
-  const [checking, setChecking] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [fontsLoaded] = useFonts({ Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold, Poppins_800ExtraBold });
 
   useEffect(() => {
-    // Υπάρχει ήδη session από προηγούμενη φορά;
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null);
-      setChecking(false);
+      setCheckingSession(false);
     });
 
-    // Μόνιμη συνδρομή: κάθε login / logout / ανανέωση token μας ειδοποιεί.
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
 
-    return () => sub.subscription.unsubscribe();
+    return () => data.subscription.unsubscribe();
   }, []);
 
-  if (checking) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-        <StatusBar style="dark" />
-      </View>
-    );
+  if (checkingSession || !fontsLoaded) {
+    return <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /><StatusBar style="dark" /></View>;
   }
+
+  if (!user) return <LoginScreen />;
 
   return (
     <View style={styles.center}>
       <Text style={styles.title}>Squaddict</Text>
-
-      {user ? (
-        <Text style={styles.sub}>Συνδεδεμένος ως {user.email}</Text>
-      ) : (
-        <Text style={styles.sub}>Κανένας συνδεδεμένος χρήστης</Text>
-      )}
-
+      <Text style={styles.subtitle}>Συνδεδεμένος ως {user.email}</Text>
       <StatusBar style="dark" />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  title: { fontSize: 26, fontWeight: '700', color: '#111111' },
-  sub: { fontSize: 14, color: '#666666' },
+  center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  title: { color: colors.text, fontFamily: font.bold, fontSize: 26 },
+  subtitle: { color: colors.textSoft, fontFamily: font.medium, fontSize: 14 },
 });
