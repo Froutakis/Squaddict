@@ -7,10 +7,12 @@ import RegisterScreen from './screens/RegisterScreen';
 import { supabase } from './services/supabaseClient';
 import { colors, font } from './theme';
 import Button from './components/Button';
+import LoginScreen from './screens/LoginScreen';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
   const [fontsLoaded, fontError] = useFonts({
     Poppins_500Medium,
     Poppins_600SemiBold,
@@ -40,7 +42,13 @@ export default function App() {
     );
   }
 
-  if (!user) return <RegisterScreen />;
+  if (!user) 
+    return authScreen === 'login' ? (
+      <LoginScreen onSwitchToRegister={() => setAuthScreen('register')} />
+    ) : (
+      <RegisterScreen onSwitchToLogin={() => setAuthScreen('login')} />
+    );
+  
 
   return (
     <View style={styles.center}>

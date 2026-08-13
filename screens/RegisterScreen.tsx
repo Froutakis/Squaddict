@@ -12,7 +12,6 @@ type RegisterScreenProps = {
   onSwitchToLogin?: () => void;
 };
 
-// Μετατρέπει τα τεχνικά μηνύματα του Supabase σε φιλικά μηνύματα για τον χρήστη.
 function authErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : '';
   if (message.includes('already registered') || message.includes('already exists') || message.includes('already in use')) {
@@ -33,13 +32,11 @@ export default function RegisterScreen({ onSwitchToLogin }: RegisterScreenProps)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Καθαρίζει το προηγούμενο σφάλμα κάθε φορά που αλλάζει ένα πεδίο.
   function updateField(setValue: (value: string) => void, value: string) {
     setValue(value);
     setError('');
   }
 
-  // Ελέγχει τα στοιχεία, δημιουργεί λογαριασμό και αφήνει το auth listener του App να αλλάξει οθόνη.
   async function handleRegister() {
     const cleanName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
@@ -61,7 +58,6 @@ export default function RegisterScreen({ onSwitchToLogin }: RegisterScreenProps)
     setLoading(true);
     try {
       await register(cleanEmail, password, cleanName);
-      // Επιτυχία: το onAuthStateChange στο App.tsx κάνει auto-login και αλλάζει οθόνη.
     } catch (registerError) {
       setError(authErrorMessage(registerError));
     } finally {
