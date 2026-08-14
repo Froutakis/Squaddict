@@ -1,76 +1,17 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import AuthField from '../components/AuthField';
 import Button from '../components/Button';
 import { login } from '../services/serviceAuth';
 import { colors, font, radius, space } from '../theme';
 
-type AuthFieldProps = {
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  value: string;
-  onChangeText: (value: string) => void;
-  placeholder: string;
-  loading: boolean;
-  password?: boolean;
-  showPassword?: boolean;
-  onTogglePassword?: () => void;
-  onSubmit?: () => void;
+type LoginScreenProps = {
+  onSwitchToRegister?: () => void;
 };
 
-// Κοινό πεδίο φόρμας για να χρησιμοποιείται σε login, register και άλλες auth οθόνες.
-function AuthField({
-  label,
-  icon,
-  value,
-  onChangeText,
-  placeholder,
-  loading,
-  password = false,
-  showPassword = false,
-  onTogglePassword,
-  onSubmit,
-}: AuthFieldProps) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.inputBox}>
-        <Ionicons name={icon} size={20} color={colors.textSoft} />
-        <TextInput
-          accessibilityLabel={label}
-          style={styles.input}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={colors.textFaint}
-          keyboardType={password ? 'default' : 'email-address'}
-          secureTextEntry={password && !showPassword}
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete={password ? 'password' : 'email'}
-          editable={!loading}
-          returnKeyType={password ? 'go' : 'next'}
-          onSubmitEditing={onSubmit}
-          selectionColor={colors.primary}
-        />
-        {password && onTogglePassword ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-            hitSlop={10}
-            onPress={onTogglePassword}
-          >
-            <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.textSoft} />
-          </Pressable>
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
-// Μετατρέπει τα τεχνικά μηνύματα του Supabase σε φιλικά μηνύματα για τον χρήστη.
 function authErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : '';
   if (message.includes('invalid login credentials')) return 'The email or password is incorrect.';
@@ -79,20 +20,18 @@ function authErrorMessage(error: unknown) {
   return 'Something went wrong. Please try again.';
 }
 
-export default function LoginScreen() {
+export default function LoginScreen({ onSwitchToRegister }: LoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Καθαρίζει το προηγούμενο σφάλμα κάθε φορά που αλλάζει ένα πεδίο.
   function updateField(setValue: (value: string) => void, value: string) {
     setValue(value);
     setError('');
   }
 
-  // Ελέγχει τα στοιχεία και αφήνει το auth listener του App να αλλάξει οθόνη.
   async function handleLogin() {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !password) {
@@ -145,10 +84,23 @@ export default function LoginScreen() {
               onSubmit={handleLogin}
             />
 
-            {error ? <View accessibilityRole="alert" style={styles.error}><Ionicons name="alert-circle-outline" size={18} color={colors.danger} /><Text style={styles.errorText}>{error}</Text></View> : null}
+            {error ? (
+              <View accessibilityRole="alert" style={styles.error}>
+                <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
 
             <Button title="Sign in" onPress={handleLogin} loading={loading} />
-            <Text style={styles.hint}>Don't have an account? Sign up will be added in the next step.</Text>
+
+            {onSwitchToRegister ? (
+              <View style={styles.footer}>
+                <Text style={styles.footerText}>Don't have an account? </Text>
+                <Pressable accessibilityRole="button" hitSlop={8} onPress={onSwitchToRegister} disabled={loading}>
+                  <Text style={styles.footerLink}>Sign up</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -157,18 +109,18 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 }, screen: { flex: 1, backgroundColor: colors.bg },
+  flex: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.bg },
   glow: { position: 'absolute', top: 0, left: 0, right: 0, height: 320 },
   content: { flexGrow: 1, justifyContent: 'center', width: '100%', maxWidth: 500, alignSelf: 'center', paddingHorizontal: space.lg, paddingVertical: space.xl },
   header: { alignItems: 'center', marginBottom: 36 },
   title: { color: colors.text, fontFamily: font.display, fontSize: 42, letterSpacing: -1.5 },
   accent: { color: colors.accent, fontFamily: font.display },
   subtitle: { marginTop: space.xs, color: colors.textSoft, fontFamily: font.medium, fontSize: 16, lineHeight: 24, textAlign: 'center' },
-  form: { gap: 20 }, field: { gap: 8 },
-  label: { color: colors.textStrong, fontFamily: font.semi, fontSize: 15 },
-  inputBox: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: space.md, borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surface },
-  input: { flex: 1, minHeight: 54, color: colors.text, fontSize: 16 },
+  form: { gap: 20 },
   error: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: radius.sm, backgroundColor: '#FFF0EE' },
   errorText: { flex: 1, color: colors.danger, fontFamily: font.medium, fontSize: 14 },
-  hint: { color: colors.textSoft, fontFamily: font.medium, fontSize: 14, lineHeight: 21, textAlign: 'center' },
+  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  footerText: { color: colors.textSoft, fontFamily: font.medium, fontSize: 14 },
+  footerLink: { color: colors.accent, fontFamily: font.semi, fontSize: 14 },
 });
