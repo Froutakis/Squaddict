@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors, font, radius, space } from '../theme';
+import { useState } from 'react';
 
 type AuthFieldProps = {
   label: string;
@@ -10,9 +11,11 @@ type AuthFieldProps = {
   placeholder: string;
   loading: boolean;
   password?: boolean;
+  email?: boolean;
   showPassword?: boolean;
   onTogglePassword?: () => void;
   onSubmit?: () => void;
+  error?: string;
 };
 
 export default function AuthField({
@@ -23,15 +26,20 @@ export default function AuthField({
   placeholder,
   loading,
   password = false,
+  email = false,
   showPassword = false,
   onTogglePassword,
   onSubmit,
+  error,
 }: AuthFieldProps) {
+   
+  const [focused, setFocused] = useState(false);
+
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
-      <View style={styles.inputBox}>
-        <Ionicons name={icon} size={20} color={colors.textSoft} />
+      <View style={[styles.inputBox, focused && styles.focused, !!error && styles.errorBox]}>
+        <Ionicons name={icon} size={20} color={error ? colors.danger : focused ? colors.primary : colors.textSoft} />
         <TextInput
           accessibilityLabel={label}
           style={styles.input}
@@ -39,16 +47,20 @@ export default function AuthField({
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor={colors.textFaint}
-          keyboardType={password ? 'default' : 'email-address'}
+          keyboardType={email ? 'email-address' : 'default'}
           secureTextEntry={password && !showPassword}
           autoCapitalize="none"
           autoCorrect={false}
-          autoComplete={password ? 'password' : 'email'}
+          autoComplete={password ? 'password' : email ? 'email' : 'name'}
+          textContentType={password ? 'password' : email ? 'emailAddress' : 'name'}
           editable={!loading}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           returnKeyType={password ? 'go' : 'next'}
           onSubmitEditing={onSubmit}
           selectionColor={colors.primary}
         />
+        
         {password && onTogglePassword ? (
           <Pressable
             accessibilityRole="button"
@@ -60,6 +72,7 @@ export default function AuthField({
           </Pressable>
         ) : null}
       </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
 }
@@ -68,5 +81,8 @@ const styles = StyleSheet.create({
   field: { gap: 8 },
   label: { color: colors.textStrong, fontFamily: font.semi, fontSize: 15 },
   inputBox: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: space.md, borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surface },
-  input: { flex: 1, minHeight: 54, color: colors.text, fontSize: 16 },
+  input: { flex: 1, minHeight: 54, color: colors.text, fontFamily: font.medium, fontSize: 16 },
+  focused: { borderColor: colors.primary, shadowColor: colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 2 },
+  errorBox: { borderColor: colors.danger },
+  error: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
 });
