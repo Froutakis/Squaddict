@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold, Poppins_800ExtraBold, useFonts } from '@expo-google-fonts/poppins';
 import type { User } from '@supabase/supabase-js';
 import RegisterScreen from './screens/RegisterScreen';
 import { supabase } from './services/supabaseClient';
-import { colors, font } from './theme';
-import Button from './components/Button';
+import { colors } from './theme';
 import LoginScreen from './screens/LoginScreen';
+import HomeScreen from './screens/HomeScreen';
+
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -50,23 +51,9 @@ export default function App() {
     );
   
 
-  return (
-    <View style={styles.center}>
-      <Text style={styles.title}>Squaddict</Text>
-      <Text style={styles.subtitle}>Συνδεδεμένος ως {user.email}</Text>
-
-      <View style={styles.action}>
-        <Button title="Αποσύνδεση" onPress={() => supabase.auth.signOut()} />
-      </View>
-
-      <StatusBar style="dark" />
-    </View>
-  );
+  return <HomeScreen user={user} />;
 }
 
 const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  title: { color: colors.text, fontFamily: font.bold, fontSize: 26 },
-  subtitle: { color: colors.textSoft, fontFamily: font.medium, fontSize: 14 },
-  action: { marginTop: 20, alignSelf: 'stretch', paddingHorizontal: 40 },
 });
