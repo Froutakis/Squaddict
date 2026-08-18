@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, font, layout, space } from '../theme';
+import { colors, font, layout, space } from '../../theme';
 
 export type NavTab = 'home' | 'chat';
 

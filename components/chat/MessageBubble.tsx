@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, View } from 'react-native';
 import { brand, colors, font, gradientFor, radius, space } from '../../theme';
-import GradientAvatar, { initialsFor } from '../GradientAvatar';
+import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 
 const AVATAR = 28;
 /** Οι "εσωτερικές" γωνίες μέσα σε μια σερί μηνυμάτων. */

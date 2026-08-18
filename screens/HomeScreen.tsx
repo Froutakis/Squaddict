@@ -8,8 +8,8 @@ import { getMyEvents } from '../services/serviceEvents'
 import { logout } from '../services/serviceAuth';
 import { ActivityIndicator, Pressable, SafeAreaView, View, ScrollView, StyleSheet, Text } from 'react-native';
 import { colors, font, layout, radius, space } from '../theme';
-import HomeHeader from '../components/HomeHeader';
-import GroupBar from '../components/GroupBar';
+import HomeHeader from '../components/home/HomeHeader';
+import GroupBar from '../components/general/GroupBar';
 import CalendarCard from '../components/events/CalendarCard';
 import EventCard from '../components/events/EventCard';
 import UpNext from '../components/events/UpNext';

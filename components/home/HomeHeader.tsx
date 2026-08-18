@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, font, radius, shadow, space } from "../theme";
-import GradientAvatar, { initialsFor } from "./GradientAvatar";
+import { colors, font, radius, shadow, space } from "../../theme";
+import GradientAvatar, { initialsFor } from "../general/GradientAvatar";
 
 type HomeHeaderProps = {
     displayName: string;

@@ -9,7 +9,7 @@ import { colors } from './theme';
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
 import GroupChatScreen from './screens/GroupChatScreen';
-import BottomNav, { type NavTab } from './components/BottomNav';
+import BottomNav, { type NavTab } from './components/general/BottomNav';
 
 
 export default function App() {
