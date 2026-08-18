@@ -93,8 +93,8 @@ export default function CalendarCard({ events, selectedDate, onSelectDate, onAdd
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: space.md, margin: 15, ...shadow.card },
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.sm ,marginLeft:space.xl,    marginRight: space.xl},
+  card: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: space.md, ...shadow.card },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.sm},
   headText: { flex: 1},
   month: { color: colors.text, fontFamily: font.bold, fontSize: 18 },
   subtitle: { color: colors.textSoft, fontFamily: font.medium, fontSize: 13, marginTop: 2 },
