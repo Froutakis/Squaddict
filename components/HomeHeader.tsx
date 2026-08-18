@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, font, gradientFor, radius, shadow, space } from "../theme";
 import GradientAvatar from "./GradientAvatar";
-import Button from "./Button";
+import Button from "./general/Button";
 
 type HomeHeaderProps = {
     displayName: string;

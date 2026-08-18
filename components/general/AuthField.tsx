@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, font, radius, space } from '../theme';
+import { colors, font, radius, space } from '../../theme';
 import { useState } from 'react';
 
 type AuthFieldProps = {
