@@ -17,7 +17,6 @@ export default function App() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
   const [screen, setScreen] = useState<NavTab>('home');
-  const [chatGroupId, setChatGroupId] = useState<string | null>(null);
   const [fontsLoaded, fontError] = useFonts({
     Poppins_500Medium,
     Poppins_600SemiBold,
@@ -58,17 +57,7 @@ export default function App() {
   return (
     <View style={styles.app}>
       <View style={styles.body}>
-        {screen === 'chat' ? (
-          <GroupChatScreen user={user} initialGroupId={chatGroupId} />
-        ) : (
-          <HomeScreen
-            user={user}
-            onOpenChat={(groupId) => {
-              setChatGroupId(groupId);
-              setScreen('chat');
-            }}
-          />
-        )}
+        {screen === 'chat' ? <GroupChatScreen user={user} /> : <HomeScreen user={user} />}
       </View>
 
       <BottomNav active={screen} onNavigate={setScreen} />
