@@ -65,6 +65,10 @@ export const shadow = {
 export const radius = { sm: 10, md: 14, lg: 18, xl: 26, pill: 999 };
 export const space = { xs: 6, sm: 10, md: 16, lg: 24, xl: 32 };
 
+// Μέγιστο πλάτος περιεχομένου. Στο κινητό δεν δεσμεύει· στο web κρατά το chat
+// σε στήλη αντί να απλώνεται σε όλη την οθόνη.
+export const layout = { column: 720 };
+
 export const font = {
   display: 'Poppins_800ExtraBold',
   bold: 'Poppins_700Bold',
