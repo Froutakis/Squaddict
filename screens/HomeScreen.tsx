@@ -7,9 +7,9 @@ import { getGroupsForUser } from '../services/serviceGroup';
 import { getMyEvents } from '../services/serviceEvents'
 import { logout } from '../services/serviceAuth';
 import { ActivityIndicator, Pressable, SafeAreaView, View, ScrollView, StyleSheet, Text } from 'react-native';
-import { colors, font, radius, space } from '../theme';
-import HomeHeader from '../components/HomeHeader';
-import GroupBar from '../components/GroupBar';
+import { colors, font, layout, radius, space } from '../theme';
+import HomeHeader from '../components/home/HomeHeader';
+import GroupBar from '../components/general/GroupBar';
 import CalendarCard from '../components/events/CalendarCard';
 import EventCard from '../components/events/EventCard';
 import UpNext from '../components/events/UpNext';
@@ -111,7 +111,7 @@ export default function HomeScreen({ user }: HomeScreenProps){
 const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   screen: { flex: 1, backgroundColor: colors.bg },
-  content: { paddingVertical: space.lg, gap: space.sm },
+  content: { width: '100%', maxWidth: layout.column, alignSelf: 'center', paddingVertical: space.lg, gap: space.sm },
   body: { paddingHorizontal: space.lg, gap: space.sm },
   greeting: { color: colors.text, fontFamily: font.display, fontSize: 24 },
   subtitle: { color: colors.textSoft, fontFamily: font.medium, fontSize: 14 },
