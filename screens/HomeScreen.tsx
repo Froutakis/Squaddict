@@ -6,9 +6,24 @@ import { getUserById } from '../services/serviceUser';
 import { getGroupsForUser } from '../services/serviceGroup';
 import { getMyEvents } from '../services/serviceEvents'
 import { logout } from '../services/serviceAuth';
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, Pressable, SafeAreaView, View, ScrollView, StyleSheet, Text } from 'react-native';
 import { colors, font, radius, space } from '../theme';
+import HomeHeader from '../components/HomeHeader';
+import GroupBar from '../components/GroupBar';
+import CalendarCard from '../components/events/CalendarCard';
+import EventCard from '../components/events/EventCard';
+import UpNext from '../components/events/UpNext';
 
+const dummyEvent: MyEvent = {
+  id: 'dummy-1',
+  groupId: 'g1',
+  title: 'Sunset at Zefyros',
+  date: '2026-08-19',
+  startTime: '20:30',
+  location: 'Zefyros Beach Bar',
+  createdBy: 'u1',
+  groupName: 'Paralia Crew',
+};
 
 type HomeScreenProps = {
     user: AuthUser;
@@ -20,6 +35,8 @@ export default function HomeScreen({ user }: HomeScreenProps){
     const [groups , setGroups] = useState<Group[]>([]);
     const [events, setEvents] = useState<MyEvent[]> ([]);
     const [loading, setLoading] = useState(true);
+    const [activeGroup, setActiveGroup] = useState<string | null>(null);
+    const [selectedDate, setSelectedDate] = useState<string | null>(null);
     
     useEffect(() => {
         async function load() {
@@ -35,6 +52,8 @@ export default function HomeScreen({ user }: HomeScreenProps){
 
         load();
     },[user.id]);
+
+
     if (loading){
         return (
         <SafeAreaView style={styles.center}>
@@ -45,32 +64,24 @@ export default function HomeScreen({ user }: HomeScreenProps){
     return (
         <SafeAreaView style={styles.screen}>
             <ScrollView contentContainerStyle={styles.content}>
-            <Text style={styles.greeting}>Hi{displayName ? `, ${displayName}` : ''}</Text>
-            <Text style={styles.subtitle}>{user.email}</Text>
+                <HomeHeader displayName={displayName} onProfile={() => logout()} />
+                <GroupBar groups={groups} activeId={activeGroup} onSelect={setActiveGroup} />
 
-            <Pressable accessibilityRole="button" onPress={() => logout()}>
-              <Text style={styles.logoutText}>Sign out</Text>
-            </Pressable>
+                <View style={styles.body}>
+                    <CalendarCard
+                        events={events}
+                        selectedDate={selectedDate}
+                        onSelectDate={setSelectedDate}
+                        onAddEvent={() => {}}
+                    />
+                </View>
+                <View style={styles.body}>
+                    <EventCard event={dummyEvent} /> 
+                </View>
+                <View style={styles.body}>
+                    <UpNext event={dummyEvent} /> 
+                </View>
 
-            <Text style={styles.sectionTitle}>Your squads</Text>
-            {groups.length === 0 ? (
-                <Text style={styles.emptyText}>You haven't joined any squad yet.</Text>
-            ) : (
-                groups.map((group) => (
-                <Text key={group.id} style={styles.itemText}>{group.name}</Text>
-                ))
-            )}
-
-            <Text style={styles.sectionTitle}>Upcoming events</Text>
-            {events.length === 0 ? (
-                <Text style={styles.emptyText}>No upcoming events.</Text>
-            ) : (
-                events.map((event) => (
-                <Text key={event.id} style={styles.itemText}>
-                    {event.date} — {event.title} ({event.groupName})
-                </Text>
-                ))
-            )}
             </ScrollView>
 
             
@@ -83,7 +94,8 @@ export default function HomeScreen({ user }: HomeScreenProps){
 const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   screen: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: space.lg, gap: space.sm },
+  content: { paddingVertical: space.lg, gap: space.sm },
+  body: { paddingHorizontal: space.lg, gap: space.sm },
   greeting: { color: colors.text, fontFamily: font.display, fontSize: 24 },
   subtitle: { color: colors.textSoft, fontFamily: font.medium, fontSize: 14 },
   logoutText: { color: colors.primary, fontFamily: font.semi, fontSize: 14, marginBottom: space.md },

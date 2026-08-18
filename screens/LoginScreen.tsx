@@ -3,8 +3,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import AuthField from '../components/AuthField';
-import Button from '../components/Button';
+import AuthField from '../components/general/AuthField';
+import Button from '../components/general/Button';
 import { login } from '../services/serviceAuth';
 import { colors, font, radius, space } from '../theme';
 
