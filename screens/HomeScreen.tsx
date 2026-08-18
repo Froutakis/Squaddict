@@ -13,6 +13,7 @@ import GroupBar from '../components/GroupBar';
 import CalendarCard from '../components/events/CalendarCard';
 import EventCard from '../components/events/EventCard';
 import UpNext from '../components/events/UpNext';
+import { keyOf } from '../lib/eventFormat';
 
 const dummyEvent: MyEvent = {
   id: 'dummy-1',
@@ -53,6 +54,11 @@ export default function HomeScreen({ user }: HomeScreenProps){
         load();
     },[user.id]);
 
+    const date = keyOf(new Date());
+    const upNextEvent = events.find((e) => e.date >= date);
+    const laterEvents = events.filter((e) => e.date >= date && e.id != upNextEvent?.id);
+
+
 
     if (loading){
         return (
@@ -75,12 +81,23 @@ export default function HomeScreen({ user }: HomeScreenProps){
                         onAddEvent={() => {}}
                     />
                 </View>
+                {laterEvents.length == 0 ? ( 
                 <View style={styles.body}>
-                    <EventCard event={dummyEvent} /> 
+                    <Text> There are no events </Text> 
                 </View>
+                ) : (
+                laterEvents.map((event) => (
                 <View style={styles.body}>
-                    <UpNext event={dummyEvent} /> 
+                    <EventCard event={event} />
                 </View>
+                ))
+                )}
+                
+                {upNextEvent ? (
+                <View style={styles.body}>
+                    <UpNext event={upNextEvent} /> 
+                </View>
+                ) : null }
 
             </ScrollView>
 
