@@ -1,5 +1,5 @@
 import { Pressable, Text, ActivityIndicator, StyleSheet } from 'react-native';
-import { colors, radius } from '../theme';
+import { colors, radius } from '../../theme';
 
 export default function Button({
   title,

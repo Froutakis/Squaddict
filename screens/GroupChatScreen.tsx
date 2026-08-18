@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import GradientAvatar, { initialsFor } from '../components/GradientAvatar';
 import ChatComposer from '../components/chatcomponents/ChatComposer';
-import GroupBar from '../components/chatcomponents/GroupBar';
+import GroupBar from '../components/GroupBar';
 import MessageBubble, { DateSeparator } from '../components/chatcomponents/MessageBubble';
 import { buildRows, type Row } from '../components/chatcomponents/messageRows';
 import { Group } from '../models/main';

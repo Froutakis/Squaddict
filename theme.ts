@@ -1,35 +1,47 @@
 // ── Squaddict design system ────────────────────────────────────────────
-// "Warm daylight" — ζεστό ανοιχτό θέμα, βασισμένο στην οθόνη σύνδεσης.
-// Παλέτα: κρεμ φόντο, βαθύ δαμασκηνί κείμενο, ροζέ κύρια ενέργεια, κοραλί τόνος.
+// "Twilight" — μοβ θέμα, από το design του Claude Design (Squaddict Home).
+// Παλέτα: παγωμένο λιλά φόντο, βαθύ δαμασκηνί κείμενο, μοβ κύρια ενέργεια,
+// κοραλί τόνος μόνο για badges και ειδοποιήσεις.
 
 export const colors = {
-  bg: '#FFF8F4',          // φόντο σελίδας (ζεστό κρεμ)
+  bg: '#FAF8FD',          // φόντο οθόνης (παγωμένο λιλά)
   surface: '#FFFFFF',     // κάρτες, πεδία, φύλλα
-  surfaceAlt: '#FDF3EE',  // ήπια εναλλακτική επιφάνεια
+  surfaceAlt: '#F3EEF9',  // ήπια εναλλακτική επιφάνεια (κυκλικά κουμπιά, bubbles)
 
-  border: '#E2D5D9',      // περιγράμματα
-  borderStrong: '#D6C4CA',
+  border: '#E1DAE9',      // περιγράμματα
+  borderStrong: '#D2C8DD',// έμφαση / διάστικτα περιγράμματα
 
   text: '#2D1F2B',        // κύριο κείμενο (βαθύ δαμασκηνί)
-  textStrong: '#3A2936',  // ετικέτες
+  textStrong: '#3A2936',  // ετικέτες, τίτλοι καρτών
   textSoft: '#7A6974',    // δευτερεύον κείμενο
-  textFaint: '#9B8F96',   // placeholders / hints
+  textFaint: '#9B8F96',   // placeholders, ανενεργά, μέρες εκτός μήνα
+  textOnBrand: '#FFFFFF', // κείμενο πάνω στο gradient
 
-  primary: '#A33D57',     // κύρια ενέργεια (ροζέ)
-  primaryDark: '#7A233C', // σκιά κουμπιού
-  accent: '#E76854',      // τόνος (κοραλί)
+  primary: '#7B4C93',     // κύρια ενέργεια (μοβ)
+  primaryDark: '#5C3570', // πατημένη κατάσταση / χρώμα σκιάς
+  accent: '#E76854',      // κοραλί — unread badges, κουκκίδα ειδοποίησης
 
   success: '#2E9E78',
   danger: '#C4453B',
 };
 
-// Το κύριο gradient της μάρκας (κοραλί → ροζέ).
-export const brand = ['#E76854', '#A33D57'] as const;
+// Απαλά φόντα για status pills — Going / Maybe / No.
+export const tint = {
+  success: '#E4F3EC',
+  danger: '#FBEBEA',
+  neutral: '#F3EEF9',
+};
+
+// Το κύριο gradient της μάρκας (λιλά → βαθύ μοβ).
+export const brand = ['#A96BC4', '#6E3F87'] as const;
+
+// Gradient για την "Up Next" hero κάρτα (μοβ).
+export const upNext = ['#9257C2', '#5C3488'] as const;
 
 // Παλέτα gradients για avatars — κάθε παρέα/χρήστης παίρνει το δικό της χρώμα.
 // Όλα αρκετά κορεσμένα ώστε το λευκό γράμμα από πάνω να διαβάζεται.
 export const avatarGradients: readonly (readonly [string, string])[] = [
-  ['#E76854', '#A33D57'],
+  ['#A96BC4', '#6E3F87'],
   ['#F0916A', '#E76854'],
   ['#7A9E7E', '#4E7A63'],
   ['#6D8FB8', '#48678F'],
@@ -44,21 +56,34 @@ export function gradientFor(name: string): readonly [string, string] {
   return avatarGradients[h % avatarGradients.length];
 }
 
-// Σκιά καρτών/κουμπιών — ενιαία σε όλο το app.
+// Συμπαγές χρώμα μιας παρέας — για τις κουκκίδες του ημερολογίου, όπου ένα
+// gradient σε 5px δεν διαβάζεται. Παίρνουμε το σκούρο άκρο του gradient.
+export function solidFor(name: string): string {
+  return gradientFor(name)[1];
+}
+
+// Σκιές — ενιαίες σε όλο το app, όλες σε μοβ βάση ώστε να δένουν με το φόντο.
 export const shadow = {
   card: {
-    shadowColor: '#7A233C',
+    shadowColor: '#5C3570',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.07,
     shadowRadius: 8,
     elevation: 2,
   },
   button: {
-    shadowColor: '#7A233C',
+    shadowColor: '#5C3570',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 4,
+  },
+  hero: {
+    shadowColor: '#5C3570',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    elevation: 6,
   },
 };
 
