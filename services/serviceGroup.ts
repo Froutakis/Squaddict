@@ -5,7 +5,7 @@ export async function createGroup(name: string): Promise<Group> {
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   if (!userData.user) {
-    throw new Error("Πρέπει να συνδεθείς για να δημιουργήσεις παρέα.");
+    throw new Error("Sign in to create a squad.");
   }
 
   const { data: existing, error: existingError } = await supabase
@@ -14,7 +14,7 @@ export async function createGroup(name: string): Promise<Group> {
     .ilike("name", name)
     .maybeSingle();
   if (existingError) throw existingError;
-  if (existing) throw new Error(`Υπάρχει ήδη παρέα με το όνομα "${name}".`);
+  if (existing) throw new Error(`A squad called "${name}" already exists.`);
 
   const { data, error } = await supabase
     .from("groups")
@@ -100,14 +100,45 @@ export async function sendMessage(groupId: string, senderId: string, content: st
   if (error) throw error;
 }
 
-export async function getMessages(groupId: string) {
+export type ChatMessage = {
+  id: string;
+  content: string;
+  senderId: string;
+  senderName: string;
+  createdAt: string;
+};
+
+/** Μετατρέπει μια γραμμή του πίνακα messages σε ChatMessage. */
+export function toChatMessage(row: any, senderName?: string): ChatMessage {
+  return {
+    id: row.id,
+    content: row.content,
+    senderId: row.sender_id,
+    senderName: senderName ?? row.profiles?.display_name ?? "",
+    createdAt: row.created_at,
+  };
+}
+
+export async function getMessages(groupId: string): Promise<ChatMessage[]> {
   const { data, error } = await supabase
     .from("messages")
-    .select("content, profiles(display_name)")
+    .select("id, content, sender_id, created_at, profiles(display_name)")
     .eq("group_id", groupId)
     .order("created_at");
   if (error) throw error;
-  return data;
+
+  return (data ?? []).map((row) => toChatMessage(row));
+}
+
+/** Χάρτης user_id → όνομα, για τα μηνύματα που έρχονται από το realtime (δεν φέρνουν προφίλ). */
+export async function getMemberNames(groupId: string): Promise<Record<string, string>> {
+  const members = await getMembers(groupId);
+
+  const names: Record<string, string> = {};
+  for (const m of members as any[]) {
+    names[m.user_id] = m.profiles?.display_name ?? "";
+  }
+  return names;
 }
 
 export async function joinByInviteCode(inviteCode: string, userId: string): Promise<Group> {
@@ -117,7 +148,7 @@ export async function joinByInviteCode(inviteCode: string, userId: string): Prom
     .eq("invite_code", inviteCode)
     .maybeSingle();
   if (error) throw error;
-  if (!group) throw new Error(`Δεν βρέθηκε παρέα με κωδικό "${inviteCode}".`);
+  if (!group) throw new Error(`No squad found with code "${inviteCode}".`);
 
   await addMember(group.id, userId);
 

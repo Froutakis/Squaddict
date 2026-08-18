@@ -1,30 +1,20 @@
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, font, gradientFor, radius, shadow, space } from "../theme";
-import GradientAvatar from "./GradientAvatar";
-import Button from "./general/Button";
+import { colors, font, radius, shadow, space } from "../../theme";
+import GradientAvatar, { initialsFor } from "../general/GradientAvatar";
 
 type HomeHeaderProps = {
     displayName: string;
     onProfile: () => void;
 }
 
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-}
-
 function todayLabel() {
-    return new Date().toLocaleDateString('gr-EL', { weekday: 'long', day: 'numeric', month: 'long'});
+    return new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long'});
 }
 
 
 export default function HomeHeader({ displayName, onProfile } : HomeHeaderProps){
     const name = displayName || 'there';
-    const init = initials(displayName);
+    const init = initialsFor(displayName);
 
     return (
     <View style={styles.header}>

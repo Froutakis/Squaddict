@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent } from '../../services/serviceEvents';
 import { font, radius, shadow, space, upNext } from '../../theme';
 import { countdownLabel, formatDateTime } from '../../lib/eventFormat';
-import GradientAvatar from '../GradientAvatar';
+import GradientAvatar from '../general/GradientAvatar';
 
 const WHITE = '#FFFFFF';
 const SOFT = 'rgba(255,255,255,0.85)';
