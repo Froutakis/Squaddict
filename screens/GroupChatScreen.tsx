@@ -12,11 +12,11 @@ import {
   Text,
   View,
 } from 'react-native';
-import GradientAvatar, { initialsFor } from '../components/GradientAvatar';
-import ChatComposer from '../components/chatcomponents/ChatComposer';
-import GroupBar from '../components/GroupBar';
-import MessageBubble, { DateSeparator } from '../components/chatcomponents/MessageBubble';
-import { buildRows, type Row } from '../components/chatcomponents/messageRows';
+import GradientAvatar, { initialsFor } from '../components/general/GradientAvatar';
+import ChatComposer from '../components/chat/ChatComposer';
+import GroupBar from '../components/general/GroupBar';
+import MessageBubble, { DateSeparator } from '../components/chat/MessageBubble';
+import { buildRows, type Row } from '../components/chat/messageRows';
 import { Group } from '../models/main';
 import {
   getGroupsForUser,
