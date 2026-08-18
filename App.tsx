@@ -8,12 +8,16 @@ import { supabase } from './services/supabaseClient';
 import { colors } from './theme';
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
+import GroupChatScreen from './screens/GroupChatScreen';
+import BottomNav, { type NavTab } from './components/BottomNav';
 
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
+  const [screen, setScreen] = useState<NavTab>('home');
+  const [chatGroupId, setChatGroupId] = useState<string | null>(null);
   const [fontsLoaded, fontError] = useFonts({
     Poppins_500Medium,
     Poppins_600SemiBold,
@@ -43,17 +47,38 @@ export default function App() {
     );
   }
 
-  if (!user) 
+  if (!user) {
     return authScreen === 'login' ? (
       <LoginScreen onSwitchToRegister={() => setAuthScreen('register')} />
     ) : (
       <RegisterScreen onSwitchToLogin={() => setAuthScreen('login')} />
     );
-  
+  }
 
-  return <HomeScreen user={user} />;
+  return (
+    <View style={styles.app}>
+      <View style={styles.body}>
+        {screen === 'chat' ? (
+          <GroupChatScreen user={user} initialGroupId={chatGroupId} />
+        ) : (
+          <HomeScreen
+            user={user}
+            onOpenChat={(groupId) => {
+              setChatGroupId(groupId);
+              setScreen('chat');
+            }}
+          />
+        )}
+      </View>
+
+      <BottomNav active={screen} onNavigate={setScreen} />
+      <StatusBar style="dark" />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  app: { flex: 1, backgroundColor: colors.bg },
+  body: { flex: 1 },
 });
