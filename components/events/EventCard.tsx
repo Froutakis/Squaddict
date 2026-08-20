@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent } from '../../services/serviceEvents';
-import { colors, font, radius, shadow, space } from '../../theme';
+import { colors, font, radius, shadow, space, tint } from '../../theme';
 import { dateParts } from '../../lib/datetime';
+import AttendeeStack from './Attendee';
 
 type EventCardProps = {
   event: MyEvent;
@@ -23,6 +24,21 @@ export default function EventCard({ event, onPress }: EventCardProps) {
         <Text style={styles.title} numberOfLines={1}>{event.title}</Text>
         <Text style={styles.meta} numberOfLines={1}>{meta}</Text>
       </View>
+      <View>
+      {event.myStatus ? (
+        <View style={[styles.pill, event.myStatus === 'in' ? styles.pillIn : styles.pillOut]}>
+          <Text style={[styles.pillText, event.myStatus === 'in' ? styles.pillTextIn : styles.pillTextOut]}>
+            {event.myStatus === 'in' ? 'Going' : 'Not going'}
+          </Text>
+        </View>
+      ) : null}
+      {event.going.length > 0 ? (
+          <View style={styles.people}>
+            <AttendeeStack people={event.going} size={24} max={3} />
+            <Text style={styles.count}>{event.going.length}</Text>
+          </View>
+        ) : null}
+        </View>
     </Pressable>
   );
 }
@@ -43,4 +59,12 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   title: { color: colors.text, fontFamily: font.semi, fontSize: 16 },
   meta: { color: colors.textSoft, fontFamily: font.medium, fontSize: 13, marginTop: 2 },
+  people: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
+  count: { color: colors.textFaint, fontFamily: font.medium, fontSize: 12 },
+  pill: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
+  pillIn: { backgroundColor: tint.success },
+  pillOut: { backgroundColor: tint.danger },
+  pillText: { fontFamily: font.semi, fontSize: 11 },
+  pillTextIn: { color: colors.success },
+  pillTextOut: { color: colors.danger },
 });
