@@ -1,15 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, font, radius, shadow, space } from "../../theme";
 import GradientAvatar, { initialsFor } from "../general/GradientAvatar";
+import { todayLabel } from "../../lib/datetime";
 
 type HomeHeaderProps = {
     displayName: string;
     onProfile: () => void;
 }
 
-function todayLabel() {
-    return new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long'});
-}
 
 
 export default function HomeHeader({ displayName, onProfile } : HomeHeaderProps){

@@ -5,7 +5,7 @@ import { useState } from 'react';
 
 type AuthFieldProps = {
   label: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  icon?: keyof typeof Ionicons.glyphMap;
   value: string;
   onChangeText: (value: string) => void;
   placeholder: string;
