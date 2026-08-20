@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { MyEvent } from '../../services/serviceEvents';
+import type { MyEvent, RsvpStatus } from '../../services/serviceEvents';
 import { font, radius, shadow, space, upNext } from '../../theme';
 import { countdownLabel, formatDateTime } from '../../lib/datetime';
-import GradientAvatar from '../general/GradientAvatar';
+import AttendeeStack from './Attendee';
+import RsvpButtons from './RsvpButtons';
 
 const WHITE = '#FFFFFF';
 const SOFT = 'rgba(255,255,255,0.85)';
@@ -13,12 +14,11 @@ const FAINT = 'rgba(255,255,255,0.18)';
 type UpNextProps = {
   event: MyEvent;
   onPress?: () => void;
-  onJoin?: () => void;
+  onRsvp: (status: RsvpStatus | null) => void;
+  saving?: boolean;
 };
 
-const FAKE_MEMBERS = ['Alex', 'Maria', 'Kostas', 'Nikos'];
-
-export default function UpNext({ event, onPress, onJoin }: UpNextProps) {
+export default function UpNext({ event, onPress, onRsvp, saving = false }: UpNextProps) {
   const when = formatDateTime(event.date, event.startTime);
 
   return (
@@ -48,18 +48,14 @@ export default function UpNext({ event, onPress, onJoin }: UpNextProps) {
         </View>
 
         <View style={styles.bottomRow}>
-          <View style={styles.avatars}>
-            {FAKE_MEMBERS.map((name, i) => (
-              <GradientAvatar key={name} label={name} size={30} ring={2} style={i > 0 ? styles.overlap : undefined} />
-            ))}
-            <View style={[styles.more, styles.overlap]}>
-              <Text style={styles.moreText}>+3</Text>
-            </View>
-          </View>
-
-          <Pressable style={styles.joinBtn} onPress={onJoin} accessibilityRole="button" accessibilityLabel="I'm in">
-            <Text style={styles.joinText}>I'm in</Text>
-          </Pressable>
+          <AttendeeStack people={event.going} onDark />
+          <RsvpButtons
+            status={event.myStatus}
+            saving={saving}
+            onChange={onRsvp}
+            compact
+            onDark
+          />
         </View>
       </LinearGradient>
     </Pressable>
@@ -78,11 +74,5 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   metaIcon: { marginLeft: space.sm },
   metaText: { color: SOFT, fontFamily: font.medium, fontSize: 13, flexShrink: 1 },
-  bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: space.xs },
-  avatars: { flexDirection: 'row', alignItems: 'center' },
-  overlap: { marginLeft: -10 },
-  more: { width: 30, height: 30, borderRadius: radius.pill, backgroundColor: FAINT, borderWidth: 2, borderColor: WHITE, alignItems: 'center', justifyContent: 'center' },
-  moreText: { color: WHITE, fontFamily: font.semi, fontSize: 10 },
-  joinBtn: { backgroundColor: WHITE, paddingHorizontal: space.md, paddingVertical: 10, borderRadius: radius.pill },
-  joinText: { color: upNext[1], fontFamily: font.bold, fontSize: 14 },
+  bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, marginTop: space.xs },
 });
