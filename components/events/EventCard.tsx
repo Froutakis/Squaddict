@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent } from '../../services/serviceEvents';
 import { colors, font, radius, shadow, space } from '../../theme';
-import { dateParts } from '../../lib/eventFormat';
+import { dateParts } from '../../lib/datetime';
 
 type EventCardProps = {
   event: MyEvent;

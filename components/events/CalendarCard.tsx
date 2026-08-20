@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent } from '../../services/serviceEvents';
 import { colors, font, radius, shadow, space } from '../../theme';
-import { keyOf } from '../../lib/eventFormat';
+import { keyOf } from '../../lib/datetime';
 
 type CalendarCardProps = {
   events: MyEvent[];

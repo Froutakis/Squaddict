@@ -37,3 +37,28 @@ export function countdownLabel(dateStr: string) {
   if (n === 1) return 'TOMORROW';
   return `IN ${n} DAYS`;
 }
+
+export function todayLabel() {
+  return new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+export function timeLabel(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+export function dayLabel(date: Date) {
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (keyOf(date) === keyOf(today)) return 'Today';
+  if (keyOf(date) === keyOf(yesterday)) return 'Yesterday';
+
+  return date.toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'short',
+    ...(date.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
+  });
+}

@@ -3,7 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent } from '../../services/serviceEvents';
 import { font, radius, shadow, space, upNext } from '../../theme';
-import { countdownLabel, formatDateTime } from '../../lib/eventFormat';
+import { countdownLabel, formatDateTime } from '../../lib/datetime';
 import GradientAvatar from '../general/GradientAvatar';
 
 const WHITE = '#FFFFFF';
