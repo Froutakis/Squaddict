@@ -136,14 +136,15 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
               <View style={styles.metaRow}>
                 <Ionicons name="time-outline" size={16} color={colors.textSoft} />
                 <Text style={styles.metaText}>{formatDateTime(event.date, event.startTime)}</Text>
-              </View>
-
-              {event.location ? (
+                {event.location ? (
                 <View style={styles.metaRow}>
                   <Ionicons name="location-outline" size={16} color={colors.textSoft} />
                   <Text style={styles.metaText} numberOfLines={1}>{event.location}</Text>
                 </View>
               ) : null}
+              </View>
+
+              
 
               {event.description ? (
                 <Text style={styles.description}>{event.description}</Text>
