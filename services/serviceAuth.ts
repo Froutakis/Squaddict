@@ -5,7 +5,7 @@ export async function register(email: string, password: string, displayName: str
   if (error) throw error;
 
   if (!data.user) {
-    throw new Error("Ο χρήστης δεν δημιουργήθηκε.");
+    throw new Error("Could not create your account.");
   }
 
   const userId = data.user.id;
@@ -28,6 +28,13 @@ export async function getCurrentUser() {
   if (error) throw error;
 
   return data.user;
+}
+
+export async function requireUser() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Sign in to continue.");
+
+  return user;
 }
 
 export async function logout() {
