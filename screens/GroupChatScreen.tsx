@@ -11,6 +11,8 @@ import {
   StyleSheet,
   Text,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import GradientAvatar, { initialsFor } from '../components/general/GradientAvatar';
 import ChatComposer from '../components/chat/ChatComposer';
@@ -56,30 +58,56 @@ export default function GroupChatScreen({
 
   // 1. Οι παρέες του χρήστη — μία φορά.
   useEffect(() => {
+    // Σημαία ακύρωσης: αν φύγει η οθόνη όσο τρέχει το await, δεν κάνουμε setState.
     let cancelled = false;
 
     async function loadGroups() {
       try {
         const myGroups = await getGroupsForUser(user.id);
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         setGroups(myGroups);
-        setActiveId((current) => current ?? myGroups[0]?.id ?? null);
+
+        // Διάλεξε ποια παρέα θα είναι ενεργή. Περνάμε συνάρτηση στον setter
+        // για να δούμε σίγουρα την πιο πρόσφατη τιμή του activeId.
+        setActiveId(function (current) {
+          // α) Αν έχει ήδη επιλεγεί κάποια, κράτα την.
+          if (current !== null && current !== undefined) {
+            return current;
+          }
+          // β) Αλλιώς, αν υπάρχει τουλάχιστον μία παρέα, πάρε την πρώτη.
+          if (myGroups.length > 0) {
+            return myGroups[0].id;
+          }
+          // γ) Αλλιώς, καμία.
+          return null;
+        });
       } catch {
-        if (!cancelled) setError("Couldn't load your squads.");
+        // Δεν μας ενδιαφέρει ΤΙ έσκασε, μόνο ότι απέτυχε.
+        if (!cancelled) {
+          setError("Couldn't load your squads.");
+        }
       } finally {
-        if (!cancelled) setLoadingGroups(false);
+        // Το finally τρέχει και σε επιτυχία και σε αποτυχία.
+        if (!cancelled) {
+          setLoadingGroups(false);
+        }
       }
     }
 
     loadGroups();
-    return () => {
+
+    // Cleanup: τρέχει στο unmount ή πριν ξανατρέξει το effect.
+    return function cleanup() {
       cancelled = true;
     };
   }, [user.id]);
 
   // 2. Ιστορικό + realtime κανάλι της ενεργής παρέας.
   useEffect(() => {
+    // Καμία ενεργή παρέα -> άδειασε την οθόνη και σταμάτα εδώ.
     if (!activeId) {
       setMessages([]);
       setMemberCount(0);
@@ -87,28 +115,56 @@ export default function GroupChatScreen({
     }
 
     let cancelled = false;
+    // Χρειάζεται ρητός τύπος: με σκέτο `= null` η TS θα κλείδωνε τον τύπο σε `null`.
     let channel: RealtimeChannel | null = null;
 
     setLoadingChat(true);
     setMessages([]);
     setError(null);
 
+    // Καλείται όταν ο server στείλει νέα γραμμή μηνύματος.
+    // Το `row` ΔΕΝ το δίνουμε εμείς — το δίνει η startChat όταν φτάσει το μήνυμα.
+    function handleIncomingRow(row: any) {
+      const senderName = namesRef.current[row.sender_id];
+      const incoming = toChatMessage(row, senderName);
+
+      setMessages(function (prev) {
+        // Το ίδιο μήνυμα μπορεί να ξαναέρθει σε reconnect — κράτα ένα.
+        let alreadyExists = false;
+        for (let i = 0; i < prev.length; i++) {
+          if (prev[i].id === incoming.id) {
+            alreadyExists = true;
+            break;
+          }
+        }
+
+        if (alreadyExists) {
+          // Ίδια αναφορά πίνακα -> το React καταλαβαίνει ότι τίποτα δεν άλλαξε.
+          return prev;
+        }
+
+        // Νέος πίνακας με το μήνυμα στο τέλος.
+        // Ποτέ prev.push() — το state του React δεν το πειράζουμε επί τόπου.
+        return [...prev, incoming];
+      });
+    }
+
     async function openChat(groupId: string) {
       try {
         const names = await getMemberNames(groupId);
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         namesRef.current = names;
-        setMemberCount(Object.keys(names).length);
+        // Object.keys(names) = πίνακας με τα user ids -> το μήκος του = πλήθος μελών.
+        const memberIds = Object.keys(names);
+        setMemberCount(memberIds.length);
 
-        const chat = await startChat(groupId, (row) => {
-          const incoming = toChatMessage(row, namesRef.current[row.sender_id]);
-          // Το ίδιο μήνυμα μπορεί να ξαναέρθει σε reconnect — κράτα ένα.
-          setMessages((prev) =>
-            prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming],
-          );
-        });
+        const chat = await startChat(groupId, handleIncomingRow);
 
+        // Αν άλλαξε παρέα όσο άνοιγε το κανάλι, το cleanup έχει ήδη τρέξει και δεν
+        // ξέρει γι' αυτό το κανάλι. Κλείσ' το εδώ, αλλιώς μένει ανοιχτό socket.
         if (cancelled) {
           await closeGroupChat(chat.channel);
           return;
@@ -117,23 +173,35 @@ export default function GroupChatScreen({
         channel = chat.channel;
         setMessages(chat.messages);
       } catch {
-        if (!cancelled) setError("Couldn't load this conversation.");
+        if (!cancelled) {
+          setError("Couldn't load this conversation.");
+        }
       } finally {
-        if (!cancelled) setLoadingChat(false);
+        if (!cancelled) {
+          setLoadingChat(false);
+        }
       }
     }
 
+    // Εδώ η TypeScript ξέρει ότι το activeId είναι `string` (όχι null),
+    // επειδή το `if (!activeId) return;` παραπάνω απέκλεισε το null.
     openChat(activeId);
 
-    return () => {
+    return function cleanup() {
       cancelled = true;
-      if (channel) closeGroupChat(channel);
+      if (channel) {
+        closeGroupChat(channel);
+      }
     };
   }, [activeId]);
 
+  // Στέλνει μήνυμα. Επιστρέφει true/false ώστε ο composer να καθαρίσει το input
+  // μόνο όταν όντως στάλθηκε.
   const handleSend = useCallback(
-    async (text: string) => {
-      if (!activeId) return false;
+    async function send(text: string) {
+      if (!activeId) {
+        return false;
+      }
 
       try {
         await sendMessage(activeId, user.id, text);
@@ -144,11 +212,135 @@ export default function GroupChatScreen({
         return false;
       }
     },
+    // Ξαναφτιάχνεται μόνο όταν αλλάξει η παρέα ή ο χρήστης.
     [activeId, user.id],
   );
 
-  const rows = useMemo(() => buildRows(messages), [messages]);
-  const activeGroup = groups.find((group) => group.id === activeId) ?? null;
+  // Τα μηνύματα -> γραμμές λίστας (με διαχωριστικά ημέρας).
+  // Ξαναϋπολογίζεται μόνο όταν αλλάξουν τα messages.
+  const rows = useMemo(
+    function () {
+      return buildRows(messages);
+    },
+    [messages],
+  );
+
+  // Ποια παρέα είναι ανοιχτή. Δεν είναι state — προκύπτει από το state.
+  let activeGroup: Group | null = null;
+  for (let i = 0; i < groups.length; i++) {
+    if (groups[i].id === activeId) {
+      activeGroup = groups[i];
+      break;
+    }
+  }
+
+  // ---- Τιμές που θα μπουν στο JSX, υπολογισμένες εκ των προτέρων ----
+
+  let headerTitle = 'Chats';
+  if (activeGroup !== null) {
+    headerTitle = activeGroup.name;
+  }
+
+  let memberLabel = 'members';
+  if (memberCount === 1) {
+    memberLabel = 'member';
+  }
+
+  // Το KeyboardAvoidingView θέλει 'padding' μόνο στο iOS.
+  let keyboardBehavior: 'padding' | undefined = undefined;
+  let keyboardOffset = 0;
+  if (Platform.OS === 'ios') {
+    keyboardBehavior = 'padding';
+    keyboardOffset = 8;
+  }
+
+  // ---- Βοηθητικές συναρτήσεις εμφάνισης ----
+
+  // Το Pressable καλεί αυτή τη συνάρτηση και της δίνει { pressed: true/false }.
+  function backButtonStyle({ pressed }: { pressed: boolean }): StyleProp<ViewStyle> {
+    if (pressed) {
+      return [styles.back, styles.pressed];
+    }
+    return styles.back;
+  }
+
+  function scrollToBottom() {
+    // Το ref είναι null μέχρι να μπει η λίστα στην οθόνη.
+    if (listRef.current !== null) {
+      listRef.current.scrollToEnd({ animated: true });
+    }
+  }
+
+  // Το FlatList καλεί αυτή τη συνάρτηση για κάθε γραμμή και της δίνει το item.
+  function renderRow({ item }: { item: Row }) {
+    // Το `kind` ξεχωρίζει τα δύο είδη γραμμής (discriminated union):
+    // μέσα σε κάθε κλάδο η TypeScript ξέρει ακριβώς ποια πεδία υπάρχουν.
+    if (item.kind === 'date') {
+      return <DateSeparator label={item.label} />;
+    }
+
+    const message = item.message;
+    const isMine = message.senderId === user.id;
+
+    return (
+      <MessageBubble
+        content={message.content}
+        senderName={message.senderName}
+        createdAt={message.createdAt}
+        mine={isMine}
+        isFirst={item.isFirst}
+        isLast={item.isLast}
+      />
+    );
+  }
+
+  function renderEmptyList() {
+    return (
+      <View style={styles.empty}>
+        <Text style={styles.emptyTitle}>No messages yet</Text>
+        <Text style={styles.emptyText}>Say something to get the squad going.</Text>
+      </View>
+    );
+  }
+
+  // Το κυρίως σώμα έχει τρεις πιθανές καταστάσεις.
+  function renderChatBody() {
+    // α) Ο χρήστης δεν έχει καμία παρέα.
+    if (groups.length === 0) {
+      return (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>No squads yet</Text>
+          <Text style={styles.emptyText}>Join a squad to start chatting.</Text>
+        </View>
+      );
+    }
+
+    // β) Φορτώνει η συζήτηση.
+    if (loadingChat) {
+      return (
+        <View style={styles.empty}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      );
+    }
+
+    // γ) Κανονική λίστα μηνυμάτων.
+    return (
+      <FlatList
+        ref={listRef}
+        data={rows}
+        keyExtractor={function (item) {
+          return item.id;
+        }}
+        contentContainerStyle={styles.list}
+        onContentSizeChange={scrollToBottom}
+        ListEmptyComponent={renderEmptyList()}
+        renderItem={renderRow}
+      />
+    );
+  }
+
+  // ---- Η οθόνη ----
 
   if (loadingGroups) {
     return (
@@ -162,12 +354,13 @@ export default function GroupChatScreen({
     <SafeAreaView style={styles.screen}>
       <View style={styles.column}>
         <View style={styles.header}>
+          {/* Το βελάκι μπαίνει μόνο αν μας δόθηκε onBack. Το `: null` = μη ζωγραφίσεις τίποτα. */}
           {onBack ? (
             <Pressable
               onPress={onBack}
               accessibilityRole="button"
               accessibilityLabel="Back"
-              style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+              style={backButtonStyle}
             >
               <Ionicons name="chevron-back" size={22} color={colors.text} />
             </Pressable>
@@ -183,11 +376,11 @@ export default function GroupChatScreen({
 
           <View style={styles.headerText}>
             <Text style={styles.title} numberOfLines={1}>
-              {activeGroup?.name ?? 'Chats'}
+              {headerTitle}
             </Text>
             {activeGroup ? (
               <Text style={styles.subtitle}>
-                {memberCount} {memberCount === 1 ? 'member' : 'members'}
+                {memberCount} {memberLabel}
               </Text>
             ) : null}
           </View>
@@ -198,49 +391,12 @@ export default function GroupChatScreen({
 
         <KeyboardAvoidingView
           style={styles.chat}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+          behavior={keyboardBehavior}
+          keyboardVerticalOffset={keyboardOffset}
         >
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {groups.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>No squads yet</Text>
-              <Text style={styles.emptyText}>Join a squad to start chatting.</Text>
-            </View>
-          ) : loadingChat ? (
-            <View style={styles.empty}>
-              <ActivityIndicator color={colors.primary} />
-            </View>
-          ) : (
-            <FlatList
-              ref={listRef}
-              data={rows}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.list}
-              onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-              ListEmptyComponent={
-                <View style={styles.empty}>
-                  <Text style={styles.emptyTitle}>No messages yet</Text>
-                  <Text style={styles.emptyText}>Say something to get the squad going.</Text>
-                </View>
-              }
-              renderItem={({ item }) =>
-                item.kind === 'date' ? (
-                  <DateSeparator label={item.label} />
-                ) : (
-                  <MessageBubble
-                    content={item.message.content}
-                    senderName={item.message.senderName}
-                    createdAt={item.message.createdAt}
-                    mine={item.message.senderId === user.id}
-                    isFirst={item.isFirst}
-                    isLast={item.isLast}
-                  />
-                )
-              }
-            />
-          )}
+          {renderChatBody()}
 
           <ChatComposer onSend={handleSend} disabled={!activeId} />
         </KeyboardAvoidingView>
