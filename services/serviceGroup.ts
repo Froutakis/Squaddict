@@ -1,17 +1,30 @@
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
-import { Group } from "../models/main";
+
+type GroupRow = {
+  id: string;
+  name: string;
+  invite_code: string;
+  created_by: string;
+  created_at: string;
+};
+
+export type Group = {
+  id: string;
+  name: string;
+  inviteCode: string;
+};
+
+export function toGroup(r: Pick<GroupRow, "id" | "name" | "invite_code">): Group {
+  return {
+    id: r.id,
+    name: r.name,
+    inviteCode: r.invite_code,
+  };
+}
 
 export async function createGroup(name: string): Promise<Group> {
   const user = await requireUser();
-
-  const { data: existing, error: existingError } = await supabase
-    .from("groups")
-    .select("id")
-    .ilike("name", name)
-    .maybeSingle();
-  if (existingError) throw existingError;
-  if (existing) throw new Error(`A squad called "${name}" already exists.`);
 
   const { data, error } = await supabase
     .from("groups")
@@ -22,7 +35,7 @@ export async function createGroup(name: string): Promise<Group> {
 
   await addMember(data.id, user.id);
 
-  return new Group(data.id, data.name);
+  return toGroup(data as GroupRow);
 }
 
 export async function deleteGroup(groupId: string): Promise<void> {
@@ -68,7 +81,7 @@ export async function getGroupById(id: string): Promise<Group> {
     .single();
   if (error) throw error;
 
-  return new Group(data.id, data.name);
+  return toGroup(data as GroupRow);
 }
 
 export async function getAllGroups(): Promise<Array<Group>> {
@@ -77,17 +90,17 @@ export async function getAllGroups(): Promise<Array<Group>> {
     .select("*");
   if (error) throw error;
 
-  return data.map((g) => new Group(g.id, g.name));
+  return (data as GroupRow[]).map(toGroup);
 }
 
 export async function getGroupsForUser(userId: string): Promise<Array<Group>> {
   const { data, error } = await supabase
     .from("group_members")
-    .select("groups(id, name)")
+    .select("groups(id, name, invite_code)")
     .eq("user_id", userId);
   if (error) throw error;
 
-  return data.map((row: any) => new Group(row.groups.id, row.groups.name));
+  return data.map((row: any) => toGroup(row.groups));
 }
 
 export async function sendMessage(groupId: string, senderId: string, content: string): Promise<void> {
@@ -139,15 +152,26 @@ export async function getMemberNames(groupId: string): Promise<Record<string, st
 }
 
 export async function joinByInviteCode(inviteCode: string, userId: string): Promise<Group> {
+  const code = inviteCode.trim();
+
   const { data: group, error } = await supabase
     .from("groups")
     .select("*")
-    .eq("invite_code", inviteCode)
+    .eq("invite_code", code)
     .maybeSingle();
   if (error) throw error;
-  if (!group) throw new Error(`No squad found with code "${inviteCode}".`);
+  if (!group) throw new Error(`No squad found with code "${code}".`);
+
+  const { data: existing, error: memberError } = await supabase
+    .from("group_members")
+    .select("user_id")
+    .eq("group_id", group.id)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (memberError) throw memberError;
+  if (existing) throw new Error(`You are already in "${group.name}".`);
 
   await addMember(group.id, userId);
 
-  return new Group(group.id, group.name);
+  return toGroup(group as GroupRow);
 }

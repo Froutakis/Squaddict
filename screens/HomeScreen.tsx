@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { User as AuthUser } from '@supabase/supabase-js';
-import { Group } from '../models/main';
+import type { Group } from '../services/serviceGroup';
 import type { MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getUserById } from '../services/serviceUser';
 import { getGroupsForUser } from '../services/serviceGroup';
