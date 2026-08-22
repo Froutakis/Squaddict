@@ -1,5 +1,18 @@
 import { supabase } from "./supabaseClient";
-import { User } from "../models/main";
+import type { User } from "./serviceAuth";
+
+type ProfileRow = {
+  id: string;
+  display_name: string;
+};
+
+function toUser(r: ProfileRow): User {
+  return {
+    id: r.id,
+    name: r.display_name,
+    isOnline: false,
+  };
+}
 
 export async function getUserById(id: string): Promise<User | null> {
   const { data, error } = await supabase
@@ -10,14 +23,14 @@ export async function getUserById(id: string): Promise<User | null> {
   if (error) throw error;
   if (!data) return null;
 
-  return new User(data.id, data.display_name, false);
+  return toUser(data as ProfileRow);
 }
 
 export async function getAllUsers(): Promise<User[]> {
   const { data, error } = await supabase.from("profiles").select("*");
   if (error) throw error;
 
-  return data.map((d) => new User(d.id, d.display_name, false));
+  return (data as ProfileRow[]).map(toUser);
 }
 
 export async function updateDisplayName(id: string, newName: string): Promise<void> {

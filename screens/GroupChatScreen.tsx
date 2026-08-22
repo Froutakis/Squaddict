@@ -19,7 +19,7 @@ import ChatComposer from '../components/chat/ChatComposer';
 import GroupBar from '../components/general/GroupBar';
 import MessageBubble, { DateSeparator } from '../components/chat/MessageBubble';
 import { buildRows, type Row } from '../components/chat/messageRows';
-import { Group } from '../models/main';
+import type { Group } from '../services/serviceGroup';
 import {
   getGroupsForUser,
   getMemberNames,

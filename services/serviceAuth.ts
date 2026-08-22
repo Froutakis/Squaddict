@@ -1,5 +1,11 @@
 import { supabase } from "./supabaseClient";
 
+export type User = {
+  id: string;
+  name: string;
+  isOnline: boolean;
+}
+
 export async function register(email: string, password: string, displayName: string) {
   const { data, error } = await supabase.auth.signUp({ email, password });
   if (error) throw error;
