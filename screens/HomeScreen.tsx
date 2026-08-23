@@ -123,6 +123,7 @@ export default function HomeScreen({ user }: HomeScreenProps){
                 <View style={styles.body}>
                     <CalendarCard
                         events={squadEvents}
+                        daysShown={7}
                         selectedDate={selectedDate}
                         onSelectDate={(d) => setSelectedDate(d === selectedDate ? null : d)}
                         onAddEvent={() => setShowCreate(true)}
