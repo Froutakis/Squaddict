@@ -10,6 +10,14 @@ export function keyOf(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
+export function addDays(d: Date, n: number) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+}
+
+export function startOfWeek(d: Date) {
+  return addDays(d, -((d.getDay() + 6) % 7));
+}
+
 export function dateParts(dateStr: string) {
   const d = parseLocal(dateStr);
   const month = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
