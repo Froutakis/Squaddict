@@ -4,7 +4,7 @@ import { requireUser } from "./serviceAuth";
 type GroupRow = {
   id: string;
   name: string;
-  invite_code: string;
+  handle: string;
   created_by: string;
   created_at: string;
 };
@@ -12,14 +12,14 @@ type GroupRow = {
 export type Group = {
   id: string;
   name: string;
-  inviteCode: string;
+  handle: string;
 };
 
-export function toGroup(r: Pick<GroupRow, "id" | "name" | "invite_code">): Group {
+export function toGroup(r: Pick<GroupRow, "id" | "name" | "handle">): Group {
   return {
     id: r.id,
     name: r.name,
-    inviteCode: r.invite_code,
+    handle: r.handle,
   };
 }
 
@@ -96,7 +96,7 @@ export async function getAllGroups(): Promise<Array<Group>> {
 export async function getGroupsForUser(userId: string): Promise<Array<Group>> {
   const { data, error } = await supabase
     .from("group_members")
-    .select("groups(id, name, invite_code)")
+    .select("groups(id, name, handle)")
     .eq("user_id", userId);
   if (error) throw error;
 
@@ -152,12 +152,12 @@ export async function getMemberNames(groupId: string): Promise<Record<string, st
 }
 
 export async function joinByInviteCode(inviteCode: string, userId: string): Promise<Group> {
-  const code = inviteCode.trim();
+  const code = inviteCode.trim().toLowerCase();
 
   const { data: group, error } = await supabase
     .from("groups")
     .select("*")
-    .eq("invite_code", code)
+    .eq("handle", code)
     .maybeSingle();
   if (error) throw error;
   if (!group) throw new Error(`No squad found with code "${code}".`);
