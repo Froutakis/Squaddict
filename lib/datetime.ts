@@ -47,7 +47,20 @@ export function countdownLabel(dateStr: string) {
 }
 
 export function todayLabel() {
-  return new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' });
+  const now = new Date();
+  const weekday = now.toLocaleDateString('en-US', { weekday: 'long' });
+  const month = now.toLocaleDateString('en-US', { month: 'long' });
+  return `${weekday} ${now.getDate()} ${month}`;
+}
+
+export function dayFilterLabel(dateStr: string) {
+  const n = daysUntil(dateStr);
+  if (n === 0) return 'today';
+  if (n === 1) return 'tomorrow';
+
+  const d = parseLocal(dateStr);
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'long' });
+  return `${weekday} ${d.getDate()}`;
 }
 
 export function timeLabel(iso: string) {

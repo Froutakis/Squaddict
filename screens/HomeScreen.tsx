@@ -1,187 +1,281 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { User as AuthUser } from '@supabase/supabase-js';
+import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Group } from '../services/serviceGroup';
 import type { MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getUserById } from '../services/serviceUser';
 import { getGroupsForUser } from '../services/serviceGroup';
-import { getMyEvents } from '../services/serviceEvents'
-import { logout } from '../services/serviceAuth';
-import { ActivityIndicator, SafeAreaView, View, ScrollView, StyleSheet, Text } from 'react-native';
+import { clearRsvp, getMyEvents, setRsvp } from '../services/serviceEvents';
 import { colors, font, layout, space } from '../theme';
+import { dayFilterLabel, keyOf } from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
-import GroupBar from '../components/general/GroupBar';
+import DayFilterRow from '../components/home/DayFilterRow';
+import ListEmpty from '../components/home/ListEmpty';
+import SectionLabel from '../components/general/SectionLabel';
+import Button from '../components/general/Button';
 import CalendarCard from '../components/events/CalendarCard';
 import EventCard from '../components/events/EventCard';
 import UpNext from '../components/events/UpNext';
 import EventSheet from '../components/events/EventSheet';
 import EventFormSheet from '../components/events/EventFormSheet';
-import { keyOf } from '../lib/datetime';
-import { clearRsvp, setRsvp } from '../services/serviceEvents';
+import GroupFormSheet from '../components/group/GroupFormSheet';
 
 type HomeScreenProps = {
-    user: AuthUser;
+  user: AuthUser;
 };
 
-export default function HomeScreen({ user }: HomeScreenProps){
+export default function HomeScreen({ user }: HomeScreenProps) {
+  const [displayName, setDisplayName] = useState('');
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [events, setEvents] = useState<MyEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-    const [displayName , setDisplayName] = useState('');
-    const [groups , setGroups] = useState<Group[]>([]);
-    const [events, setEvents] = useState<MyEvent[]> ([]);
-    const [loading, setLoading] = useState(true);
-    const [activeGroup, setActiveGroup] = useState<string | null>(null);
-    const [selectedDate, setSelectedDate] = useState<string | null>(null);
-    const [error , setError] = useState<string | null>(null);
-    const [showCreate, setShowCreate] = useState(false);
-    const [rsvpSaving, setRsvpSaving] = useState(false);
-    const [rsvpError, setRsvpError] = useState<string | null>(null);
-    const [openEvent, setOpenEvent] = useState<MyEvent | null>(null);
-    const [editEvent, setEditEvent] = useState<MyEvent | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [showSquadForm, setShowSquadForm] = useState(false);
+  const [formDate, setFormDate] = useState<string | null>(null);
+  const [openEvent, setOpenEvent] = useState<MyEvent | null>(null);
+  const [editEvent, setEditEvent] = useState<MyEvent | null>(null);
+  const [rsvpSaving, setRsvpSaving] = useState(false);
+  const [rsvpError, setRsvpError] = useState<string | null>(null);
 
-    useEffect(() => {
-        async function load() {
-            try {
-                const profile = await getUserById(user.id);
-                const myGroups = await getGroupsForUser(user.id);
-                const myEvents = await getMyEvents(user.id);
+  const load = useCallback(
+    async function load() {
+      setLoading(true);
+      setError(null);
 
-                setDisplayName(profile?.name ?? '');
-                setGroups(myGroups);
-                setEvents(myEvents);
-            }
-            catch (e) {
-                setError("Loading Error!");
-            }
-            finally {
-                setLoading(false);
-            }
-        }
+      try {
+        const [profile, myGroups, myEvents] = await Promise.all([
+          getUserById(user.id),
+          getGroupsForUser(user.id),
+          getMyEvents(user.id),
+        ]);
 
-        load();
-    },[user.id]);
+        setDisplayName(profile?.name ?? '');
+        setGroups(myGroups);
+        setEvents(myEvents);
+      } catch {
+        setError("Couldn't load your week");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [user.id],
+  );
 
-    const date = keyOf(new Date());
-    
-    const squadEvents = activeGroup ? events.filter((e) => e.groupId === activeGroup) : events;
-    const dayMode = !!selectedDate;
-    const upcoming = squadEvents.filter((e) => e.date >= date);
-    const upNextEvent = dayMode ? undefined : upcoming[0];
-    const listEvents = dayMode ? squadEvents.filter((e) => e.date === selectedDate) : upcoming.slice(1);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-    async function handleRsvp(eventId: string, status: RsvpStatus | null) {
-        setRsvpSaving(true);
-        setRsvpError(null);
-        try {
-            if (status) await setRsvp(eventId, status);
-            else await clearRsvp(eventId);
+  async function handleRsvp(eventId: string, status: RsvpStatus | null) {
+    setRsvpSaving(true);
+    setRsvpError(null);
 
-            setEvents(await getMyEvents(user.id));
-        }
-        catch (e) {
-            setRsvpError('Could not save your answer. Try again.');
-        }
-        finally {
-            setRsvpSaving(false);
-        }
+    try {
+      if (status) {
+        await setRsvp(eventId, status);
+      } else {
+        await clearRsvp(eventId);
+      }
+      setEvents(await getMyEvents(user.id));
+    } catch {
+      setRsvpError('Could not save your answer. Try again.');
+    } finally {
+      setRsvpSaving(false);
+    }
+  }
+
+  function openNewEvent(date: string | null) {
+    setEditEvent(null);
+    setFormDate(date);
+    setShowCreate(true);
+  }
+
+  const today = keyOf(new Date());
+  const dayMode = selectedDate !== null;
+  const upcoming = events.filter((e) => e.date >= today);
+  const upNextEvent = dayMode ? undefined : upcoming[0];
+  const listEvents = dayMode ? events.filter((e) => e.date === selectedDate) : upcoming.slice(1);
+
+  function renderBody() {
+    if (loading) {
+      return (
+        <View style={styles.state}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      );
     }
 
-    if (loading){
-        return (
-        <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        </SafeAreaView>
-        )
+    if (error) {
+      return (
+        <View style={styles.state}>
+          <Text style={styles.stateTitle}>{error}</Text>
+          <Text style={styles.stateBody}>The connection dropped. Your plans are still there.</Text>
+          <View style={styles.stateButton}>
+            <Button title="Try again" onPress={load} />
+          </View>
+        </View>
+      );
     }
 
-    if (error){
-        return (
-        <SafeAreaView style={styles.center}>
-            <Text style={styles.emptyText}>{error}</Text>
-        </SafeAreaView>
-        )
+    if (groups.length === 0) {
+      return (
+        <View style={styles.state}>
+          <Text style={styles.stateTitle}>No squads yet</Text>
+          <Text style={styles.stateBody}>
+            Start one and send the code to your people, or paste a code somebody sent you.
+          </Text>
+          <View style={styles.stateButton}>
+            <Button title="Start a squad" onPress={() => setShowSquadForm(true)} />
+          </View>
+        </View>
+      );
+    }
+
+    if (events.length === 0) {
+      return (
+        <View style={styles.state}>
+          <Text style={styles.stateTitle}>Nothing on. Suspicious.</Text>
+          <Text style={styles.stateBody}>
+            Your week is wide open. Somebody has to go first — might as well be you.
+          </Text>
+          <View style={styles.stateButton}>
+            <Button title="Propose an outing" onPress={() => openNewEvent(null)} />
+          </View>
+        </View>
+      );
     }
 
     return (
-        <SafeAreaView style={styles.screen}> 
-            <ScrollView contentContainerStyle={styles.content}>
-                <HomeHeader displayName={displayName} onProfile={() => logout()} />
-                <GroupBar groups={groups} activeId={activeGroup} onSelect={setActiveGroup} />
-                {rsvpError ? (
-                <View style={styles.body}>
-                    <Text style={styles.formError}>{rsvpError}</Text>
-                </View>
-                ) : null }
-                {upNextEvent ? (
-                <View style={styles.body}>
-                    <UpNext
-                        event={upNextEvent}
-                        onPress={() => setOpenEvent(upNextEvent)}
-                        onRsvp={(status) => handleRsvp(upNextEvent.id, status)}
-                        saving={rsvpSaving}
-                    />
-                </View>
-                ) : null }
-                <View style={styles.body}>
-                    <CalendarCard
-                        events={squadEvents}
-                        daysShown={7}
-                        selectedDate={selectedDate}
-                        onSelectDate={(d) => setSelectedDate(d === selectedDate ? null : d)}
-                        onAddEvent={() => setShowCreate(true)}
-                    />
-                </View>
-                {!upNextEvent && listEvents.length == 0 ? ( 
-                <View style={styles.body}>
-                    <Text style={styles.emptyText}>
-                        {dayMode ? 'Nothing Today..:(' : 'There are no Events'}
-                    </Text>
-                </View>
-                ) : (
-                listEvents.map((event) => (
-                <View style={styles.body} key={event.id}>
-                    <EventCard event={event} onPress={() => setOpenEvent(event)} />
-                </View>
-                ))
-                )}
-            </ScrollView>
-            <EventFormSheet
-                visible={showCreate}
-                groups={groups}
-                defaultGroupId={activeGroup}
-                defaultDate={selectedDate ?? date}
-                event={editEvent}
-                onClose={() => { setShowCreate(false); setEditEvent(null); }}
-                onSaved={async () => setEvents(await getMyEvents(user.id))}
-            />
+      <>
+        <View style={styles.body}>
+          <CalendarCard
+            events={events}
+            daysShown={7}
+            selectedDate={selectedDate}
+            onSelectDate={(d) => setSelectedDate(d === selectedDate ? null : d)}
+            onAddEvent={() => openNewEvent(selectedDate)}
+          />
+        </View>
 
-            <EventSheet
-                event={openEvent}
-                currentUserId={user.id}
-                onClose={() => setOpenEvent(null)}
-                onChanged={async () => setEvents(await getMyEvents(user.id))}
-                onEdit={(e) => {
-                    setOpenEvent(null);
-                    setEditEvent(e);
-                    setShowCreate(true);
-                }}
+        {dayMode ? (
+          <View style={styles.body}>
+            <DayFilterRow
+              label={dayFilterLabel(selectedDate)}
+              onClear={() => setSelectedDate(null)}
             />
-        </SafeAreaView>
-        );
-        
+          </View>
+        ) : null}
 
+        {rsvpError ? (
+          <View style={styles.body}>
+            <Text style={styles.error}>{rsvpError}</Text>
+          </View>
+        ) : null}
+
+        {upNextEvent ? (
+          <View style={styles.body}>
+            <SectionLabel>Up next</SectionLabel>
+            <UpNext
+              event={upNextEvent}
+              onPress={() => setOpenEvent(upNextEvent)}
+              onRsvp={(status) => handleRsvp(upNextEvent.id, status)}
+              saving={rsvpSaving}
+            />
+          </View>
+        ) : null}
+
+        <View style={styles.body}>
+          <SectionLabel>{dayMode ? 'On this day' : 'Later'}</SectionLabel>
+
+          {listEvents.length === 0 ? (
+            <ListEmpty
+              title={dayMode ? `Nothing on ${dayFilterLabel(selectedDate)}` : 'Nothing else planned'}
+              body="A free evening is a terrible thing to waste."
+              actionLabel="Propose something"
+              onAction={() => openNewEvent(selectedDate)}
+            />
+          ) : (
+            listEvents.map((event) => (
+              <EventCard key={event.id} event={event} onPress={() => setOpenEvent(event)} />
+            ))
+          )}
+        </View>
+      </>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <HomeHeader displayName={displayName} onCreate={() => openNewEvent(selectedDate)} />
+        {renderBody()}
+      </ScrollView>
+
+      <EventFormSheet
+        visible={showCreate}
+        groups={groups}
+        defaultGroupId={null}
+        defaultDate={formDate ?? today}
+        event={editEvent}
+        onClose={() => {
+          setShowCreate(false);
+          setEditEvent(null);
+        }}
+        onSaved={async () => setEvents(await getMyEvents(user.id))}
+      />
+
+      <GroupFormSheet
+        visible={showSquadForm}
+        userId={user.id}
+        onClose={() => setShowSquadForm(false)}
+        onDone={async () => {
+          setGroups(await getGroupsForUser(user.id));
+        }}
+      />
+
+      <EventSheet
+        event={openEvent}
+        currentUserId={user.id}
+        onClose={() => setOpenEvent(null)}
+        onChanged={async () => setEvents(await getMyEvents(user.id))}
+        onEdit={(e) => {
+          setOpenEvent(null);
+          setEditEvent(e);
+          setFormDate(e.date);
+          setShowCreate(true);
+        }}
+      />
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
-    center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
-    screen: { flex: 1, backgroundColor: colors.bg },
-    content: { width: '100%', maxWidth: layout.column, alignSelf: 'center', paddingVertical: space.lg, gap: space.sm },
-    body: { paddingHorizontal: space.lg, gap: space.sm },
-    greeting: { color: colors.text, fontFamily: font.display, fontSize: 24 },
-    subtitle: { color: colors.textSoft, fontFamily: font.medium, fontSize: 14 },
-    logoutText: { color: colors.primary, fontFamily: font.semi, fontSize: 14, marginBottom: space.md },
-    sectionTitle: { color: colors.textStrong, fontFamily: font.semi, fontSize: 17, marginTop: space.md },
-    emptyText: { color: colors.textFaint, fontFamily: font.medium, fontSize: 14 },
-    itemText: { color: colors.text, fontFamily: font.medium, fontSize: 15 },
-    formError: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
+  screen: { flex: 1, backgroundColor: colors.bg },
+  content: {
+    width: '100%',
+    maxWidth: layout.column,
+    alignSelf: 'center',
+    paddingVertical: space.md,
+    gap: space.md,
+  },
+  body: { paddingHorizontal: space.lg, gap: space.sm },
+  error: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
+  state: { alignItems: 'center', paddingHorizontal: space.lg, paddingVertical: space.xl, gap: space.xs },
+  stateTitle: {
+    color: colors.text,
+    fontFamily: font.display,
+    fontSize: 21,
+    letterSpacing: -0.3,
+    textAlign: 'center',
+  },
+  stateBody: {
+    color: colors.textSoft,
+    fontFamily: font.medium,
+    fontSize: 14.5,
+    lineHeight: 21,
+    textAlign: 'center',
+  },
+  stateButton: { alignSelf: 'stretch', marginTop: space.sm },
 });
-
-
