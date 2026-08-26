@@ -14,27 +14,29 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import GradientAvatar, { initialsFor } from '../components/general/GradientAvatar';
 import ChatComposer from '../components/chat/ChatComposer';
-import GroupBar from '../components/general/GroupBar';
 import MessageBubble, { DateSeparator } from '../components/chat/MessageBubble';
+import SquadPicker, { SquadMonogram } from '../components/chat/SquadPicker';
 import { buildRows, type Row } from '../components/chat/messageRows';
 import { Group } from '../models/main';
 import {
+  getGroupPreviews,
   getGroupsForUser,
   getMemberNames,
   sendMessage,
   toChatMessage,
   type ChatMessage,
+  type GroupPreview,
 } from '../services/serviceGroup';
 import { closeGroupChat, startChat } from '../services/serviceRealtime';
-import { colors, font, layout, radius, space } from '../theme';
+import { getUserById } from '../services/serviceUser';
+import { layout, paper, paperFont, radius, space } from '../theme';
 
 type GroupChatScreenProps = {
   user: AuthUser;
-  /** Ποια παρέα ανοίγει πρώτη — αλλιώς η πρώτη της λίστας. */
+  /** Αν δοθεί, ανοίγει κατευθείαν αυτή η παρέα· αλλιώς ξεκινάμε από τη λίστα. */
   initialGroupId?: string | null;
-  /** Αν λείπει, δεν εμφανίζεται βελάκι πίσω — η πλοήγηση γίνεται από το BottomNav. */
+  /** Αν λείπει, δεν εμφανίζεται βελάκι πίσω από τη λίστα — η πλοήγηση γίνεται από το BottomNav. */
   onBack?: () => void;
 };
 
@@ -44,7 +46,10 @@ export default function GroupChatScreen({
   onBack,
 }: GroupChatScreenProps) {
   const [groups, setGroups] = useState<Group[]>([]);
+  // null = κανένα ανοιχτό chat, δηλαδή δείχνουμε τη λίστα με τις παρέες.
   const [activeId, setActiveId] = useState<string | null>(initialGroupId);
+  const [previews, setPreviews] = useState<Record<string, GroupPreview>>({});
+  const [displayName, setDisplayName] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [memberCount, setMemberCount] = useState(0);
   const [loadingGroups, setLoadingGroups] = useState(true);
@@ -56,7 +61,45 @@ export default function GroupChatScreen({
   const namesRef = useRef<Record<string, string>>({});
   const listRef = useRef<FlatList<Row>>(null);
 
-  // 1. Οι παρέες του χρήστη — μία φορά.
+  // Φέρνει τα τελευταία μηνύματα για την προεπισκόπηση της λίστας.
+  // Αν αποτύχει το αφήνουμε να περάσει: η λίστα δουλεύει και χωρίς previews.
+  const loadPreviews = useCallback(async function load(forGroups: Group[]) {
+    const ids = forGroups.map(function (group) {
+      return group.id;
+    });
+
+    try {
+      const latest = await getGroupPreviews(ids);
+      setPreviews(latest);
+    } catch {
+      // σιωπηλά — η προεπισκόπηση είναι διακόσμηση, όχι περιεχόμενο.
+    }
+  }, []);
+
+  // 1. Το όνομα του χρήστη — μόνο για τον χαιρετισμό, γι' αυτό αν αποτύχει
+  // απλώς μένει άδειο και ο χαιρετισμός εμφανίζεται χωρίς όνομα.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfile() {
+      try {
+        const profile = await getUserById(user.id);
+        if (!cancelled && profile) {
+          setDisplayName(profile.name);
+        }
+      } catch {
+        // σιωπηλά
+      }
+    }
+
+    loadProfile();
+
+    return function cleanup() {
+      cancelled = true;
+    };
+  }, [user.id]);
+
+  // 2. Οι παρέες του χρήστη — μία φορά.
   useEffect(() => {
     // Σημαία ακύρωσης: αν φύγει η οθόνη όσο τρέχει το await, δεν κάνουμε setState.
     let cancelled = false;
@@ -69,21 +112,7 @@ export default function GroupChatScreen({
         }
 
         setGroups(myGroups);
-
-        // Διάλεξε ποια παρέα θα είναι ενεργή. Περνάμε συνάρτηση στον setter
-        // για να δούμε σίγουρα την πιο πρόσφατη τιμή του activeId.
-        setActiveId(function (current) {
-          // α) Αν έχει ήδη επιλεγεί κάποια, κράτα την.
-          if (current !== null && current !== undefined) {
-            return current;
-          }
-          // β) Αλλιώς, αν υπάρχει τουλάχιστον μία παρέα, πάρε την πρώτη.
-          if (myGroups.length > 0) {
-            return myGroups[0].id;
-          }
-          // γ) Αλλιώς, καμία.
-          return null;
-        });
+        loadPreviews(myGroups);
       } catch {
         // Δεν μας ενδιαφέρει ΤΙ έσκασε, μόνο ότι απέτυχε.
         if (!cancelled) {
@@ -103,11 +132,11 @@ export default function GroupChatScreen({
     return function cleanup() {
       cancelled = true;
     };
-  }, [user.id]);
+  }, [user.id, loadPreviews]);
 
-  // 2. Ιστορικό + realtime κανάλι της ενεργής παρέας.
+  // 3. Ιστορικό + realtime κανάλι της ενεργής παρέας.
   useEffect(() => {
-    // Καμία ενεργή παρέα -> άδειασε την οθόνη και σταμάτα εδώ.
+    // Καμία ενεργή παρέα -> είμαστε στη λίστα, δεν ανοίγουμε κανάλι.
     if (!activeId) {
       setMessages([]);
       setMemberCount(0);
@@ -236,11 +265,6 @@ export default function GroupChatScreen({
 
   // ---- Τιμές που θα μπουν στο JSX, υπολογισμένες εκ των προτέρων ----
 
-  let headerTitle = 'Chats';
-  if (activeGroup !== null) {
-    headerTitle = activeGroup.name;
-  }
-
   let memberLabel = 'members';
   if (memberCount === 1) {
     memberLabel = 'member';
@@ -252,6 +276,21 @@ export default function GroupChatScreen({
   if (Platform.OS === 'ios') {
     keyboardBehavior = 'padding';
     keyboardOffset = 8;
+  }
+
+  // ---- Ενέργειες ----
+
+  function openGroup(id: string) {
+    setError(null);
+    setActiveId(id);
+  }
+
+  // Πίσω από το ανοιχτό chat: κλείνει τη συνομιλία και ξαναδείχνει τη λίστα,
+  // με φρέσκια προεπισκόπηση ώστε να φαίνεται το μήνυμα που μόλις γράφτηκε.
+  function closeGroup() {
+    setActiveId(null);
+    setError(null);
+    loadPreviews(groups);
   }
 
   // ---- Βοηθητικές συναρτήσεις εμφάνισης ----
@@ -297,46 +336,9 @@ export default function GroupChatScreen({
   function renderEmptyList() {
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>No messages yet</Text>
-        <Text style={styles.emptyText}>Say something to get the squad going.</Text>
+        <Text style={styles.emptyTitle}>Quiet in here</Text>
+        <Text style={styles.emptyText}>Write the squad's first message.</Text>
       </View>
-    );
-  }
-
-  // Το κυρίως σώμα έχει τρεις πιθανές καταστάσεις.
-  function renderChatBody() {
-    // α) Ο χρήστης δεν έχει καμία παρέα.
-    if (groups.length === 0) {
-      return (
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>No squads yet</Text>
-          <Text style={styles.emptyText}>Join a squad to start chatting.</Text>
-        </View>
-      );
-    }
-
-    // β) Φορτώνει η συζήτηση.
-    if (loadingChat) {
-      return (
-        <View style={styles.empty}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      );
-    }
-
-    // γ) Κανονική λίστα μηνυμάτων.
-    return (
-      <FlatList
-        ref={listRef}
-        data={rows}
-        keyExtractor={function (item) {
-          return item.id;
-        }}
-        contentContainerStyle={styles.list}
-        onContentSizeChange={scrollToBottom}
-        ListEmptyComponent={renderEmptyList()}
-        renderItem={renderRow}
-      />
     );
   }
 
@@ -345,49 +347,52 @@ export default function GroupChatScreen({
   if (loadingGroups) {
     return (
       <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={paper.accent} />
       </SafeAreaView>
     );
   }
 
+  // α) Καμία ανοιχτή παρέα -> η λίστα επιλογής.
+  if (activeGroup === null) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        <SquadPicker
+          groups={groups}
+          previews={previews}
+          displayName={displayName}
+          onSelect={openGroup}
+          onBack={onBack}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // β) Ανοιχτή συνομιλία.
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.column}>
-        <View style={styles.header}>
-          {/* Το βελάκι μπαίνει μόνο αν μας δόθηκε onBack. Το `: null` = μη ζωγραφίσεις τίποτα. */}
-          {onBack ? (
-            <Pressable
-              onPress={onBack}
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              style={backButtonStyle}
-            >
-              <Ionicons name="chevron-back" size={22} color={colors.text} />
-            </Pressable>
-          ) : null}
+        <View style={styles.topBar}>
+          <Pressable
+            onPress={closeGroup}
+            accessibilityRole="button"
+            accessibilityLabel="Back to squads"
+            style={backButtonStyle}
+          >
+            <Ionicons name="chevron-back" size={20} color={paper.ink} />
+          </Pressable>
 
-          {activeGroup ? (
-            <GradientAvatar
-              label={activeGroup.name}
-              initials={initialsFor(activeGroup.name)}
-              size={38}
-            />
-          ) : null}
+          <SquadMonogram name={activeGroup.name} size={32} />
 
           <View style={styles.headerText}>
             <Text style={styles.title} numberOfLines={1}>
-              {headerTitle}
+              {activeGroup.name}
             </Text>
-            {activeGroup ? (
-              <Text style={styles.subtitle}>
-                {memberCount} {memberLabel}
-              </Text>
-            ) : null}
+            <Text style={styles.subtitle}>
+              {memberCount} {memberLabel}
+            </Text>
           </View>
         </View>
-
-        <GroupBar groups={groups} activeId={activeId} onSelect={setActiveId} showAll={false} />
-        <View style={styles.divider} />
 
         <KeyboardAvoidingView
           style={styles.chat}
@@ -396,7 +401,23 @@ export default function GroupChatScreen({
         >
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {renderChatBody()}
+          {loadingChat ? (
+            <View style={styles.empty}>
+              <ActivityIndicator color={paper.accent} />
+            </View>
+          ) : (
+            <FlatList
+              ref={listRef}
+              data={rows}
+              keyExtractor={function (item) {
+                return item.id;
+              }}
+              contentContainerStyle={styles.list}
+              onContentSizeChange={scrollToBottom}
+              ListEmptyComponent={renderEmptyList()}
+              renderItem={renderRow}
+            />
+          )}
 
           <ChatComposer onSend={handleSend} disabled={!activeId} />
         </KeyboardAvoidingView>
@@ -406,47 +427,56 @@ export default function GroupChatScreen({
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
-  screen: { flex: 1, backgroundColor: colors.bg },
+  center: { flex: 1, backgroundColor: paper.bg, alignItems: 'center', justifyContent: 'center' },
+  screen: { flex: 1, backgroundColor: paper.bg },
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
-  header: {
+
+  // Header της συνομιλίας: μία λεπτή γραμμή τον χωρίζει από τα μηνύματα — καμία σκιά.
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
     paddingHorizontal: space.md,
     paddingTop: space.sm,
-    paddingBottom: space.xs,
+    paddingBottom: space.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: paper.line,
+    backgroundColor: paper.bg,
   },
   back: {
-    width: 38,
-    height: 38,
+    width: 32,
+    height: 32,
+    marginLeft: -4,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
-  pressed: { opacity: 0.7 },
+  pressed: { backgroundColor: paper.surfaceAlt },
   headerText: { flex: 1 },
-  title: { color: colors.text, fontFamily: font.bold, fontSize: 19 },
-  subtitle: { marginTop: 1, color: colors.textSoft, fontFamily: font.medium, fontSize: 12 },
-  divider: { height: 1, backgroundColor: colors.border },
+  title: { color: paper.ink, fontFamily: paperFont.semi, fontSize: 16 },
+  subtitle: { marginTop: 1, color: paper.inkFaint, fontFamily: paperFont.regular, fontSize: 12 },
+
   chat: { flex: 1 },
   list: {
     flexGrow: 1,
     paddingHorizontal: space.md,
-    paddingTop: space.xs,
+    paddingTop: space.sm,
     paddingBottom: space.md,
   },
+
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: space.lg },
-  emptyTitle: { color: colors.textStrong, fontFamily: font.semi, fontSize: 16 },
-  emptyText: { color: colors.textFaint, fontFamily: font.medium, fontSize: 14, textAlign: 'center' },
+  emptyTitle: { color: paper.ink, fontFamily: paperFont.serifSemi, fontSize: 20 },
+  emptyText: {
+    color: paper.inkSoft,
+    fontFamily: paperFont.regular,
+    fontSize: 14,
+    textAlign: 'center',
+  },
   error: {
     paddingHorizontal: space.md,
     paddingVertical: space.xs,
-    color: colors.danger,
-    fontFamily: font.medium,
+    color: paper.accent,
+    fontFamily: paperFont.medium,
     fontSize: 13,
     textAlign: 'center',
   },

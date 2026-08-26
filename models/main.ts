@@ -11,42 +11,23 @@ export class User {
     }
 }
 
-export class Group {
+/**
+ * Το δημόσιο προφίλ μιας Παρέας — ό,τι βλέπει ΚΑΙ ένας μη-μέλος.
+ *
+ * Το `handle` είναι η ταυτότητα: μοναδικό, πεζά λατινικά, δεν αλλάζει.
+ * Το `name` είναι το εμφανιζόμενο όνομα: ελεύθερο, αλλάζει όποτε θέλουν.
+ *
+ * Τα μέλη και τα μηνύματα ΔΕΝ ζουν εδώ μέσα: τα φέρνει το serviceGroup όταν
+ * και όποτε χρειάζονται, και μόνο για όποιον έχει δικαίωμα να τα δει.
+ */
+export type Group = {
     id: string;
+    handle: string;
     name: string;
-    members: Array<User>;
-    messages: Array<Message>;
-
-    constructor(id: string, name: string, members: Array<User> = [], messages: Array<Message> = []){
-        this.id = id;
-        this.name = name;
-        this.members = members;
-        this.messages = messages;
-    }
-
-    addMember(u: User): void {
-        this.members.push(u);
-        
-        console.log(`User ${u.name} added!`);
-    }
-
-    removeMember(u: User): void {
-        this.members = this.members.filter(member => member.id != u.id);
-
-        console.log(`User ${u.name} removed!`);
-    }
-
-    addMessage(m: Message): void {
-        this.messages.push(m);
-        console.log(`💬 ${m.sender.name}: ${m.content}`);    
-    }
-    showConversation(): void {
-        console.log(`--- Συνομιλία: ${this.name} ---`);
-        for (const m of this.messages) {
-            console.log(`${m.sender.name}: ${m.content}`);
-        }
-    }
-}
+    bio: string | null;
+    avatarUrl: string | null;
+    memberCount: number;
+};
 
 export class Message{
     id: string;
