@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { colors, font, radius, shadow, space } from '../../theme';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { paper, paperFont, radius, space } from '../../theme';
 
 type ChatComposerProps = {
   /** Επιστρέφει false αν η αποστολή απέτυχε — τότε το κείμενο μένει στο πεδίο. */
@@ -12,11 +12,12 @@ type ChatComposerProps = {
 
 export default function ChatComposer({
   onSend,
-  placeholder = 'Message',
+  placeholder = 'Message the squad',
   disabled = false,
 }: ChatComposerProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [focused, setFocused] = useState(false);
 
   const trimmed = text.trim();
   const canSend = trimmed.length > 0 && !sending && !disabled;
@@ -31,73 +32,117 @@ export default function ChatComposer({
     if (sent) setText('');
   }
 
+  /**
+   * Πληκτρολόγιο: Enter στέλνει, Shift+Enter αλλάζει γραμμή. Μόνο στο web —
+   * στο κινητό το Enter του εικονικού πληκτρολογίου πρέπει να κάνει νέα γραμμή.
+   *
+   * Το react-native-web δίνει εδώ το κανονικό keydown event του browser, οπότε
+   * έχουμε και `shiftKey` και `preventDefault()`. Το preventDefault εμποδίζει
+   * τον browser να προσθέσει το newline πριν προλάβουμε να στείλουμε.
+   */
+  function handleKeyPress(event: any) {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+
+    const key = event.key ?? event.nativeEvent?.key;
+    const withShift = event.shiftKey ?? event.nativeEvent?.shiftKey;
+    // Όσο ένα IME συνθέτει χαρακτήρα, το Enter επιβεβαιώνει τη σύνθεση — όχι αποστολή.
+    const composing = event.nativeEvent?.isComposing === true;
+
+    if (key === 'Enter' && !withShift && !composing) {
+      event.preventDefault();
+      handleSend();
+    }
+  }
+
   return (
     <View style={styles.bar}>
-      <TextInput
-        style={styles.input}
-        value={text}
-        onChangeText={setText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textFaint}
-        editable={!disabled}
-        multiline
-      />
+      {/* Ένα ενιαίο κουτί: πεδίο και κουμπί ζουν μέσα στο ίδιο περίγραμμα. */}
+      <View style={[styles.box, focused && styles.boxFocused]}>
+        <TextInput
+          style={styles.input}
+          value={text}
+          onChangeText={setText}
+          onKeyPress={handleKeyPress}
+          onFocus={function () {
+            setFocused(true);
+          }}
+          onBlur={function () {
+            setFocused(false);
+          }}
+          placeholder={placeholder}
+          placeholderTextColor={paper.inkFaint}
+          editable={!disabled}
+          multiline
+        />
 
-      <Pressable
-        onPress={handleSend}
-        disabled={!canSend}
-        accessibilityRole="button"
-        accessibilityLabel="Send"
-        style={({ pressed }) => [
-          styles.send,
-          !canSend && styles.sendDisabled,
-          pressed && canSend && styles.pressed,
-        ]}
-      >
-        {sending ? (
-          <ActivityIndicator size="small" color="#FFFFFF" />
-        ) : (
-          <Ionicons name="send" size={18} color="#FFFFFF" />
-        )}
-      </Pressable>
+        <Pressable
+          onPress={handleSend}
+          disabled={!canSend}
+          accessibilityRole="button"
+          accessibilityLabel="Send"
+          style={function ({ pressed }) {
+            return [styles.send, canSend ? styles.sendReady : styles.sendIdle, pressed && canSend && styles.pressed];
+          }}
+        >
+          {sending ? (
+            <ActivityIndicator size="small" color={paper.onMine} />
+          ) : (
+            <Ionicons
+              name="arrow-up"
+              size={17}
+              color={canSend ? paper.onMine : paper.inkFaint}
+            />
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
 
+const SEND = 30;
+
 const styles = StyleSheet.create({
   bar: {
+    paddingHorizontal: space.md,
+    paddingTop: space.sm,
+    paddingBottom: space.md,
+    backgroundColor: paper.bg,
+  },
+  box: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: space.sm,
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    backgroundColor: colors.bg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    paddingLeft: 14,
+    paddingRight: 7,
+    paddingVertical: 7,
+    backgroundColor: paper.surface,
+    borderWidth: 1,
+    borderColor: paper.line,
+    borderRadius: radius.xl,
   },
+  // Στο focus σκουραίνει μόνο το περίγραμμα — καμία σκιά, κανένα glow.
+  boxFocused: { borderColor: paper.inkFaint },
   input: {
     flex: 1,
-    minHeight: 46,
     maxHeight: 120,
-    paddingHorizontal: space.md,
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.xl,
-    color: colors.text,
-    fontFamily: font.medium,
+    minHeight: SEND,
+    paddingTop: 5,
+    paddingBottom: 5,
+    color: paper.ink,
+    fontFamily: paperFont.regular,
     fontSize: 15,
+    lineHeight: 21,
   },
   send: {
-    width: 46,
-    height: 46,
+    width: SEND,
+    height: SEND,
     borderRadius: radius.pill,
-    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadow.button,
   },
-  sendDisabled: { backgroundColor: colors.borderStrong, shadowOpacity: 0, elevation: 0 },
+  sendReady: { backgroundColor: paper.accent },
+  sendIdle: { backgroundColor: paper.surfaceAlt },
   pressed: { opacity: 0.85 },
 });
