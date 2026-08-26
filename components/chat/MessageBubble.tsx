@@ -1,16 +1,17 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, View } from 'react-native';
-import { brand, colors, font, gradientFor, radius, space } from '../../theme';
-import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
+import { paper, paperFont, space } from '../../theme';
+import { SquadMonogram } from './SquadPicker';
 
-const AVATAR = 28;
+const AVATAR = 26;
+/** Στρογγυλή εξωτερική γωνία φυσαλίδας. */
+const ROUND = 16;
 /** Οι "εσωτερικές" γωνίες μέσα σε μια σερί μηνυμάτων. */
 const TIGHT = 6;
 
 function timeLabel(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
 type MessageBubbleProps = {
@@ -18,7 +19,7 @@ type MessageBubbleProps = {
   senderName: string;
   /** ISO timestamp από τη βάση. */
   createdAt: string;
-  /** Δικό μου μήνυμα — πάει δεξιά με το brand gradient. */
+  /** Δικό μου μήνυμα — πάει δεξιά, σε μελανί κουτί. */
   mine: boolean;
   /** Πρώτο μιας σερί του ίδιου αποστολέα — μόνο εκεί δείχνουμε όνομα. */
   isFirst: boolean;
@@ -37,43 +38,33 @@ export default function MessageBubble({
   // Στρογγυλή γωνία μόνο στις εξωτερικές άκρες, ώστε η σερί να διαβάζεται σαν μία στήλη.
   const shape = mine
     ? {
-        borderTopRightRadius: isFirst ? radius.lg : TIGHT,
-        borderBottomRightRadius: isLast ? radius.lg : TIGHT,
+        borderTopRightRadius: isFirst ? ROUND : TIGHT,
+        borderBottomRightRadius: isLast ? ROUND : TIGHT,
       }
     : {
-        borderTopLeftRadius: isFirst ? radius.lg : TIGHT,
-        borderBottomLeftRadius: isLast ? radius.lg : TIGHT,
+        borderTopLeftRadius: isFirst ? ROUND : TIGHT,
+        borderBottomLeftRadius: isLast ? ROUND : TIGHT,
       };
 
   return (
     <View style={[styles.row, mine ? styles.rowMine : styles.rowOther, isFirst && styles.rowFirst]}>
+      {/* Το avatar μπαίνει μόνο στο τελευταίο μήνυμα της σερί· αλλιώς κρατάμε τη θέση του κενή. */}
       {mine ? null : isLast ? (
-        <GradientAvatar label={senderName || '?'} initials={initialsFor(senderName)} size={AVATAR} />
+        <SquadMonogram name={senderName || '?'} size={AVATAR} />
       ) : (
         <View style={styles.avatarSpacer} />
       )}
 
       <View style={[styles.column, mine ? styles.columnMine : styles.columnOther]}>
         {!mine && isFirst && senderName ? (
-          <Text style={[styles.sender, { color: gradientFor(senderName)[1] }]} numberOfLines={1}>
+          <Text style={styles.sender} numberOfLines={1}>
             {senderName}
           </Text>
         ) : null}
 
-        {mine ? (
-          <LinearGradient
-            colors={[brand[0], brand[1]]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.bubble, shape]}
-          >
-            <Text style={[styles.text, styles.textMine]}>{content}</Text>
-          </LinearGradient>
-        ) : (
-          <View style={[styles.bubble, styles.bubbleOther, shape]}>
-            <Text style={styles.text}>{content}</Text>
-          </View>
-        )}
+        <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther, shape]}>
+          <Text style={[styles.text, mine && styles.textMine]}>{content}</Text>
+        </View>
 
         {isLast ? <Text style={styles.time}>{timeLabel(createdAt)}</Text> : null}
       </View>
@@ -81,7 +72,7 @@ export default function MessageBubble({
   );
 }
 
-/** Διαχωριστικό ημέρας ανάμεσα στα μηνύματα. */
+/** Διαχωριστικό ημέρας — μια λεπτή γραμμή με την ημερομηνία στη μέση. */
 export function DateSeparator({ label }: { label: string }) {
   return (
     <View style={styles.separator}>
@@ -93,26 +84,40 @@ export function DateSeparator({ label }: { label: string }) {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 2 },
+  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 3 },
   rowFirst: { marginTop: space.md },
   rowMine: { justifyContent: 'flex-end' },
   rowOther: { justifyContent: 'flex-start' },
   avatarSpacer: { width: AVATAR },
-  column: { maxWidth: '78%' },
+  column: { maxWidth: '76%' },
   columnMine: { alignItems: 'flex-end' },
   columnOther: { alignItems: 'flex-start' },
-  bubble: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.lg },
-  bubbleOther: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  sender: { marginBottom: 3, marginLeft: 2, fontFamily: font.semi, fontSize: 12 },
-  text: { color: colors.text, fontFamily: font.medium, fontSize: 15, lineHeight: 21 },
-  textMine: { color: '#FFFFFF' },
-  time: {
-    marginTop: 3,
-    marginHorizontal: 2,
-    color: colors.textFaint,
-    fontFamily: font.medium,
-    fontSize: 10,
+
+  bubble: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: ROUND },
+  bubbleMine: { backgroundColor: paper.mine },
+  bubbleOther: {
+    backgroundColor: paper.surface,
+    borderWidth: 1,
+    borderColor: paper.line,
   },
+
+  sender: {
+    marginBottom: 4,
+    marginLeft: 2,
+    color: paper.inkSoft,
+    fontFamily: paperFont.semi,
+    fontSize: 12,
+  },
+  text: { color: paper.ink, fontFamily: paperFont.regular, fontSize: 15, lineHeight: 22 },
+  textMine: { color: paper.onMine },
+  time: {
+    marginTop: 4,
+    marginHorizontal: 2,
+    color: paper.inkFaint,
+    fontFamily: paperFont.regular,
+    fontSize: 11,
+  },
+
   separator: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -120,12 +125,11 @@ const styles = StyleSheet.create({
     marginTop: space.lg,
     marginBottom: space.xs,
   },
-  separatorLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  separatorLine: { flex: 1, height: 1, backgroundColor: paper.line },
   separatorText: {
-    color: colors.textFaint,
-    fontFamily: font.semi,
+    color: paper.inkFaint,
+    fontFamily: paperFont.medium,
     fontSize: 11,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+    letterSpacing: 0.4,
   },
 });

@@ -228,7 +228,6 @@ export default function HomeScreen({ user }: HomeScreenProps) {
 
       <GroupFormSheet
         visible={showSquadForm}
-        userId={user.id}
         onClose={() => setShowSquadForm(false)}
         onDone={async () => {
           setGroups(await getGroupsForUser(user.id));

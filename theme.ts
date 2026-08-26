@@ -81,6 +81,14 @@ export const shadow = {
     shadowRadius: 10,
     elevation: 4,
   },
+  // Απαλή ανύψωση για φυσαλίδες chat και για το header — μόλις που φαίνεται.
+  bubble: {
+    shadowColor: '#5C3570',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 1,
+  },
   hero: {
     shadowColor: '#5C3570',
     shadowOffset: { width: 0, height: 8 },
@@ -102,4 +110,38 @@ export const font = {
   bold: 'Poppins_700Bold',
   semi: 'Poppins_600SemiBold',
   medium: 'Poppins_500Medium',
+};
+
+// ── Chat: "Paper" ──────────────────────────────────────────────────────
+// Ξεχωριστή, πιο ήσυχη παλέτα μόνο για την οθόνη των μηνυμάτων: ζεστό κρεμ
+// χαρτί, μελανί κείμενο, ένα γήινο κεραμιδί σαν μοναδικός τόνος. Χωρίς
+// gradients και χωρίς σκιές — ο διαχωρισμός γίνεται με λεπτές γραμμές.
+export const paper = {
+  bg: '#FAF9F5',          // φόντο οθόνης (κρεμ χαρτί)
+  surface: '#FFFFFF',     // φυσαλίδες των άλλων, κάρτες λίστας
+  surfaceAlt: '#F0EEE6',  // ήπια επιφάνεια (πεδίο εισόδου, chips)
+
+  line: '#E8E5DA',        // λεπτές γραμμές / περιγράμματα
+  lineSoft: '#F0EDE4',    // διαχωριστικά μέσα σε λίστα
+
+  ink: '#1F1E1D',         // κύριο κείμενο
+  inkSoft: '#6B6862',     // δευτερεύον κείμενο
+  inkFaint: '#9A968D',    // ώρες, placeholders
+
+  // Δικά μου μηνύματα: συμπαγές μελανί κουτί με κρεμ γράμματα.
+  mine: '#262625',
+  onMine: '#FAF9F5',
+
+  accent: '#C96442',      // κεραμιδί — κουμπί αποστολής, ενεργές ενδείξεις
+  accentSoft: '#F3E7E1',  // απαλό φόντο του τόνου
+};
+
+// Γραμματοσειρές του chat: Inter για το UI και τα μηνύματα, Source Serif για
+// τους τίτλους — ίδια λογική με το claude.ai (grotesque + serif κεφαλίδες).
+export const paperFont = {
+  regular: 'Inter_400Regular',
+  medium: 'Inter_500Medium',
+  semi: 'Inter_600SemiBold',
+  serif: 'SourceSerif4_400Regular',
+  serifSemi: 'SourceSerif4_600SemiBold',
 };

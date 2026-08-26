@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { createGroup, joinByInviteCode, type Group } from '../../services/serviceGroup';
+import {
+  createGroup,
+  joinByInviteCode,
+  normalizeHandle,
+  HANDLE_PATTERN,
+  type Group,
+} from '../../services/serviceGroup';
 import { colors, font, radius, space } from '../../theme';
 import AuthField from '../general/AuthField';
 import Button from '../general/Button';
@@ -13,20 +19,20 @@ const TABS: { key: Mode; label: string }[] = [
 ];
 
 const HINTS: Record<Mode, string> = {
-  create: 'Only members see the name. You can change it later.',
-  join: 'Ask someone already in the squad for its handle.',
+  create: 'The handle is permanent and unique. The name you can change later.',
+  join: 'Ask someone already in the squad for its invite code.',
 };
 
 type GroupFormSheetProps = {
   visible: boolean;
-  userId: string;
   onClose: () => void;
   onDone: (group: Group) => void | Promise<void>;
 };
 
-export default function GroupFormSheet({ visible, userId, onClose, onDone }: GroupFormSheetProps) {
+export default function GroupFormSheet({ visible, onClose, onDone }: GroupFormSheetProps) {
   const [mode, setMode] = useState<Mode>('create');
   const [name, setName] = useState('');
+  const [handle, setHandle] = useState('');
   const [code, setCode] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -36,6 +42,7 @@ export default function GroupFormSheet({ visible, userId, onClose, onDone }: Gro
 
     setMode('create');
     setName('');
+    setHandle('');
     setCode('');
     setSaving(false);
     setFormError(null);
@@ -48,14 +55,19 @@ export default function GroupFormSheet({ visible, userId, onClose, onDone }: Gro
 
   async function handleSave() {
     const squadName = name.trim();
+    const squadHandle = normalizeHandle(handle);
     const inviteCode = code.trim();
 
     if (mode === 'create' && !squadName) {
       setFormError('Give your squad a name.');
       return;
     }
+    if (mode === 'create' && !HANDLE_PATTERN.test(squadHandle)) {
+      setFormError('A handle is 3-30 characters: a-z, 0-9 and _ only.');
+      return;
+    }
     if (mode === 'join' && !inviteCode) {
-      setFormError('Enter the squad handle.');
+      setFormError('Enter the invite code.');
       return;
     }
 
@@ -63,8 +75,8 @@ export default function GroupFormSheet({ visible, userId, onClose, onDone }: Gro
     setFormError(null);
     try {
       const group = mode === 'create'
-        ? await createGroup(squadName)
-        : await joinByInviteCode(inviteCode, userId);
+        ? await createGroup(squadHandle, squadName)
+        : await joinByInviteCode(inviteCode);
 
       await onDone(group);
       onClose();
@@ -110,22 +122,33 @@ export default function GroupFormSheet({ visible, userId, onClose, onDone }: Gro
 
           <View style={styles.form}>
             {mode === 'create' ? (
-              <AuthField
-                label="Name"
-                icon="people-outline"
-                value={name}
-                onChangeText={setName}
-                placeholder="Mpala"
-                loading={saving}
-                onSubmit={handleSave}
-              />
+              <>
+                <AuthField
+                  label="Name"
+                  icon="people-outline"
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Mpala"
+                  loading={saving}
+                  onSubmit={handleSave}
+                />
+                <AuthField
+                  label="Handle"
+                  icon="at-outline"
+                  value={handle}
+                  onChangeText={(text) => setHandle(text.toLowerCase())}
+                  placeholder="mvps"
+                  loading={saving}
+                  onSubmit={handleSave}
+                />
+              </>
             ) : (
               <AuthField
-                label="Squad handle"
+                label="Invite code"
                 icon="key-outline"
                 value={code}
-                onChangeText={(text) => setCode(text.toLowerCase())}
-                placeholder="mvps"
+                onChangeText={(text) => setCode(text.toUpperCase())}
+                placeholder="7KQ2XM"
                 loading={saving}
                 onSubmit={handleSave}
               />

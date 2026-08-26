@@ -12,24 +12,44 @@ type GroupBarProps = {
   unread?: Record<string, number>;
   /** Το κυκλάκι "All" — κρύψε το εκεί που δεν έχει νόημα (π.χ. στο chat). */
   showAll?: boolean;
+  /** Πιο μικρά avatars και λιγότερο ύψος — για τη μπάρα μέσα στο chat. */
+  compact?: boolean;
 };
+
+/** Διαστάσεις ανά μέγεθος: κανονικό για το Home, μικρό για το chat. */
+function dimsFor(compact: boolean) {
+  const avatar = compact ? 42 : 54;
+  const gap = avatar + 6;
+  const ring = gap + 5;
+  return {
+    avatar,
+    gap,
+    ring,
+    item: compact ? 60 : 72,
+    label: compact ? 10 : 11,
+    avatarText: compact ? 15 : 19,
+    padV: compact ? space.xs : space.sm,
+  };
+}
 
 type StoryRingProps = {
   colors: readonly [string, string];
   active: boolean;
+  size: number;
   children: React.ReactNode;
 };
 
 /** Δαχτυλίδι σε στιλ story: χρωματιστό στην ενεργή παρέα, σβηστό στις υπόλοιπες. */
-function StoryRing({ colors: ring, active, children }: StoryRingProps) {
+function StoryRing({ colors: ring, active, size, children }: StoryRingProps) {
   return (
     <LinearGradient
       colors={active ? [ring[0], ring[1]] : [colors.border, colors.border]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={styles.ring}
+      style={[styles.ring, { width: size, height: size }]}
     >
-      <View style={styles.ringGap}>{children}</View>
+      {/* Το εσωτερικό κενό είναι 5px μικρότερο — έτσι φαίνεται το δαχτυλίδι. */}
+      <View style={[styles.ringGap, { width: size - 5, height: size - 5 }]}>{children}</View>
     </LinearGradient>
   );
 }
@@ -40,23 +60,38 @@ export default function GroupBar({
   onSelect,
   unread = {},
   showAll = true,
+  compact = false,
 }: GroupBarProps) {
+  const d = dimsFor(compact);
+
+  // Τα κυκλικά μεγέθη εξαρτώνται από το compact, γι' αυτό μπαίνουν inline.
+  const ringSize = { width: d.ring, height: d.ring };
+  const gapSize = { width: d.gap, height: d.gap };
+  const avatarSize = { width: d.avatar, height: d.avatar };
+
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={[styles.row, { paddingVertical: d.padV }]}
+    >
       {showAll ? (
         <Pressable
-          style={styles.item}
+          style={[styles.item, { width: d.item }]}
           onPress={() => onSelect(null)}
           accessibilityRole="button"
           accessibilityState={{ selected: activeId === null }}
           accessibilityLabel="All squads"
         >
-          <StoryRing colors={[colors.primary, colors.accent]} active={activeId === null}>
-            <View style={styles.allTile}>
-              <Ionicons name="people-outline" size={22} color={colors.bg} />
+          <StoryRing colors={[colors.primary, colors.accent]} active={activeId === null} size={d.ring}>
+            <View style={[styles.allTile, avatarSize]}>
+              <Ionicons name="people-outline" size={Math.round(d.avatar * 0.4)} color={colors.bg} />
             </View>
           </StoryRing>
-          <Text style={[styles.label, activeId === null && styles.labelActive]} numberOfLines={1}>
+          <Text
+            style={[styles.label, { fontSize: d.label }, activeId === null && styles.labelActive]}
+            numberOfLines={1}
+          >
             All
           </Text>
         </Pressable>
@@ -69,21 +104,23 @@ export default function GroupBar({
         return (
           <Pressable
             key={group.id}
-            style={styles.item}
+            style={[styles.item, { width: d.item }]}
             onPress={() => onSelect(group.id)}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
             accessibilityLabel={group.name}
           >
             <View>
-              <StoryRing colors={gradientFor(group.name)} active={active}>
+              <StoryRing colors={gradientFor(group.name)} active={active} size={d.ring}>
                 <LinearGradient
                   colors={gradientFor(group.name)}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={[styles.avatar, !active && styles.avatarIdle]}
+                  style={[styles.avatar, avatarSize, !active && styles.avatarIdle]}
                 >
-                  <Text style={styles.avatarText}>{initialsFor(group.name)}</Text>
+                  <Text style={[styles.avatarText, { fontSize: d.avatarText }]}>
+                    {initialsFor(group.name)}
+                  </Text>
                 </LinearGradient>
               </StoryRing>
 
@@ -94,7 +131,10 @@ export default function GroupBar({
               ) : null}
             </View>
 
-            <Text style={[styles.label, active && styles.labelActive]} numberOfLines={1}>
+            <Text
+              style={[styles.label, { fontSize: d.label }, active && styles.labelActive]}
+              numberOfLines={1}
+            >
               {group.name}
             </Text>
           </Pressable>
@@ -104,45 +144,33 @@ export default function GroupBar({
   );
 }
 
-const AVATAR = 54;
-const GAP = AVATAR + 6;
-const RING = GAP + 5;
-
 const styles = StyleSheet.create({
-  row: { paddingHorizontal: space.md, paddingVertical: space.sm, gap: space.sm },
-  item: { width: 72, alignItems: 'center' },
+  row: { paddingHorizontal: space.md, gap: space.sm },
+  item: { alignItems: 'center' },
   ring: {
-    width: RING,
-    height: RING,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ringGap: {
-    width: GAP,
-    height: GAP,
     borderRadius: radius.pill,
     backgroundColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   allTile: {
-    width: AVATAR,
-    height: AVATAR,
     borderRadius: radius.pill,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatar: {
-    width: AVATAR,
-    height: AVATAR,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarIdle: { opacity: 0.72 },
-  avatarText: { color: '#FFFFFF', fontFamily: font.semi, fontSize: 19 },
+  avatarText: { color: '#FFFFFF', fontFamily: font.semi },
   badge: {
     position: 'absolute',
     top: 0,
