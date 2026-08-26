@@ -1,6 +1,23 @@
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
-import { Group } from "../models/main";
+
+/**
+ * Το δημόσιο προφίλ μιας Παρέας — ό,τι βλέπει ΚΑΙ ένας μη-μέλος.
+ *
+ * Το `handle` είναι η ταυτότητα: μοναδικό, πεζά λατινικά, δεν αλλάζει.
+ * Το `name` είναι το εμφανιζόμενο όνομα: ελεύθερο, αλλάζει όποτε θέλουν.
+ *
+ * Τα μέλη και τα μηνύματα ΔΕΝ ζουν εδώ μέσα: τα φέρνουν οι συναρτήσεις
+ * παρακάτω όταν και όποτε χρειάζονται, και μόνο για όποιον έχει δικαίωμα να τα δει.
+ */
+export type Group = {
+  id: string;
+  handle: string;
+  name: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  memberCount: number;
+};
 
 /** Τα δημόσια πεδία μιας Παρέας — όσα επιτρέπεται να δει και ένας μη-μέλος. */
 const GROUP_FIELDS = "id, handle, name, bio, avatar_url, member_count";

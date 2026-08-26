@@ -18,7 +18,7 @@ import ChatComposer from '../components/chat/ChatComposer';
 import MessageBubble, { DateSeparator } from '../components/chat/MessageBubble';
 import SquadPicker, { SquadMonogram } from '../components/chat/SquadPicker';
 import { buildRows, type Row } from '../components/chat/messageRows';
-import { Group } from '../models/main';
+import type { Group } from '../services/serviceGroup';
 import {
   getGroupPreviews,
   getGroupsForUser,

@@ -10,7 +10,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { Group } from '../../models/main';
+import { Group } from '../../services/serviceGroup';
 import type { GroupPreview } from '../../services/serviceGroup';
 import { initialsFor } from '../general/GradientAvatar';
 import { layout, paper, paperFont, radius, solidFor, space } from '../../theme';

@@ -9,6 +9,7 @@ type RsvpButtonsProps = {
   onChange: (status: RsvpStatus | null) => void;
   compact?: boolean;
   onDark?: boolean;
+  stretch?: boolean;
 };
 
 export default function RsvpButtons({
@@ -17,31 +18,34 @@ export default function RsvpButtons({
   onChange,
   compact = false,
   onDark = false,
+  stretch = false,
 }: RsvpButtonsProps) {
   function pick(next: RsvpStatus) {
     onChange(status === next ? null : next);
   }
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, stretch && styles.rowFill]}>
       <Option
-        label={status === 'in' ? "You're in" : "I'm in"}
+        label={status === 'in' ? "You're in" : "I'm going"}
         icon="checkmark"
         tone="success"
         active={status === 'in'}
         disabled={saving}
         compact={compact}
         onDark={onDark}
+        stretch={stretch}
         onPress={() => pick('in')}
       />
       <Option
-        label="I'm out"
+        label="Can't make it"
         icon="close"
         tone="danger"
         active={status === 'out'}
         disabled={saving}
         compact={compact}
         onDark={onDark}
+        stretch={stretch}
         onPress={() => pick('out')}
       />
     </View>
@@ -56,10 +60,11 @@ type OptionProps = {
   disabled: boolean;
   compact: boolean;
   onDark: boolean;
+  stretch: boolean;
   onPress: () => void;
 };
 
-function Option({ label, icon, tone, active, disabled, compact, onDark, onPress }: OptionProps) {
+function Option({ label, icon, tone, active, disabled, compact, onDark, stretch, onPress }: OptionProps) {
   const accent = tone === 'success' ? colors.success : colors.danger;
   const fill = tone === 'success' ? tint.success : tint.danger;
   const idleText = onDark ? '#FFFFFF' : colors.textSoft;
@@ -74,8 +79,11 @@ function Option({ label, icon, tone, active, disabled, compact, onDark, onPress 
       style={({ pressed }) => [
         styles.option,
         compact && styles.optionCompact,
+        stretch && styles.optionFill,
         active
-          ? { backgroundColor: fill, borderColor: accent }
+          ? onDark
+            ? styles.activeDark
+            : { backgroundColor: fill, borderColor: accent }
           : onDark
             ? styles.idleDark
             : styles.idleLight,
@@ -83,7 +91,7 @@ function Option({ label, icon, tone, active, disabled, compact, onDark, onPress 
         disabled && styles.disabled,
       ]}
     >
-      <Ionicons name={icon} size={compact ? 15 : 17} color={active ? accent : idleText} />
+      {compact ? null : <Ionicons name={icon} size={17} color={active ? accent : idleText} />}
       <Text
         style={[
           styles.label,
@@ -100,6 +108,7 @@ function Option({ label, icon, tone, active, disabled, compact, onDark, onPress 
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.sm },
+  rowFill: { flex: 1 },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -110,11 +119,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1.5,
   },
-  optionCompact: { paddingHorizontal: space.sm, paddingVertical: 7 },
+  optionCompact: { paddingHorizontal: 13, paddingVertical: 6 },
+  optionFill: { flex: 1 },
   idleLight: { backgroundColor: colors.surface, borderColor: colors.border },
-  idleDark: { backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.45)' },
+  idleDark: { backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.18)' },
+  activeDark: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
   pressed: { opacity: 0.7 },
   disabled: { opacity: 0.5 },
-  label: { fontFamily: font.semi, fontSize: 14 },
-  labelCompact: { fontSize: 12.5 },
+  label: { fontFamily: font.semi, fontSize: 15 },
+  labelCompact: { fontSize: 15 },
 });
