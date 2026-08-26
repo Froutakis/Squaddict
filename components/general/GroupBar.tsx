@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Group } from '../../models/main';
+import type { Group } from '../../services/serviceGroup';
 import { colors, font, gradientFor, radius, space } from '../../theme';
 import { initialsFor } from './GradientAvatar';
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Group } from '../../models/main';
+import type { Group } from '../../services/serviceGroup';
 import { createEvent, updateEvent, type MyEvent } from '../../services/serviceEvents';
 import { colors, font, radius, space } from '../../theme';
 import AuthField from '../general/AuthField';
@@ -36,7 +36,7 @@ export default function EventFormSheet({
     setEventDate(event?.date ?? defaultDate);
     setFormError(null);
   }, [visible, defaultDate, event?.id]);
-
+  
   const editing = !!event;
 
   async function handleSave() {

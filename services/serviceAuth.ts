@@ -1,5 +1,11 @@
 import { supabase } from "./supabaseClient";
 
+export type User = {
+  id: string;
+  name: string;
+  isOnline: boolean;
+}
+
 /**
  * Το προφίλ ΔΕΝ φτιάχνεται εδώ. Το φτιάχνει ο trigger `on_auth_user_created`
  * μέσα στην ίδια συναλλαγή με τον χρήστη, διαβάζοντας το display_name από τα

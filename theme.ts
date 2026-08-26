@@ -35,6 +35,9 @@ export const tint = {
 // Το κύριο gradient της μάρκας (λιλά → βαθύ μοβ).
 export const brand = ['#A96BC4', '#6E3F87'] as const;
 
+// Απαλός "ουρανός" στην κορυφή των οθονών — δίνει βάθος στο επίπεδο φόντο.
+export const sky = ['#F0E6F8', 'rgba(240,230,248,0)'] as const;
+
 // Gradient για την "Up Next" hero κάρτα (μοβ).
 export const upNext = ['#9257C2', '#5C3488'] as const;
 

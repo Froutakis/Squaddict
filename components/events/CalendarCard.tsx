@@ -2,115 +2,168 @@ import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent } from '../../services/serviceEvents';
-import { colors, font, radius, shadow, space } from '../../theme';
-import { keyOf } from '../../lib/datetime';
+import { colors, font, radius, shadow, solidFor, space } from '../../theme';
+import { addDays, keyOf, startOfWeek } from '../../lib/datetime';
 
 type CalendarCardProps = {
   events: MyEvent[];
+  daysShown: number;
   selectedDate: string | null;
   onSelectDate: (date: string) => void;
   onAddEvent?: () => void;
 };
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const MAX_DOTS = 3;
 
-export default function CalendarCard({ events, selectedDate, onSelectDate, onAddEvent }: CalendarCardProps) {
-  const [visible, setVisible] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
+function shortMonth(d: Date) {
+  return d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+}
 
-  const year = visible.getFullYear();
-  const month = visible.getMonth();
-  const firstOffset = (new Date(year, month, 1).getDay() + 6) % 7;
-  const cells = Array.from({ length: 42 }, (_, i) => new Date(year, month, 1 - firstOffset + i));
+export default function CalendarCard({ events, daysShown, selectedDate, onSelectDate, onAddEvent }: CalendarCardProps) {
+  const [firstDay, setFirstDay] = useState(() => startOfWeek(new Date()));
 
-  const eventDays = new Set(events.map((e) => e.date));
+  const days = Array.from({ length: daysShown }, (_, i) => addDays(firstDay, i));
+  const lastDay = days[daysShown - 1];
+
+  const colorsByDay = new Map<string, string[]>();
+  for (const event of events) {
+    const seen = colorsByDay.get(event.date) ?? [];
+    const color = solidFor(event.groupName);
+    if (!seen.includes(color)) seen.push(color);
+    colorsByDay.set(event.date, seen);
+  }
+
   const todayKey = keyOf(new Date());
-  const upcoming = events.filter((e) => e.date >= todayKey).length;
 
-  const monthTitle = visible.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-  const subtitle = upcoming === 0 ? 'No events yet' : `${upcoming} event${upcoming === 1 ? '' : 's'} coming up`;
+  const label =
+    firstDay.getMonth() === lastDay.getMonth()
+      ? `${shortMonth(firstDay)} ${firstDay.getFullYear()}`
+      : `${shortMonth(firstDay)} – ${shortMonth(lastDay)}`;
 
-  function shiftMonth(delta: number) {
-    setVisible((v) => new Date(v.getFullYear(), v.getMonth() + delta, 1));
+  function shift(deltaDays: number) {
+    setFirstDay((current) => addDays(current, deltaDays));
+  }
+
+  function backToToday() {
+    setFirstDay(startOfWeek(new Date()));
   }
 
   return (
     <View style={styles.card}>
       <View style={styles.head}>
-        <View style={styles.headText}>
-          <Text style={styles.month}>{monthTitle}</Text>
-          <Text style={styles.subtitle}>{subtitle}</Text>
-        </View>
-        <View style={styles.controls}>
-          <Pressable style={styles.navBtn} onPress={() => shiftMonth(-1)} accessibilityRole="button" accessibilityLabel="Previous month">
-            <Ionicons name="chevron-back" size={18} color={colors.text} />
-          </Pressable>
-          <Pressable style={styles.navBtn} onPress={() => shiftMonth(1)} accessibilityRole="button" accessibilityLabel="Next month">
-            <Ionicons name="chevron-forward" size={18} color={colors.text} />
-          </Pressable>
-          <Pressable style={styles.addBtn} onPress={onAddEvent} accessibilityRole="button" accessibilityLabel="Add event">
-            <Ionicons name="add" size={22} color="#FFFFFF" />
-          </Pressable>
-        </View>
+        <Pressable onPress={backToToday} accessibilityRole="button" accessibilityLabel="Back to this week">
+          <Text style={styles.month}>{label}</Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}
+          onPress={onAddEvent}
+          accessibilityRole="button"
+          accessibilityLabel="Add event"
+        >
+          <Ionicons name="add" size={20} color="#FFFFFF" />
+        </Pressable>
       </View>
 
-      <View style={styles.weekRow}>
-        {WEEKDAYS.map((w, i) => (
-          <Text key={i} style={styles.weekday}>{w}</Text>
-        ))}
-      </View>
+      <View style={styles.strip}>
+        <Pressable
+          style={({ pressed }) => [styles.navBtn, pressed && styles.pressed]}
+          onPress={() => shift(-daysShown)}
+          accessibilityRole="button"
+          accessibilityLabel="Previous days"
+        >
+          <Ionicons name="chevron-back" size={18} color={colors.textSoft} />
+        </Pressable>
 
-      <View style={styles.grid}>
-        {cells.map((d, i) => {
-          const key = keyOf(d);
-          const inMonth = d.getMonth() === month;
-          const isToday = key === todayKey;
-          const isSelected = key === selectedDate;
-          const hasEvent = inMonth && eventDays.has(key);
-          return (
-            <Pressable
-              key={i}
-              style={styles.cell}
-              disabled={!inMonth}
-              onPress={() => onSelectDate(key)}
-              accessibilityRole="button"
-              accessibilityLabel={key}
-            >
-              <View style={[styles.circle, isToday && styles.today, isSelected && !isToday && styles.selected]}>
-                <Text style={[styles.dayText, !inMonth && styles.dayMuted, isToday && styles.dayTextToday]}>
-                  {d.getDate()}
-                </Text>
-              </View>
-              <View style={styles.dotSlot}>{hasEvent ? <View style={styles.dot} /> : null}</View>
-            </Pressable>
-          );
-        })}
+        <View style={styles.days}>
+          {days.map((day, i) => {
+            const key = keyOf(day);
+            const isToday = key === todayKey;
+            const isSelected = key === selectedDate;
+            const dots = (colorsByDay.get(key) ?? []).slice(0, MAX_DOTS);
+
+            return (
+              <Pressable
+                key={key}
+                style={styles.cell}
+                onPress={() => onSelectDate(key)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={key}
+              >
+                <Text style={styles.weekday}>{WEEKDAYS[i % 7]}</Text>
+                <View style={[styles.circle, isToday && styles.today, isSelected && !isToday && styles.selected]}>
+                  <Text style={[styles.dayText, isToday && styles.dayTextToday]}>{day.getDate()}</Text>
+                </View>
+                <View style={styles.dotSlot}>
+                  {dots.map((color) => (
+                    <View key={color} style={[styles.dot, { backgroundColor: color }]} />
+                  ))}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Pressable
+          style={({ pressed }) => [styles.navBtn, pressed && styles.pressed]}
+          onPress={() => shift(daysShown)}
+          accessibilityRole="button"
+          accessibilityLabel="Next days"
+        >
+          <Ionicons name="chevron-forward" size={18} color={colors.textSoft} />
+        </Pressable>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: space.md, ...shadow.card },
-  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.sm},
-  headText: { flex: 1},
-  month: { color: colors.text, fontFamily: font.bold, fontSize: 18 },
-  subtitle: { color: colors.textSoft, fontFamily: font.medium, fontSize: 13, marginTop: 2 },
-  controls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  navBtn: { width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-  addBtn: { width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
-  weekRow: { flexDirection: 'row', marginBottom: 4 },
-  weekday: { width: '14.2857%', textAlign: 'center', color: colors.textFaint, fontFamily: font.semi, fontSize: 12 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: { width: '14.2857%', alignItems: 'center', paddingVertical: 3 },
-  circle: { width: 34, height: 34, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: 'transparent' },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.sm,
+    ...shadow.card,
+  },
+  head: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: space.xs,
+    marginBottom: 2,
+  },
+  month: { color: colors.textFaint, fontFamily: font.semi, fontSize: 11, letterSpacing: 0.8 },
+  addBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: { opacity: 0.7 },
+  strip: { flexDirection: 'row', alignItems: 'center' },
+  navBtn: { width: 22, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
+  days: { flex: 1, flexDirection: 'row', flexWrap: 'wrap' },
+  cell: { width: '14.2857%', alignItems: 'center', paddingVertical: 2 },
+  weekday: { color: colors.textFaint, fontFamily: font.medium, fontSize: 10, marginBottom: 1 },
+  circle: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
   today: { backgroundColor: colors.primary },
   selected: { borderColor: colors.primary },
-  dayText: { color: colors.text, fontFamily: font.medium, fontSize: 14 },
-  dayMuted: { color: colors.textFaint },
+  dayText: { color: colors.text, fontFamily: font.medium, fontSize: 13.5 },
   dayTextToday: { color: '#FFFFFF', fontFamily: font.semi },
-  dot: { width: 5, height: 5, borderRadius: radius.pill, backgroundColor: colors.accent },
-  dotSlot: { height: 8, justifyContent: 'center' },
+  dotSlot: { height: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
+  dot: { width: 4.5, height: 4.5, borderRadius: radius.pill },
 });
