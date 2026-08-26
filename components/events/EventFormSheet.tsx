@@ -5,6 +5,7 @@ import { createEvent, updateEvent, type MyEvent } from '../../services/serviceEv
 import { colors, font, radius, space } from '../../theme';
 import AuthField from '../general/AuthField';
 import Button from '../general/Button';
+import DateField from '../general/DateField';
 
 type EventFormSheetProps = {
   visible: boolean;
@@ -27,6 +28,10 @@ export default function EventFormSheet({
 }: EventFormSheetProps) {
   const [title, setTitle] = useState('');
   const [eventDate, setEventDate] = useState('');
+  const [description, setDescription] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [location, setLocation] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -50,7 +55,7 @@ export default function EventFormSheet({
     setFormError(null);
     try {
       if (event) await updateEvent(event.id, { title: title.trim(), date: eventDate });
-      else await createEvent(groupId!, { title: title.trim(), date: eventDate });
+      else await createEvent(groupId!, { title: title.trim(), date: eventDate, startTime: startTime, location: location });
 
       await onSaved();
       onClose();
@@ -77,14 +82,32 @@ export default function EventFormSheet({
               placeholder="Kalamia 2 ora karta"
               loading={saving}
             />
-            <AuthField
-              label='Date'
-              icon='calendar-outline'
-              value={eventDate}
-              onChangeText={setEventDate}
-              placeholder="YYYY-MM-DD"
-              loading={saving}
-            />
+            <View style={styles.sheetRow}>
+              <DateField
+                label='Date'
+                value={eventDate}
+                onChange={setEventDate}
+                style={styles.dateColumn}
+              />
+              <AuthField
+                label='Time'
+                value={startTime}
+                onChangeText={setStartTime}
+                placeholder="--:--"
+                loading={saving}
+                style={styles.timeColumn}
+              />
+            </View>
+            <View style={styles.form}>
+              <AuthField
+                label='Location'
+                value={location}
+                onChangeText={setLocation}
+                placeholder=' '
+                loading={saving}
+                />
+            </View>
+
             {formError ? <Text style={styles.formError}>{formError}</Text> : null}
             <Button title={editing ? 'Save' : 'Create'} onPress={handleSave} loading={saving} />
           </View>
@@ -103,6 +126,9 @@ const styles = StyleSheet.create({
     padding: space.lg,
     gap: space.md,
   },
+  sheetRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
+  dateColumn: { flex: 2 },
+  timeColumn: { flex: 1 },
   sheetTitle: { color: colors.text, fontFamily: font.bold, fontSize: 20 },
   form: { gap: space.md },
   formError: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
