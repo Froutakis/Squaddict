@@ -18,6 +18,29 @@ export function startOfWeek(d: Date) {
   return addDays(d, -((d.getDay() + 6) % 7));
 }
 
+export function addMonths(d: Date, n: number) {
+  return new Date(d.getFullYear(), d.getMonth() + n, 1);
+}
+
+export function isDateKey(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+export function parseDateKey(value: string) {
+  return isDateKey(value) ? parseLocal(value) : null;
+}
+
+export function monthGrid(d: Date) {
+  const start = startOfWeek(new Date(d.getFullYear(), d.getMonth(), 1));
+  return Array.from({ length: 42 }, (_, i) => addDays(start, i));
+}
+
+export function dayMonth(dateStr: string) {
+  const d = parseDateKey(dateStr);
+  if (!d) return '';
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 export function dateParts(dateStr: string) {
   const d = parseLocal(dateStr);
   const month = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
