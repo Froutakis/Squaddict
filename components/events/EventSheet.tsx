@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Attendee, MyEvent, RsvpStatus } from '../../services/serviceEvents';
 import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/serviceEvents';
 import { getMemberNames } from '../../services/serviceGroup';
-import { colors, font, radius, space } from '../../theme';
+import { colors, font, gradientFor, radius, space } from '../../theme';
 import { formatDateTime } from '../../lib/datetime';
 import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 import RsvpButtons from './RsvpButtons';
@@ -112,93 +113,110 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
         <Pressable style={styles.sheet} onPress={() => {}}>
           {event ? (
             <>
-              <View style={styles.grabber} />
+              <LinearGradient
+                colors={gradientFor(event.groupName)}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.header}
+              >
+                <View style={styles.grabber} />
 
-              <View style={styles.headRow}>
-                <View style={styles.head}>
-                  <Text style={styles.title} numberOfLines={2}>{event.title}</Text>
-                  <Text style={styles.group}>{event.groupName}</Text>
+                <View style={styles.squadPill}>
+                  <View style={styles.squadDot} />
+                  <Text style={styles.squadName} numberOfLines={1}>{event.groupName}</Text>
                 </View>
 
-                {isOwner && onEdit ? (
-                  <Pressable
-                    onPress={() => onEdit(event)}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Edit event"
-                    style={({ pressed }) => [styles.editBtn, pressed && styles.pressed]}
-                  >
-                    <Ionicons name="create-outline" size={20} color={colors.textSoft} />
-                  </Pressable>
+                <Text style={styles.title} numberOfLines={3}>{event.title}</Text>
+                <Text style={styles.when}>{formatDateTime(event.date, event.startTime)}</Text>
+                {event.location ? (
+                  <Text style={styles.where} numberOfLines={1}>{event.location}</Text>
+                ) : null}
+              </LinearGradient>
+
+              <View style={styles.body}>
+                {event.description ? (
+                  <Text style={styles.description}>{event.description}</Text>
+                ) : null}
+
+                <RsvpButtons status={myStatus} saving={saving} onChange={handleRsvp} />
+
+                {error ? <Text style={styles.error}>{error}</Text> : null}
+
+                {loading ? (
+                  <ActivityIndicator color={colors.primary} style={styles.loader} />
+                ) : (
+                  <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+                    <Section
+                      title="Going"
+                      people={going}
+                      dot={colors.success}
+                      empty="Nobody so far"
+                    />
+                    <Section
+                      title="Can't make it"
+                      people={notGoing}
+                      dot={colors.danger}
+                      empty="Nobody so far"
+                    />
+                    <Section
+                      title="Still deciding"
+                      people={noAnswer}
+                      dot={colors.borderStrong}
+                      empty="Everyone answered"
+                    />
+                  </ScrollView>
+                )}
+
+                {isOwner ? (
+                  confirming ? (
+                    <View style={styles.confirmRow}>
+                      <Pressable
+                        onPress={() => setConfirming(false)}
+                        disabled={saving}
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel"
+                        style={({ pressed }) => [styles.confirmBtn, styles.cancelBtn, pressed && styles.pressed]}
+                      >
+                        <Text style={styles.cancelText}>Cancel</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={handleDelete}
+                        disabled={saving}
+                        accessibilityRole="button"
+                        accessibilityLabel="Confirm delete"
+                        style={({ pressed }) => [styles.confirmBtn, styles.dangerBtn, pressed && styles.pressed]}
+                      >
+                        <Text style={styles.dangerText}>{saving ? 'Deleting…' : 'Yes, delete'}</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.ownerRow}>
+                      {onEdit ? (
+                        <Pressable
+                          onPress={() => onEdit(event)}
+                          disabled={saving}
+                          accessibilityRole="button"
+                          accessibilityLabel="Edit event"
+                          style={({ pressed }) => [styles.ownerBtn, pressed && styles.pressed]}
+                        >
+                          <Ionicons name="create-outline" size={17} color={colors.textSoft} />
+                          <Text style={styles.editText}>Edit</Text>
+                        </Pressable>
+                      ) : null}
+                      <Pressable
+                        onPress={() => setConfirming(true)}
+                        disabled={saving}
+                        accessibilityRole="button"
+                        accessibilityLabel="Delete event"
+                        style={({ pressed }) => [styles.ownerBtn, pressed && styles.pressed]}
+                      >
+                        <Ionicons name="trash-outline" size={17} color={colors.danger} />
+                        <Text style={styles.deleteText}>Delete</Text>
+                      </Pressable>
+                    </View>
+                  )
                 ) : null}
               </View>
-
-              <View style={styles.metaRow}>
-                <Ionicons name="time-outline" size={16} color={colors.textSoft} />
-                <Text style={styles.metaText}>{formatDateTime(event.date, event.startTime)}</Text>
-                {event.location ? (
-                <View style={styles.metaRow}>
-                  <Ionicons name="location-outline" size={16} color={colors.textSoft} />
-                  <Text style={styles.metaText} numberOfLines={1}>{event.location}</Text>
-                </View>
-              ) : null}
-              </View>
-
-              
-
-              {event.description ? (
-                <Text style={styles.description}>{event.description}</Text>
-              ) : null}
-
-              <RsvpButtons status={myStatus} saving={saving} onChange={handleRsvp} />
-
-              {error ? <Text style={styles.error}>{error}</Text> : null}
-
-              {loading ? (
-                <ActivityIndicator color={colors.primary} style={styles.loader} />
-              ) : (
-                <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-                  <Section title="Going" people={going} />
-                  <Section title="Not going" people={notGoing} />
-                  <Section title="No answer" people={noAnswer} />
-                </ScrollView>
-              )}
-
-              {isOwner ? (
-                confirming ? (
-                  <View style={styles.confirmRow}>
-                    <Pressable
-                      onPress={() => setConfirming(false)}
-                      disabled={saving}
-                      accessibilityRole="button"
-                      accessibilityLabel="Cancel"
-                      style={({ pressed }) => [styles.confirmBtn, styles.cancelBtn, pressed && styles.pressed]}
-                    >
-                      <Text style={styles.cancelText}>Cancel</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={handleDelete}
-                      disabled={saving}
-                      accessibilityRole="button"
-                      accessibilityLabel="Confirm delete"
-                      style={({ pressed }) => [styles.confirmBtn, styles.dangerBtn, pressed && styles.pressed]}
-                    >
-                      <Text style={styles.dangerText}>{saving ? 'Deleting…' : 'Yes, delete'}</Text>
-                    </Pressable>
-                  </View>
-                ) : (
-                  <Pressable
-                    onPress={() => setConfirming(true)}
-                    disabled={saving}
-                    accessibilityRole="button"
-                    accessibilityLabel="Delete event"
-                    style={({ pressed }) => [styles.delete, pressed && styles.pressed]}
-                  >
-                    <Ionicons name="trash-outline" size={17} color={colors.danger} />
-                    <Text style={styles.deleteText}>Delete event</Text>
-                  </Pressable>
-                )
-              ) : null}
             </>
           ) : null}
         </Pressable>
@@ -207,18 +225,33 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
   );
 }
 
-function Section({ title, people }: { title: string; people: Person[] }) {
-  if (people.length === 0) return null;
+type SectionProps = {
+  title: string;
+  people: Person[];
+  dot: string;
+  empty: string;
+};
 
+function Section({ title, people, dot, empty }: SectionProps) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title} · {people.length}</Text>
-      {people.map((person) => (
-        <View key={person.userId} style={styles.person}>
-          <GradientAvatar label={person.name || '?'} initials={initialsFor(person.name)} size={30} />
-          <Text style={styles.personName} numberOfLines={1}>{person.name || 'Someone'}</Text>
+      <View style={styles.sectionHead}>
+        <View style={[styles.sectionDot, { backgroundColor: dot }]} />
+        <Text style={styles.sectionTitle}>{title} · {people.length}</Text>
+      </View>
+
+      {people.length === 0 ? (
+        <Text style={styles.empty}>{empty}</Text>
+      ) : (
+        <View style={styles.chips}>
+          {people.map((person) => (
+            <View key={person.userId} style={styles.chip}>
+              <GradientAvatar label={person.name || '?'} initials={initialsFor(person.name)} size={26} />
+              <Text style={styles.chipName} numberOfLines={1}>{person.name || 'Someone'}</Text>
+            </View>
+          ))}
         </View>
-      ))}
+      )}
     </View>
   );
 }
@@ -229,50 +262,71 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
+    overflow: 'hidden',
+    maxHeight: '85%',
+  },
+  header: {
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
-    paddingBottom: space.xl,
-    gap: space.sm,
-    maxHeight: '85%',
+    paddingBottom: space.lg,
+    gap: 3,
   },
   grabber: {
     width: 40,
     height: 4,
     borderRadius: radius.pill,
-    backgroundColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.5)',
     alignSelf: 'center',
-    marginBottom: space.sm,
+    marginBottom: space.md,
   },
-  headRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
-  head: { flex: 1, gap: 2 },
-  editBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceAlt,
+  squadPill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    alignSelf: 'flex-start',
+    gap: 7,
+    paddingLeft: 7,
+    paddingRight: 13,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    marginBottom: space.xs,
   },
-  title: { color: colors.text, fontFamily: font.bold, fontSize: 22, lineHeight: 27 },
-  group: { color: colors.primary, fontFamily: font.semi, fontSize: 13 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  metaText: { color: colors.textSoft, fontFamily: font.medium, fontSize: 14, flexShrink: 1 },
-  description: { color: colors.text, fontFamily: font.medium, fontSize: 14, lineHeight: 20, marginTop: space.xs },
+  squadDot: { width: 14, height: 14, borderRadius: radius.pill, backgroundColor: '#FFFFFF' },
+  squadName: { color: '#FFFFFF', fontFamily: font.bold, fontSize: 12.5, flexShrink: 1 },
+  title: { color: '#FFFFFF', fontFamily: font.display, fontSize: 26, lineHeight: 32, letterSpacing: -0.5 },
+  when: { color: '#FFFFFF', fontFamily: font.semi, fontSize: 15, marginTop: 4 },
+  where: { color: 'rgba(255,255,255,0.82)', fontFamily: font.medium, fontSize: 15 },
+  body: {
+    paddingHorizontal: space.lg,
+    paddingTop: space.md,
+    paddingBottom: space.xl,
+    gap: space.sm,
+  },
+  description: { color: colors.text, fontFamily: font.medium, fontSize: 14, lineHeight: 20 },
   error: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
   loader: { marginVertical: space.lg },
   list: { maxHeight: 260 },
   listContent: { gap: space.md, paddingBottom: space.sm },
   section: { gap: space.sm },
-  sectionTitle: {
-    color: colors.textFaint,
-    fontFamily: font.semi,
-    fontSize: 11,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  sectionDot: { width: 8, height: 8, borderRadius: radius.pill },
+  sectionTitle: { color: colors.text, fontFamily: font.semi, fontSize: 13.5 },
+  empty: { color: colors.textFaint, fontFamily: font.medium, fontSize: 13.5 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingLeft: 5,
+    paddingRight: 14,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
   },
-  person: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  personName: { color: colors.text, fontFamily: font.medium, fontSize: 14, flexShrink: 1 },
-  delete: {
+  chipName: { color: colors.text, fontFamily: font.semi, fontSize: 13.5, flexShrink: 1 },
+  ownerRow: { flexDirection: 'row', gap: space.sm },
+  ownerBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -283,6 +337,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   pressed: { opacity: 0.7 },
+  editText: { color: colors.textSoft, fontFamily: font.semi, fontSize: 14 },
   deleteText: { color: colors.danger, fontFamily: font.semi, fontSize: 14 },
   confirmRow: { flexDirection: 'row', gap: space.sm },
   confirmBtn: {
