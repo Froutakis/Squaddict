@@ -55,15 +55,6 @@ export default function CalendarCard({ events, daysShown, selectedDate, onSelect
         <Pressable onPress={backToToday} accessibilityRole="button" accessibilityLabel="Back to this week">
           <Text style={styles.month}>{label}</Text>
         </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}
-          onPress={onAddEvent}
-          accessibilityRole="button"
-          accessibilityLabel="Add event"
-        >
-          <Ionicons name="add" size={20} color="#FFFFFF" />
-        </Pressable>
       </View>
 
       <View style={styles.strip}>

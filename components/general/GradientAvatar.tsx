@@ -57,7 +57,6 @@ export default function GradientAvatar({
   );
 }
 
-/** Μονόχρωμη εκδοχή — για τα placeholder κυκλάκια "All" και "New". */
 export function FlatAvatar({
   size = 54,
   color,

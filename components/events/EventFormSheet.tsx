@@ -6,6 +6,8 @@ import { colors, font, radius, space } from '../../theme';
 import AuthField from '../general/AuthField';
 import Button from '../general/Button';
 import DateField from '../general/DateField';
+import GroupBar from '../general/GroupBar';
+import { requireUser } from '../../services/serviceAuth';
 
 type EventFormSheetProps = {
   visible: boolean;
@@ -32,6 +34,7 @@ export default function EventFormSheet({
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [location, setLocation] = useState('');
+  const [targetGroup, setTargetGroup] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -40,16 +43,17 @@ export default function EventFormSheet({
     setTitle(event?.title ?? '');
     setEventDate(event?.date ?? defaultDate);
     setFormError(null);
+    setTargetGroup(defaultGroupId ?? groups[0]?.id ?? null);
   }, [visible, defaultDate, event?.id]);
   
   const editing = !!event;
 
   async function handleSave() {
-    const groupId = defaultGroupId ?? groups[0]?.id;
+    const groupId = targetGroup;
 
     if (!title.trim()) { setFormError('Give your event a title.'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) { setFormError('Use the format YYYY-MM-DD.'); return; }
-    if (!event && !groupId) { setFormError('Join a squad first.'); return; }
+    if (!event && !groupId) { setFormError('Pick a squad.'); return; }
 
     setSaving(true);
     setFormError(null);
@@ -107,6 +111,13 @@ export default function EventFormSheet({
                 loading={saving}
                 />
             </View>
+            <GroupBar
+              groups={groups}
+              activeId={targetGroup}
+              onSelect={setTargetGroup}
+              showAll={false}
+              compact
+            />
 
             {formError ? <Text style={styles.formError}>{formError}</Text> : null}
             <Button title={editing ? 'Save' : 'Create'} onPress={handleSave} loading={saving} />

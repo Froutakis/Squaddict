@@ -76,9 +76,9 @@ export const shadow = {
   },
   button: {
     shadowColor: '#5C3570',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
     elevation: 4,
   },
   // Απαλή ανύψωση για φυσαλίδες chat και για το header — μόλις που φαίνεται.
