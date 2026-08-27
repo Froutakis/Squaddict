@@ -26,13 +26,6 @@ export async function getUserById(id: string): Promise<User | null> {
   return toUser(data as ProfileRow);
 }
 
-export async function getAllUsers(): Promise<User[]> {
-  const { data, error } = await supabase.from("profiles").select("*");
-  if (error) throw error;
-
-  return (data as ProfileRow[]).map(toUser);
-}
-
 export async function updateDisplayName(id: string, newName: string): Promise<void> {
   const { error } = await supabase
     .from("profiles")

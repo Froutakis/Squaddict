@@ -33,14 +33,14 @@ export default function UpNext({ event, onPress, onRsvp, saving = false }: UpNex
       >
         <View style={styles.topRow}>
           <View style={styles.pill}>
-            <Text style={styles.pillText}>{event.title}</Text>
+            <Text style={styles.pillText}>{event.groupName}</Text>
           </View>
           <View style={styles.group}>
             <Text style={styles.groupText}>{countdownLabel(event.date)}</Text>
           </View>
         </View>
 
-        <Text style={styles.title} numberOfLines={2}>{event.description}</Text>
+        <Text style={styles.title} numberOfLines={2}>{event.title}</Text>
 
         <View style={styles.metaRow}>
           <Ionicons name="time-outline" size={15} color={SOFT} />
