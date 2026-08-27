@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import { font, gradientFor, radius } from '../../theme';
 
 /** Αρχικά για avatar: "Nikos Papas" → "NP", "Beach" → "B". Ίδιο όνομα, ίδια αρχικά παντού. */
@@ -54,32 +54,6 @@ export default function GradientAvatar({
         </Text>
       )}
     </LinearGradient>
-  );
-}
-
-export function FlatAvatar({
-  size = 54,
-  color,
-  dashed = false,
-  borderColor,
-  children,
-}: {
-  size?: number;
-  color: string;
-  dashed?: boolean;
-  borderColor?: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <View
-      style={[
-        styles.base,
-        { width: size, height: size, borderRadius: radius.pill, backgroundColor: color },
-        dashed && { borderWidth: 1.5, borderStyle: 'dashed', borderColor: borderColor ?? '#D2C8DD' },
-      ]}
-    >
-      {children}
-    </View>
   );
 }
 
