@@ -246,11 +246,62 @@ export async function joinByInviteCode(inviteCode: string): Promise<Group> {
   return toGroup(data);
 }
 
-export async function sendMessage(groupId: string, senderId: string, content: string): Promise<void> {
-  const { error } = await supabase
+/**
+ * Γράφει ένα μήνυμα και επιστρέφει τη γραμμή που μπήκε.
+ *
+ * Το `id` δίνεται από τη συσκευή όταν το μήνυμα έχει ήδη εμφανιστεί στην οθόνη
+ * (δες lib/ids.ts). Είναι προαιρετικό: χωρίς αυτό το φτιάχνει η βάση, όπως πριν.
+ *
+ * Η επανάληψη μιας αποστολής που απέτυχε ξαναστέλνει το ΙΔΙΟ id. Αν το πρώτο
+ * insert είχε τελικά περάσει και χάθηκε μόνο η απάντηση, εδώ γυρίζει παραβίαση
+ * του primary key — που σημαίνει ότι το μήνυμα είναι ήδη μέσα. Το διαβάζουμε
+ * πίσω και το επιστρέφουμε σαν επιτυχία, αλλιώς ο χρήστης θα πάταγε ξανά και
+ * ξανά ένα κουμπί που δεν είχε τίποτα να διορθώσει.
+ */
+export async function sendMessage(
+  groupId: string,
+  senderId: string,
+  content: string,
+  id?: string,
+): Promise<ChatMessage> {
+  // Ένα αντικείμενο με προαιρετικό id, όχι ένωση δύο σχημάτων: η ένωση κάνει τον
+  // τύπο του insert να απαιτήσει το id και από τον κλάδο που δεν το έχει.
+  const row: { group_id: string; sender_id: string; content: string; id?: string } = {
+    group_id: groupId,
+    sender_id: senderId,
+    content,
+  };
+  if (id) {
+    row.id = id;
+  }
+
+  const { data, error } = await supabase
     .from("messages")
-    .insert({ group_id: groupId, sender_id: senderId, content });
+    .insert(row)
+    .select("id, content, sender_id, created_at, profiles(display_name)")
+    .single();
+
+  if (error) {
+    if (id && error.code === UNIQUE_VIOLATION) {
+      const existing = await getMessageById(id);
+      if (existing) return existing;
+    }
+    throw error;
+  }
+
+  return toChatMessage(data);
+}
+
+/** Ένα μήνυμα με το id του — για να επιβεβαιώσουμε μια αποστολή που «απέτυχε». */
+export async function getMessageById(id: string): Promise<ChatMessage | null> {
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id, content, sender_id, created_at, profiles(display_name)")
+    .eq("id", id)
+    .maybeSingle();
   if (error) throw error;
+
+  return data ? toChatMessage(data) : null;
 }
 
 export type ChatMessage = {
@@ -272,15 +323,56 @@ export function toChatMessage(row: any, senderName?: string): ChatMessage {
   };
 }
 
-export async function getMessages(groupId: string): Promise<ChatMessage[]> {
-  const { data, error } = await supabase
+/** Πόσα μηνύματα φέρνει μία σελίδα ιστορικού. */
+export const MESSAGE_PAGE_SIZE = 50;
+
+export type MessagePage = {
+  /** Σε χρονολογική σειρά, παλαιότερο πρώτο — όπως τα θέλει η buildRows. */
+  messages: ChatMessage[];
+  /** Υπάρχει κι άλλο παλιότερο ιστορικό πίσω από αυτή τη σελίδα; */
+  hasMore: boolean;
+};
+
+/**
+ * Μία σελίδα ιστορικού. Χωρίς `before` δίνει τα πιο πρόσφατα· με `before` το
+ * `createdAt` του παλαιότερου που κρατάμε, την αμέσως παλαιότερη σελίδα.
+ *
+ * Ο δείκτης είναι χρονική στιγμή και όχι offset, επειδή το realtime προσθέτει
+ * μηνύματα όσο διαβάζεις: με offset μετατοπίζονται όλα κατά μία θέση, και η
+ * επόμενη σελίδα είτε ξαναφέρνει ένα μήνυμα είτε προσπερνάει ένα. Το ερώτημα
+ * πέφτει πάνω στο index messages_group_created_idx (group_id, created_at).
+ */
+export async function getMessages(
+  groupId: string,
+  options: { before?: string; limit?: number } = {},
+): Promise<MessagePage> {
+  const limit = options.limit ?? MESSAGE_PAGE_SIZE;
+
+  let query = supabase
     .from("messages")
     .select("id, content, sender_id, created_at, profiles(display_name)")
     .eq("group_id", groupId)
-    .order("created_at");
+    // Φθίνουσα, γιατί το limit πρέπει να κόψει τα ΠΑΛΙΑ, όχι τα πρόσφατα.
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (options.before) {
+    query = query.lt("created_at", options.before);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
 
-  return (data ?? []).map((row) => toChatMessage(row));
+  const rows = data ?? [];
+
+  return {
+    messages: rows.map((row) => toChatMessage(row)).reverse(),
+    // Αν το ιστορικό τελειώνει ακριβώς σε πολλαπλάσιο του limit, αυτό βγαίνει
+    // μία φορά true άδικα: η επόμενη σελίδα έρχεται άδεια και το hasMore
+    // κλείνει. Ένα παραπανίσιο αίτημα στη σπάνια περίπτωση, αντί για ένα
+    // count σε κάθε σελίδα.
+    hasMore: rows.length === limit,
+  };
 }
 
 /** Χάρτης user_id → όνομα, για τα μηνύματα που έρχονται από το realtime (δεν φέρνουν προφίλ). */
