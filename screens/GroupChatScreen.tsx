@@ -17,12 +17,14 @@ import {
 import ChatComposer from '../components/chat/ChatComposer';
 import MessageBubble, { DateSeparator } from '../components/chat/MessageBubble';
 import SquadPicker, { SquadMonogram } from '../components/chat/SquadPicker';
-import { buildRows, type Row } from '../components/chat/messageRows';
+import { buildRows, type OutgoingMessage, type Row } from '../components/chat/messageRows';
+import { newMessageId } from '../lib/ids';
 import type { Group } from '../services/serviceGroup';
 import {
   getGroupPreviews,
   getGroupsForUser,
   getMemberNames,
+  getMessages,
   sendMessage,
   toChatMessage,
   type ChatMessage,
@@ -51,15 +53,27 @@ export default function GroupChatScreen({
   const [previews, setPreviews] = useState<Record<string, GroupPreview>>({});
   const [displayName, setDisplayName] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Δικά μου μηνύματα που δεν έχουν επιβεβαιωθεί ακόμα από τη βάση.
+  const [outbox, setOutbox] = useState<OutgoingMessage[]>([]);
   const [memberCount, setMemberCount] = useState(0);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [loadingChat, setLoadingChat] = useState(false);
+  // Υπάρχει κι άλλο ιστορικό πάνω από όσα δείχνουμε;
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Τα ονόματα των μελών ζουν και σε ref: ο realtime handler φτιάχνεται μία φορά
   // ανά παρέα και πρέπει να βλέπει πάντα τον τρέχοντα χάρτη.
   const namesRef = useRef<Record<string, string>>({});
-  const listRef = useRef<FlatList<Row>>(null);
+  // Φρουρά για το onEndReached, που πυροδοτείται και δύο φορές στο ίδιο σκρολ.
+  // Δεν είναι state: το χρειαζόμαστε ΤΩΡΑ μέσα στην loadOlder, όχι στο επόμενο
+  // render — μέχρι τότε θα έχει ήδη φύγει δεύτερο αίτημα για την ίδια σελίδα.
+  const loadingOlderRef = useRef(false);
+  // Το outbox και σε ref, ώστε η retrySend να διαβάζει την τρέχουσα λίστα χωρίς
+  // να ξαναφτιάχνεται σε κάθε αλλαγή της — αλλιώς άλλαζε σε κάθε πληκτρολόγηση.
+  const outboxRef = useRef<OutgoingMessage[]>([]);
+  outboxRef.current = outbox;
 
   // Φέρνει τα τελευταία μηνύματα για την προεπισκόπηση της λίστας.
   // Αν αποτύχει το αφήνουμε να περάσει: η λίστα δουλεύει και χωρίς previews.
@@ -139,7 +153,9 @@ export default function GroupChatScreen({
     // Καμία ενεργή παρέα -> είμαστε στη λίστα, δεν ανοίγουμε κανάλι.
     if (!activeId) {
       setMessages([]);
+      setOutbox([]);
       setMemberCount(0);
+      setHasMore(false);
       return;
     }
 
@@ -149,6 +165,12 @@ export default function GroupChatScreen({
 
     setLoadingChat(true);
     setMessages([]);
+    // Ό,τι δεν πρόλαβε να φύγει χάνεται όταν αλλάξεις Παρέα: για να επιβιώνει
+    // θέλει αποθήκευση στη συσκευή, που είναι επόμενη φάση.
+    setOutbox([]);
+    setHasMore(false);
+    setLoadingOlder(false);
+    loadingOlderRef.current = false;
     setError(null);
 
     // Καλείται όταν ο server στείλει νέα γραμμή μηνύματος.
@@ -201,6 +223,7 @@ export default function GroupChatScreen({
 
         channel = chat.channel;
         setMessages(chat.messages);
+        setHasMore(chat.hasMore);
       } catch {
         if (!cancelled) {
           setError("Couldn't load this conversation.");
@@ -224,34 +247,150 @@ export default function GroupChatScreen({
     };
   }, [activeId]);
 
-  // Στέλνει μήνυμα. Επιστρέφει true/false ώστε ο composer να καθαρίσει το input
-  // μόνο όταν όντως στάλθηκε.
-  const handleSend = useCallback(
-    async function send(text: string) {
-      if (!activeId) {
-        return false;
-      }
-
+  /**
+   * Η αποστολή, από τη στιγμή που το μήνυμα είναι ήδη στην οθόνη.
+   *
+   * Σε επιτυχία το μήνυμα περνάει μόνο του στα επιβεβαιωμένα — δεν περιμένουμε
+   * το realtime echo. Αν το κανάλι είναι πεσμένο, το μήνυμα πρέπει να μείνει
+   * εκεί που το βλέπει ο χρήστης· το echo, όταν έρθει, φέρνει το ίδιο id και
+   * το κόβει ο έλεγχος διπλών.
+   */
+  const deliver = useCallback(
+    async function deliver(groupId: string, id: string, text: string) {
       try {
-        await sendMessage(activeId, user.id, text);
-        setError(null);
-        return true;
+        const saved = await sendMessage(groupId, user.id, text, id);
+
+        setMessages(function (prev) {
+          if (prev.some((m) => m.id === saved.id)) return prev;
+          return [...prev, saved];
+        });
+        setOutbox(function (prev) {
+          return prev.filter((item) => item.id !== id);
+        });
       } catch {
-        setError('Message not sent. Tap send to try again.');
-        return false;
+        setOutbox(function (prev) {
+          return prev.map((item) =>
+            item.id === id ? { ...item, status: 'failed' as const } : item,
+          );
+        });
       }
     },
-    // Ξαναφτιάχνεται μόνο όταν αλλάξει η παρέα ή ο χρήστης.
-    [activeId, user.id],
+    [user.id],
+  );
+
+  // Ο composer δεν περιμένει τίποτα: το μήνυμα μπαίνει στη λίστα και φεύγει.
+  const handleSend = useCallback(
+    function send(text: string) {
+      if (!activeId) {
+        return;
+      }
+
+      const id = newMessageId();
+      setOutbox(function (prev) {
+        return [...prev, { id, content: text, createdAt: new Date().toISOString(), status: 'pending' }];
+      });
+      setError(null);
+
+      deliver(activeId, id, text);
+    },
+    [activeId, deliver],
+  );
+
+  // Δεύτερη προσπάθεια για μήνυμα που απέτυχε — με το ΙΔΙΟ id, ώστε μια αποστολή
+  // που τελικά είχε περάσει να μη γραφτεί δεύτερη φορά.
+  const retrySend = useCallback(
+    function retry(id: string) {
+      if (!activeId) {
+        return;
+      }
+
+      const item = outboxRef.current.find((entry) => entry.id === id);
+      if (!item || item.status !== 'failed') {
+        return;
+      }
+
+      setOutbox(function (prev) {
+        return prev.map((entry) =>
+          entry.id === id ? { ...entry, status: 'pending' as const } : entry,
+        );
+      });
+
+      deliver(activeId, id, item.content);
+    },
+    [activeId, deliver],
+  );
+
+  // Φέρνει την επόμενη σελίδα παλιότερων και τη βάζει ΜΠΡΟΣΤΑ από όσα έχουμε.
+  // Την καλεί η λίστα όταν ο χρήστης φτάσει στην κορυφή του ιστορικού.
+  const loadOlder = useCallback(
+    async function older() {
+      // Η ref κόβει τη διπλή πυροδότηση· τα υπόλοιπα είναι απλή λογική.
+      if (!activeId || loadingOlderRef.current || !hasMore) {
+        return;
+      }
+
+      // Δείκτης: το παλαιότερο που κρατάμε. Χωρίς μηνύματα δεν έχει νόημα —
+      // την πρώτη σελίδα την έφερε ήδη η openChat.
+      const oldest = messages[0];
+      if (!oldest) {
+        return;
+      }
+
+      loadingOlderRef.current = true;
+      setLoadingOlder(true);
+
+      try {
+        const page = await getMessages(activeId, { before: oldest.createdAt });
+
+        setMessages(function (prev) {
+          // Ό,τι ήρθε και το έχουμε ήδη πέφτει έξω. Δεν το περιμένουμε με
+          // δείκτη χρόνου, αλλά ένα διπλό id στη λίστα σπάει το keyExtractor.
+          const known = new Set(
+            prev.map(function (message) {
+              return message.id;
+            }),
+          );
+          const fresh = page.messages.filter(function (message) {
+            return !known.has(message.id);
+          });
+
+          if (fresh.length === 0) {
+            return prev;
+          }
+          return [...fresh, ...prev];
+        });
+
+        setHasMore(page.hasMore);
+      } catch {
+        // Σιωπηλή αποτυχία: το ιστορικό που ήδη βλέπεις μένει στη θέση του και
+        // η επόμενη προσπάθεια σκρολ ξαναζητάει την ίδια σελίδα.
+        setHasMore(true);
+      } finally {
+        loadingOlderRef.current = false;
+        setLoadingOlder(false);
+      }
+    },
+    [activeId, hasMore, messages],
   );
 
   // Τα μηνύματα -> γραμμές λίστας (με διαχωριστικά ημέρας).
   // Ξαναϋπολογίζεται μόνο όταν αλλάξουν τα messages.
   const rows = useMemo(
     function () {
-      return buildRows(messages);
+      return buildRows(messages, outbox, { id: user.id, name: displayName });
     },
-    [messages],
+    [messages, outbox, user.id, displayName],
+  );
+
+  // Η λίστα είναι inverted: ζωγραφίζει το index 0 στο ΚΑΤΩ μέρος και ανεβαίνει.
+  // Δίνοντάς της τις γραμμές ανάποδα, η οθόνη διαβάζεται πάλι από πάνω προς τα
+  // κάτω σε χρονολογική σειρά — και τα διαχωριστικά ημέρας μένουν πάνω από τη
+  // μέρα τους, χωρίς να αλλάξει τίποτα στην buildRows.
+  const invertedRows = useMemo(
+    function () {
+      return rows.slice().reverse();
+    },
+    [rows],
   );
 
   // Ποια παρέα είναι ανοιχτή. Δεν είναι state — προκύπτει από το state.
@@ -303,11 +442,17 @@ export default function GroupChatScreen({
     return styles.back;
   }
 
-  function scrollToBottom() {
-    // Το ref είναι null μέχρι να μπει η λίστα στην οθόνη.
-    if (listRef.current !== null) {
-      listRef.current.scrollToEnd({ animated: true });
+  // Σε inverted λίστα το footer ζωγραφίζεται στην ΚΟΡΥΦΗ — ακριβώς εκεί που
+  // περιμένει ο χρήστης την ένδειξη ότι κατεβαίνει κι άλλο ιστορικό.
+  function renderOlderSpinner() {
+    if (!loadingOlder) {
+      return null;
     }
+    return (
+      <View style={styles.olderSpinner}>
+        <ActivityIndicator color={paper.accent} size="small" />
+      </View>
+    );
   }
 
   // Το FlatList καλεί αυτή τη συνάρτηση για κάθε γραμμή και της δίνει το item.
@@ -329,6 +474,10 @@ export default function GroupChatScreen({
         mine={isMine}
         isFirst={item.isFirst}
         isLast={item.isLast}
+        status={item.status}
+        onRetry={function () {
+          retrySend(message.id);
+        }}
       />
     );
   }
@@ -407,13 +556,16 @@ export default function GroupChatScreen({
             </View>
           ) : (
             <FlatList
-              ref={listRef}
-              data={rows}
+              inverted
+              data={invertedRows}
               keyExtractor={function (item) {
                 return item.id;
               }}
               contentContainerStyle={styles.list}
-              onContentSizeChange={scrollToBottom}
+              // Σε inverted λίστα το "τέλος" είναι η κορυφή του ιστορικού.
+              onEndReached={loadOlder}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={renderOlderSpinner()}
               ListEmptyComponent={renderEmptyList()}
               renderItem={renderRow}
             />
@@ -457,12 +609,17 @@ const styles = StyleSheet.create({
   subtitle: { marginTop: 1, color: paper.inkFaint, fontFamily: paperFont.regular, fontSize: 12 },
 
   chat: { flex: 1 },
+  // Η λίστα είναι inverted, άρα ο content container είναι αναποδογυρισμένος:
+  // το paddingTop εμφανίζεται κάτω και το paddingBottom πάνω. Τα γράφουμε
+  // ανάποδα ώστε η οθόνη να δείχνει όπως πριν.
   list: {
     flexGrow: 1,
     paddingHorizontal: space.md,
-    paddingTop: space.sm,
-    paddingBottom: space.md,
+    paddingTop: space.md,
+    paddingBottom: space.sm,
   },
+
+  olderSpinner: { paddingVertical: space.md, alignItems: 'center' },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: space.lg },
   emptyTitle: { color: paper.ink, fontFamily: paperFont.serifSemi, fontSize: 20 },

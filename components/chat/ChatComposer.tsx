@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { paper, paperFont, radius, space } from '../../theme';
 
 type ChatComposerProps = {
-  /** Επιστρέφει false αν η αποστολή απέτυχε — τότε το κείμενο μένει στο πεδίο. */
-  onSend: (text: string) => Promise<boolean>;
+  /**
+   * Βάζει το μήνυμα στην οθόνη και αναλαμβάνει την αποστολή από εκεί και πέρα.
+   * Δεν περιμένουμε δίκτυο: ό,τι πάει στραβά φαίνεται πάνω στη φυσαλίδα.
+   */
+  onSend: (text: string) => void;
   placeholder?: string;
   disabled?: boolean;
 };
@@ -16,20 +19,17 @@ export default function ChatComposer({
   disabled = false,
 }: ChatComposerProps) {
   const [text, setText] = useState('');
-  const [sending, setSending] = useState(false);
   const [focused, setFocused] = useState(false);
 
   const trimmed = text.trim();
-  const canSend = trimmed.length > 0 && !sending && !disabled;
+  const canSend = trimmed.length > 0 && !disabled;
 
-  async function handleSend() {
+  function handleSend() {
     if (!canSend) return;
 
-    setSending(true);
-    const sent = await onSend(trimmed);
-    setSending(false);
-
-    if (sent) setText('');
+    // Καθαρίζει αμέσως: το μήνυμα ζει πλέον στη λίστα, όχι στο πεδίο.
+    onSend(trimmed);
+    setText('');
   }
 
   /**
@@ -86,15 +86,11 @@ export default function ChatComposer({
             return [styles.send, canSend ? styles.sendReady : styles.sendIdle, pressed && canSend && styles.pressed];
           }}
         >
-          {sending ? (
-            <ActivityIndicator size="small" color={paper.onMine} />
-          ) : (
-            <Ionicons
-              name="arrow-up"
-              size={17}
-              color={canSend ? paper.onMine : paper.inkFaint}
-            />
-          )}
+          <Ionicons
+            name="arrow-up"
+            size={17}
+            color={canSend ? paper.onMine : paper.inkFaint}
+          />
         </Pressable>
       </View>
     </View>

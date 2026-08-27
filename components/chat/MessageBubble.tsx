@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { paper, paperFont, space } from '../../theme';
 import { SquadMonogram } from './SquadPicker';
 
@@ -25,6 +25,10 @@ type MessageBubbleProps = {
   isFirst: boolean;
   /** Τελευταίο της σερί — μόνο εκεί δείχνουμε avatar και ώρα. */
   isLast: boolean;
+  /** Λείπει για όσα έχουν επιβεβαιωθεί από τη βάση. */
+  status?: 'pending' | 'failed';
+  /** Καλείται όταν πατηθεί μήνυμα που απέτυχε. */
+  onRetry?: () => void;
 };
 
 export default function MessageBubble({
@@ -34,6 +38,8 @@ export default function MessageBubble({
   mine,
   isFirst,
   isLast,
+  status,
+  onRetry,
 }: MessageBubbleProps) {
   // Στρογγυλή γωνία μόνο στις εξωτερικές άκρες, ώστε η σερί να διαβάζεται σαν μία στήλη.
   const shape = mine
@@ -62,11 +68,47 @@ export default function MessageBubble({
           </Text>
         ) : null}
 
-        <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther, shape]}>
-          <Text style={[styles.text, mine && styles.textMine]}>{content}</Text>
-        </View>
+        {/* Το failed γίνεται πατητό· τα υπόλοιπα μένουν απλό View ώστε να μη
+            μαζεύει η λίστα χιλιάδες άχρηστους χειριστές αφής. */}
+        {status === 'failed' && onRetry ? (
+          <Pressable
+            onPress={onRetry}
+            accessibilityRole="button"
+            accessibilityLabel="Message not sent. Tap to try again."
+            style={function ({ pressed }) {
+              return [
+                styles.bubble,
+                mine ? styles.bubbleMine : styles.bubbleOther,
+                styles.bubbleFailed,
+                shape,
+                pressed && styles.pressed,
+              ];
+            }}
+          >
+            <Text style={[styles.text, mine && styles.textMine]}>{content}</Text>
+          </Pressable>
+        ) : (
+          <View
+            style={[
+              styles.bubble,
+              mine ? styles.bubbleMine : styles.bubbleOther,
+              shape,
+              status === 'pending' && styles.bubblePending,
+            ]}
+          >
+            <Text style={[styles.text, mine && styles.textMine]}>{content}</Text>
+          </View>
+        )}
 
-        {isLast ? <Text style={styles.time}>{timeLabel(createdAt)}</Text> : null}
+        {/* Όσο εκκρεμεί ή έχει αποτύχει, η κατάσταση παίρνει τη θέση της ώρας:
+            η ώρα ενός μηνύματος που δεν έφτασε ποτέ δεν σημαίνει τίποτα. */}
+        {status === 'failed' ? (
+          <Text style={styles.failedNote}>Not sent · Tap to try again</Text>
+        ) : status === 'pending' ? (
+          <Text style={styles.pendingNote}>Sending…</Text>
+        ) : isLast ? (
+          <Text style={styles.time}>{timeLabel(createdAt)}</Text>
+        ) : null}
       </View>
     </View>
   );
@@ -100,6 +142,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: paper.line,
   },
+  // Ξεθωριασμένο όσο ταξιδεύει — αρκετά για να φανεί, όχι τόσο ώστε να μη διαβάζεται.
+  bubblePending: { opacity: 0.55 },
+  bubbleFailed: { backgroundColor: paper.danger },
+  pressed: { opacity: 0.85 },
 
   sender: {
     marginBottom: 4,
@@ -115,6 +161,20 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
     color: paper.inkFaint,
     fontFamily: paperFont.regular,
+    fontSize: 11,
+  },
+  pendingNote: {
+    marginTop: 4,
+    marginHorizontal: 2,
+    color: paper.inkFaint,
+    fontFamily: paperFont.regular,
+    fontSize: 11,
+  },
+  failedNote: {
+    marginTop: 4,
+    marginHorizontal: 2,
+    color: paper.danger,
+    fontFamily: paperFont.medium,
     fontSize: 11,
   },
 
