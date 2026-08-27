@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, font, layout, space } from '../../theme';
 
-export type NavTab = 'home' | 'chat';
+export type NavTab = 'home' | 'squads';
 
 type TabDef = {
   key: NavTab;
@@ -13,7 +13,7 @@ type TabDef = {
 
 const TABS: TabDef[] = [
   { key: 'home', label: 'Home', icon: 'home-outline', iconActive: 'home' },
-  { key: 'chat', label: 'Chats', icon: 'chatbubbles-outline', iconActive: 'chatbubbles' },
+  { key: 'squads', label: 'Squads', icon: 'people-outline', iconActive: 'people' },
 ];
 
 type BottomNavProps = {
