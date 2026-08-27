@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, font, radius, space } from '../../theme';
 import { useState } from 'react';
 
@@ -16,6 +16,7 @@ type AuthFieldProps = {
   onTogglePassword?: () => void;
   onSubmit?: () => void;
   error?: string;
+  style?: StyleProp<ViewStyle>;
 };
 
 export default function AuthField({
@@ -31,12 +32,13 @@ export default function AuthField({
   onTogglePassword,
   onSubmit,
   error,
+  style,
 }: AuthFieldProps) {
-   
+
   const [focused, setFocused] = useState(false);
 
   return (
-    <View style={styles.field}>
+    <View style={[styles.field, style]}>
       <Text style={styles.label}>{label}</Text>
       <View style={[styles.inputBox, focused && styles.focused, !!error && styles.errorBox]}>
         <Ionicons name={icon} size={20} color={error ? colors.danger : focused ? colors.primary : colors.textSoft} />

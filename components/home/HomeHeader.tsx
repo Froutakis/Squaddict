@@ -79,7 +79,11 @@ const styles = StyleSheet.create({
     fontSize: 26,
     letterSpacing: -0.5,
   },
-  createWrap: { ...shadow.button },
+  createWrap: {
+    ...shadow.button,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+  },
   create: {
     width: BUTTON,
     height: BUTTON,

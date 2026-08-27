@@ -64,7 +64,7 @@ export default function App() {
   return (
     <View style={styles.app}>
       <View style={styles.body}>
-        {screen === 'chat' ? <GroupChatScreen user={user} /> : <HomeScreen user={user} />}
+        {screen === 'squads' ? <GroupChatScreen user={user} /> : <HomeScreen user={user} />}
       </View>
 
       <BottomNav active={screen} onNavigate={setScreen} />
