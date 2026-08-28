@@ -24,6 +24,12 @@ type HomeScreenProps = {
   user: AuthUser;
 };
 
+function unansweredFirst(list: MyEvent[]): MyEvent[] {
+  return [...list].sort(
+    (a, b) => Number(a.myStatus !== undefined) - Number(b.myStatus !== undefined),
+  );
+}
+
 export default function HomeScreen({ user }: HomeScreenProps) {
   const [displayName, setDisplayName] = useState('');
   const [groups, setGroups] = useState<Group[]>([]);
@@ -32,12 +38,12 @@ export default function HomeScreen({ user }: HomeScreenProps) {
   const [error, setError] = useState<string | null>(null);
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [squadId, setSquadId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showSquadForm, setShowSquadForm] = useState(false);
   const [formDate, setFormDate] = useState<string | null>(null);
   const [openEvent, setOpenEvent] = useState<MyEvent | null>(null);
   const [editEvent, setEditEvent] = useState<MyEvent | null>(null);
-  const [rsvpSaving, setRsvpSaving] = useState(false);
   const [rsvpError, setRsvpError] = useState<string | null>(null);
 
   const load = useCallback(
@@ -68,9 +74,25 @@ export default function HomeScreen({ user }: HomeScreenProps) {
     load();
   }, [load]);
 
+  function applyRsvp(list: MyEvent[], eventId: string, status: RsvpStatus | null): MyEvent[] {
+    return list.map(function (event) {
+      if (event.id !== eventId) {
+        return event;
+      }
+
+      const others = event.going.filter((person) => person.id !== user.id);
+      const going =
+        status === 'in' ? [...others, { id: user.id, name: displayName }] : others;
+
+      return { ...event, myStatus: status ?? undefined, going };
+    });
+  }
+
   async function handleRsvp(eventId: string, status: RsvpStatus | null) {
-    setRsvpSaving(true);
+    const previous = events;
+
     setRsvpError(null);
+    setEvents(applyRsvp(events, eventId, status));
 
     try {
       if (status) {
@@ -78,11 +100,9 @@ export default function HomeScreen({ user }: HomeScreenProps) {
       } else {
         await clearRsvp(eventId);
       }
-      setEvents(await getMyEvents(user.id));
     } catch {
+      setEvents(previous);
       setRsvpError('Could not save your answer. Try again.');
-    } finally {
-      setRsvpSaving(false);
     }
   }
 
@@ -94,9 +114,12 @@ export default function HomeScreen({ user }: HomeScreenProps) {
 
   const today = keyOf(new Date());
   const dayMode = selectedDate !== null;
-  const upcoming = events.filter((e) => e.date >= today);
+  const visible = squadId ? events.filter((e) => e.groupId === squadId) : events;
+  const upcoming = visible.filter((e) => e.date >= today);
   const upNextEvent = dayMode ? undefined : upcoming[0];
-  const listEvents = dayMode ? events.filter((e) => e.date === selectedDate) : upcoming.slice(1);
+  const listEvents = unansweredFirst(
+    dayMode ? visible.filter((e) => e.date === selectedDate) : upcoming.slice(1),
+  );
 
   function renderBody() {
     if (loading) {
@@ -149,9 +172,10 @@ export default function HomeScreen({ user }: HomeScreenProps) {
 
     return (
       <>
+
         <View style={styles.body}>
           <CalendarCard
-            events={events}
+            events={visible}
             daysShown={7}
             selectedDate={selectedDate}
             onSelectDate={(d) => setSelectedDate(d === selectedDate ? null : d)}
@@ -181,7 +205,6 @@ export default function HomeScreen({ user }: HomeScreenProps) {
               event={upNextEvent}
               onPress={() => setOpenEvent(upNextEvent)}
               onRsvp={(status) => handleRsvp(upNextEvent.id, status)}
-              saving={rsvpSaving}
             />
           </View>
         ) : null}

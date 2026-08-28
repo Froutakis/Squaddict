@@ -19,9 +19,7 @@ type UpNextProps = {
 };
 
 export default function UpNext({ event, onPress, onRsvp, saving = false }: UpNextProps) {
-  const when = formatDateTime(event.date, event.startTime);
-  const meta = [when].filter(Boolean).join(' · ');
-  const where = [event.location];
+  const meta = formatDateTime(event.date, event.startTime);
 
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={event.title}>
@@ -46,13 +44,18 @@ export default function UpNext({ event, onPress, onRsvp, saving = false }: UpNex
           <Ionicons name="time-outline" size={15} color={SOFT} />
           <Text style={styles.metaText} numberOfLines={1}>{meta}</Text>
         </View>
-        <View style={styles.metaRow}>
-          <Ionicons name="location-outline" size={15} color={SOFT} />
-          <Text style={styles.metaText} numberOfLines={1}>{where}</Text>
-        </View>
-        <View style={styles.metaRow}>
+        {event.location ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="location-outline" size={15} color={SOFT} />
+            <Text style={styles.metaText} numberOfLines={1}>{event.location}</Text>
+          </View>
+        ) : null}
+
+        {event.going.length > 0 ? (
+          <View style={styles.metaRow}>
             <AttendeeStack people={event.going} size={26} max={3} onDark />
-        </View>
+          </View>
+        ) : null}
 
         <View style={styles.rsvpRow}>
           <RsvpButtons
