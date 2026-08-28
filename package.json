@@ -14,6 +14,7 @@
     "test-realtime": "tsx --env-file=.env debug/test-realtime.ts",
     "test-inverted-rows": "tsx debug/test-inverted-rows.ts",
     "test-outbox-rows": "tsx debug/test-outbox-rows.ts",
+    "test-connection": "tsx debug/test-connection.ts",
     "test-pagination": "tsx --env-file=.env debug/test-pagination.ts",
     "listen": "tsx --env-file=.env debug/listen.ts",
     "send": "tsx --env-file=.env debug/send.ts"

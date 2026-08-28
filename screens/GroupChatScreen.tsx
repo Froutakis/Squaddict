@@ -18,6 +18,12 @@ import ChatComposer from '../components/chat/ChatComposer';
 import MessageBubble, { DateSeparator } from '../components/chat/MessageBubble';
 import SquadPicker, { SquadMonogram } from '../components/chat/SquadPicker';
 import { buildRows, type OutgoingMessage, type Row } from '../components/chat/messageRows';
+import {
+  connectionFrom,
+  connectionLabel,
+  mergeNewMessages,
+  type Connection,
+} from '../components/chat/connection';
 import { newMessageId } from '../lib/ids';
 import type { Group } from '../services/serviceGroup';
 import {
@@ -25,6 +31,7 @@ import {
   getGroupsForUser,
   getMemberNames,
   getMessages,
+  getMessagesAfter,
   sendMessage,
   toChatMessage,
   type ChatMessage,
@@ -33,6 +40,14 @@ import {
 import { closeGroupChat, startChat } from '../services/serviceRealtime';
 import { getUserById } from '../services/serviceUser';
 import { layout, paper, paperFont, radius, space } from '../theme';
+
+/**
+ * Πόσα χαμένα μηνύματα γεφυρώνουμε σελίδα-σελίδα πριν τα παρατήσουμε και
+ * ξαναρχίσουμε από την πρώτη σελίδα. Μετά από μέρες εκτός, ο βρόχος θα ήταν
+ * δεκάδες αιτήματα σε μια συσκευή που μόλις ξύπνησε — ενώ το αποτέλεσμα είναι
+ * το ίδιο, αφού το παλιότερο ιστορικό έρχεται με scroll προς τα πάνω.
+ */
+const CATCH_UP_LIMIT = 300;
 
 type GroupChatScreenProps = {
   user: AuthUser;
@@ -58,6 +73,8 @@ export default function GroupChatScreen({
   const [memberCount, setMemberCount] = useState(0);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [loadingChat, setLoadingChat] = useState(false);
+  // Η δική μας σύνδεση με το κανάλι της συνομιλίας.
+  const [connection, setConnection] = useState<Connection>('connecting');
   // Υπάρχει κι άλλο ιστορικό πάνω από όσα δείχνουμε;
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -74,6 +91,11 @@ export default function GroupChatScreen({
   // να ξαναφτιάχνεται σε κάθε αλλαγή της — αλλιώς άλλαζε σε κάθε πληκτρολόγηση.
   const outboxRef = useRef<OutgoingMessage[]>([]);
   outboxRef.current = outbox;
+  // Ίδιος λόγος: το catch-up ζει μέσα στο effect του καναλιού, που στήνεται μία
+  // φορά ανά παρέα. Χωρίς ref θα έβλεπε για πάντα την άδεια αρχική λίστα.
+  const messagesRef = useRef<ChatMessage[]>([]);
+  messagesRef.current = messages;
+  const connectionRef = useRef<Connection>('connecting');
 
   // Φέρνει τα τελευταία μηνύματα για την προεπισκόπηση της λίστας.
   // Αν αποτύχει το αφήνουμε να περάσει: η λίστα δουλεύει και χωρίς previews.
@@ -156,8 +178,13 @@ export default function GroupChatScreen({
       setOutbox([]);
       setMemberCount(0);
       setHasMore(false);
+      setConnection('connecting');
       return;
     }
+
+    // Το activeId είναι ήδη ελεγμένο παραπάνω, αλλά η handleStatus είναι hoisted
+    // function declaration και η TypeScript δεν κρατά τη στένωση μέσα της.
+    const chatGroupId: string = activeId;
 
     let cancelled = false;
     // Χρειάζεται ρητός τύπος: με σκέτο `= null` η TS θα κλείδωνε τον τύπο σε `null`.
@@ -169,6 +196,8 @@ export default function GroupChatScreen({
     // θέλει αποθήκευση στη συσκευή, που είναι επόμενη φάση.
     setOutbox([]);
     setHasMore(false);
+    setConnection('connecting');
+    connectionRef.current = 'connecting';
     setLoadingOlder(false);
     loadingOlderRef.current = false;
     setError(null);
@@ -200,6 +229,98 @@ export default function GroupChatScreen({
       });
     }
 
+    /**
+     * Γεφυρώνει το κενό μιας αποσύνδεσης.
+     *
+     * Το postgres_changes δεν ξαναστέλνει όσα έχασες: το κανάλι ξανασυνδέεται
+     * σιωπηλά και συνεχίζει από εκείνη τη στιγμή. Χωρίς αυτό, τα μηνύματα του
+     * διαστήματος δεν εμφανίζονται ποτέ.
+     */
+    async function catchUp(groupId: string) {
+      // Δείκτης: το πιο πρόσφατο που ξέρουμε. Χωρίς μηνύματα δεν υπάρχει κενό
+      // να γεφυρωθεί — η openChat έφερε ήδη την πρώτη σελίδα.
+      const latest = messagesRef.current[messagesRef.current.length - 1];
+      if (!latest) {
+        return;
+      }
+
+      let since = latest.createdAt;
+      let collected: ChatMessage[] = [];
+
+      for (;;) {
+        const page = await getMessagesAfter(groupId, since);
+        if (cancelled) {
+          return;
+        }
+
+        collected = [...collected, ...page.messages];
+
+        if (!page.hasMore || page.messages.length === 0) {
+          break;
+        }
+
+        // Πάνω από το όριο, το κενό είναι πολύ μεγάλο για να το γεφυρώσουμε
+        // σελίδα-σελίδα. Ξαναρχίζουμε από την πρώτη σελίδα: τίποτα δεν χάνεται,
+        // το παλιότερο ιστορικό μένει προσβάσιμο με scroll προς τα πάνω.
+        if (collected.length >= CATCH_UP_LIMIT) {
+          const fresh = await getMessages(groupId);
+          if (cancelled) {
+            return;
+          }
+          setMessages(fresh.messages);
+          setHasMore(fresh.hasMore);
+          return;
+        }
+
+        since = page.messages[page.messages.length - 1].createdAt;
+      }
+
+      if (collected.length === 0) {
+        return;
+      }
+
+      // Μπορεί να μπήκε καινούργιο μέλος όσο ήμασταν εκτός· χωρίς αυτό τα
+      // μηνύματά του θα έφταναν από το κανάλι χωρίς όνομα αποστολέα.
+      try {
+        const names = await getMemberNames(groupId);
+        if (!cancelled) {
+          namesRef.current = names;
+          setMemberCount(Object.keys(names).length);
+        }
+      } catch {
+        // Τα ονόματα είναι καλλωπισμός· τα μηνύματα μετράνε.
+      }
+
+      if (!cancelled) {
+        setMessages(function (prev) {
+          return mergeNewMessages(prev, collected);
+        });
+      }
+    }
+
+    // Κάθε αλλαγή κατάστασης του καναλιού, και στις επανασυνδέσεις.
+    function handleStatus(status: string) {
+      if (cancelled) {
+        return;
+      }
+
+      const next = connectionFrom(status);
+      // Η σύγκριση γίνεται σε ref και όχι μέσα στον updater του setConnection:
+      // ο updater μπορεί να τρέξει δύο φορές (StrictMode), και το catch-up είναι
+      // αίτημα δικτύου — δεν έχει θέση μέσα σε συνάρτηση που πρέπει να είναι καθαρή.
+      const wasOnline = connectionRef.current === 'online';
+      connectionRef.current = next;
+      setConnection(next);
+
+      // Η επιστροφή στο online είναι το σήμα: ό,τι έτρεξε στο μεταξύ λείπει.
+      if (!wasOnline && next === 'online') {
+        catchUp(chatGroupId).catch(function () {
+          // Αν αποτύχει, η επόμενη επανασύνδεση ξαναδοκιμάζει από τον ίδιο
+          // δείκτη. Δεν χαλάμε την οθόνη για κάτι που επανορθώνεται μόνο του.
+        });
+      }
+    }
+
     async function openChat(groupId: string) {
       try {
         const names = await getMemberNames(groupId);
@@ -212,7 +333,7 @@ export default function GroupChatScreen({
         const memberIds = Object.keys(names);
         setMemberCount(memberIds.length);
 
-        const chat = await startChat(groupId, handleIncomingRow);
+        const chat = await startChat(groupId, handleIncomingRow, undefined, handleStatus);
 
         // Αν άλλαξε παρέα όσο άνοιγε το κανάλι, το cleanup έχει ήδη τρέξει και δεν
         // ξέρει γι' αυτό το κανάλι. Κλείσ' το εδώ, αλλιώς μένει ανοιχτό socket.
@@ -550,6 +671,11 @@ export default function GroupChatScreen({
         >
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
+          {/* Μόνο όταν φταίει κάτι. Στο online δεν υπάρχει τίποτα εδώ. */}
+          {connectionLabel(connection) ? (
+            <Text style={styles.connection}>{connectionLabel(connection)}</Text>
+          ) : null}
+
           {loadingChat ? (
             <View style={styles.empty}>
               <ActivityIndicator color={paper.accent} />
@@ -635,6 +761,18 @@ const styles = StyleSheet.create({
     color: paper.accent,
     fontFamily: paperFont.medium,
     fontSize: 13,
+    textAlign: 'center',
+  },
+
+  // Πιο σβηστή από το error: η αποσύνδεση είναι κατάσταση, όχι σφάλμα, και
+  // περνάει από μόνη της.
+  connection: {
+    paddingHorizontal: space.md,
+    paddingVertical: space.xs,
+    backgroundColor: paper.surfaceAlt,
+    color: paper.inkSoft,
+    fontFamily: paperFont.medium,
+    fontSize: 12,
     textAlign: 'center',
   },
 });

@@ -375,6 +375,42 @@ export async function getMessages(
   };
 }
 
+/**
+ * Ό,τι γράφτηκε ΜΕΤΑ από μια στιγμή — ο ανιών καθρέφτης της getMessages.
+ *
+ * Χρειάζεται στην επανασύνδεση. Το postgres_changes δεν ξαναστέλνει όσα έχασες
+ * όσο ήσουν εκτός: το κανάλι ξανασυνδέεται σιωπηλά και συνεχίζει από εκείνη τη
+ * στιγμή και μπρος. Χωρίς αυτό το ερώτημα, τα μηνύματα του διαστήματος δεν
+ * εμφανίζονται ποτέ — και ο χρήστης δεν έχει τρόπο να καταλάβει ότι λείπουν.
+ *
+ * Το `hasMore` εδώ σημαίνει "υπάρχουν κι άλλα ΝΕΟΤΕΡΑ", οπότε ο καλών ξαναρωτά
+ * με δείκτη το τελευταίο που πήρε, μέχρι να αδειάσει.
+ */
+export async function getMessagesAfter(
+  groupId: string,
+  since: string,
+  limit: number = MESSAGE_PAGE_SIZE,
+): Promise<MessagePage> {
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id, content, sender_id, created_at, profiles(display_name)")
+    .eq("group_id", groupId)
+    .gt("created_at", since)
+    // Ανιούσα: εδώ το limit πρέπει να κόψει τα νεότερα, ώστε να προχωράμε
+    // από το κενό προς το παρόν χωρίς να αφήσουμε τρύπα πίσω μας.
+    .order("created_at", { ascending: true })
+    .limit(limit);
+
+  if (error) throw error;
+
+  const rows = data ?? [];
+
+  return {
+    messages: rows.map((row) => toChatMessage(row)),
+    hasMore: rows.length === limit,
+  };
+}
+
 /** Χάρτης user_id → όνομα, για τα μηνύματα που έρχονται από το realtime (δεν φέρνουν προφίλ). */
 export async function getMemberNames(groupId: string): Promise<Record<string, string>> {
   const members = await getMembers(groupId);
