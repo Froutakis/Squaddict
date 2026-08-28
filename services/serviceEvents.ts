@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
+import { toEventTags, type EventTag } from "../lib/tags";
 
 type EventRow = {
   id: string;
@@ -11,6 +12,11 @@ type EventRow = {
   location: string | null;
   description: string | null;
   created_by: string;
+  is_public: boolean;
+  lat: number | null;
+  lng: number | null;
+  place_label: string | null;
+  tags: string[] | null;
 };
 
 type AttendeeRow = {
@@ -34,9 +40,20 @@ export type GroupEvent = {
   location?: string;
   description?: string;
   createdBy: string;
+  isPublic: boolean;
+  lat?: number;
+  lng?: number;
+  placeLabel?: string;
+  tags: EventTag[];
 };
 
-export type NewEvent = Omit<GroupEvent, 'id' | 'groupId' | 'createdBy'>;
+export type NewEvent = Omit<
+  GroupEvent,
+  'id' | 'groupId' | 'createdBy' | 'isPublic' | 'tags'
+> & {
+  isPublic?: boolean;
+  tags?: EventTag[];
+};
 
 export type RsvpStatus = "in" | "out";
 
@@ -63,6 +80,11 @@ function toEvent(r: EventRow): GroupEvent {
     location: r.location ?? undefined,
     description: r.description ?? undefined,
     createdBy: r.created_by,
+    isPublic: r.is_public ?? false,
+    lat: r.lat ?? undefined,
+    lng: r.lng ?? undefined,
+    placeLabel: r.place_label ?? undefined,
+    tags: toEventTags(r.tags),
   };
 }
 
@@ -75,7 +97,7 @@ function toAttendee(a: AttendeeRow): Attendee {
 }
 
 function toColumns(input: NewEvent) {
-  return {
+  const columns: Record<string, unknown> = {
     title: input.title,
     date: input.date,
     start_time: input.startTime || null,
@@ -83,6 +105,14 @@ function toColumns(input: NewEvent) {
     location: input.location || null,
     description: input.description || null,
   };
+
+  if (input.isPublic !== undefined) columns.is_public = input.isPublic;
+  if (input.lat !== undefined) columns.lat = input.lat;
+  if (input.lng !== undefined) columns.lng = input.lng;
+  if (input.placeLabel !== undefined) columns.place_label = input.placeLabel || null;
+  if (input.tags !== undefined) columns.tags = input.tags;
+
+  return columns;
 }
 
 export async function createEvent(groupId: string, input: NewEvent): Promise<GroupEvent> {
