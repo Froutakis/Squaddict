@@ -1,4 +1,4 @@
- import type { Coords } from "./serviceLocation";
+import type { Coords } from "./serviceLocation";
 
 export type Place = {
   label: string;
@@ -19,8 +19,32 @@ const HEADERS = {
   "User-Agent": CONTACT ? `Parea/1.0 (${CONTACT})` : "Parea/1.0",
 };
 
+const MIN_GAP_MS = 1100;
+
+let nextSlot = 0;
+
 function identified(url: string): string {
   return CONTACT ? `${url}&email=${encodeURIComponent(CONTACT)}` : url;
+}
+
+function abortError(): Error {
+  const error = new Error("Aborted");
+  error.name = "AbortError";
+
+  return error;
+}
+
+async function waitForSlot(signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) throw abortError();
+
+  const now = Date.now();
+  const slot = Math.max(now, nextSlot);
+  nextSlot = slot + MIN_GAP_MS;
+
+  const wait = slot - now;
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+
+  if (signal?.aborted) throw abortError();
 }
 
 function shortLabel(row: any): string {
@@ -37,6 +61,8 @@ function shortLabel(row: any): string {
 export async function searchPlaces(query: string, signal?: AbortSignal): Promise<Place[]> {
   const trimmed = query.trim();
   if (trimmed.length < MIN_QUERY) return [];
+
+  await waitForSlot(signal);
 
   const url = identified(
     `${ENDPOINT}?q=${encodeURIComponent(trimmed)}&format=jsonv2&limit=6&addressdetails=0`,
@@ -58,6 +84,8 @@ export async function searchPlaces(query: string, signal?: AbortSignal): Promise
 }
 
 export async function reversePlace(coords: Coords, signal?: AbortSignal): Promise<Place | null> {
+  await waitForSlot(signal);
+
   const url = identified(
     `${REVERSE_ENDPOINT}?lat=${coords.lat}&lon=${coords.lng}&format=jsonv2&zoom=18`,
   );

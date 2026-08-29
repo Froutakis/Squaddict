@@ -32,6 +32,15 @@ export default function PlaceField({ label, place, onChange, loading = false, er
 
   useEffect(
     function () {
+      if (dirty.current) return;
+
+      setQuery(place?.label ?? '');
+    },
+    [place],
+  );
+
+  useEffect(
+    function () {
       if (!dirty.current) return;
       if (place && query === place.label) return;
 

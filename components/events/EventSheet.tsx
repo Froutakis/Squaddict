@@ -1,17 +1,28 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Attendee, MyEvent, RsvpStatus } from '../../services/serviceEvents';
 import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/serviceEvents';
 import { getMemberNames } from '../../services/serviceGroup';
 import { colors, font, gradientFor, radius, space } from '../../theme';
 import { formatDateTime } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
+import { mapsUrl } from '../../lib/maps';
 import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 import RsvpButtons from './RsvpButtons';
 
 type Person = { userId: string; name: string };
+
+async function openMaps(lat: number, lng: number, label?: string): Promise<void> {
+  const url = mapsUrl(Platform.OS, lat, lng, label);
+
+  try {
+    await Linking.openURL(url);
+  } catch {
+    await Linking.openURL(mapsUrl('web', lat, lng, label));
+  }
+}
 
 type EventSheetProps = {
   event: MyEvent | null;
@@ -142,6 +153,18 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
               <View style={styles.body}>
                 {event.description ? (
                   <Text style={styles.description}>{event.description}</Text>
+                ) : null}
+
+                {event.lat !== undefined && event.lng !== undefined ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Open in maps"
+                    onPress={() => openMaps(event.lat!, event.lng!, place.primary)}
+                    style={({ pressed }) => [styles.maps, pressed && styles.mapsPressed]}
+                  >
+                    <Ionicons name="map-outline" size={17} color={colors.primary} />
+                    <Text style={styles.mapsText}>Open in maps</Text>
+                  </Pressable>
                 ) : null}
 
                 <RsvpButtons status={myStatus} saving={saving} onChange={handleRsvp} />
@@ -312,6 +335,19 @@ const styles = StyleSheet.create({
   description: { color: colors.text, fontFamily: font.medium, fontSize: 14, lineHeight: 20 },
   error: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
   loader: { marginVertical: space.lg },
+  maps: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingVertical: space.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+  },
+  mapsPressed: { opacity: 0.7 },
+  mapsText: { color: colors.primary, fontFamily: font.semi, fontSize: 14 },
   list: { maxHeight: 260 },
   listContent: { gap: space.md, paddingBottom: space.sm },
   section: { gap: space.sm },
