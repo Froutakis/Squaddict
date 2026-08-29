@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, font, radius, space } from '../../theme';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 type AuthFieldProps = {
   label: string;
@@ -36,13 +36,20 @@ export default function AuthField({
 }: AuthFieldProps) {
 
   const [focused, setFocused] = useState(false);
+  const inputRef = useRef<TextInput>(null);
 
   return (
     <View style={[styles.field, style]}>
       <Text style={styles.label}>{label}</Text>
-      <View style={[styles.inputBox, focused && styles.focused, !!error && styles.errorBox]}>
+      <Pressable
+        style={[styles.inputBox, focused && styles.focused, !!error && styles.errorBox]}
+        onPress={function () {
+          inputRef.current?.focus();
+        }}
+      >
         <Ionicons name={icon} size={20} color={error ? colors.danger : focused ? colors.primary : colors.textSoft} />
         <TextInput
+          ref={inputRef}
           accessibilityLabel={label}
           style={styles.input}
           value={value}
@@ -73,7 +80,7 @@ export default function AuthField({
             <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={22} color={colors.textSoft} />
           </Pressable>
         ) : null}
-      </View>
+      </Pressable>
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );

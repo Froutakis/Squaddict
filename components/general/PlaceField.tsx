@@ -29,6 +29,7 @@ export default function PlaceField({ label, place, onChange, loading = false, er
   const [focused, setFocused] = useState(false);
 
   const dirty = useRef(false);
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(
     function () {
@@ -124,13 +125,19 @@ export default function PlaceField({ label, place, onChange, loading = false, er
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
 
-      <View style={[styles.inputBox, focused && styles.focused, !!error && styles.errorBox]}>
+      <Pressable
+        style={[styles.inputBox, focused && styles.focused, !!error && styles.errorBox]}
+        onPress={function () {
+          inputRef.current?.focus();
+        }}
+      >
         <Ionicons
           name={place ? 'location' : 'location-outline'}
           size={20}
           color={error ? colors.danger : place ? colors.success : focused ? colors.primary : colors.textSoft}
         />
         <TextInput
+          ref={inputRef}
           accessibilityLabel={label}
           style={styles.input}
           value={query}
@@ -160,7 +167,7 @@ export default function PlaceField({ label, place, onChange, loading = false, er
             <Ionicons name="close-circle" size={20} color={colors.textFaint} />
           </Pressable>
         ) : null}
-      </View>
+      </Pressable>
 
       {showResults ? (
         <View style={styles.results}>

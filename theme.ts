@@ -93,7 +93,7 @@ export const shadow = {
 };
 
 export const radius = { sm: 10, md: 14, lg: 18, xl: 26, pill: 999 };
-export const space = { xs: 6, sm: 10, md: 16, lg: 24, xl: 32 };
+export const space = { xxs: 4, xs: 6, sm: 10, md: 16, lg: 24, xl: 32 };
 
 // Μέγιστο πλάτος περιεχομένου. Στο κινητό δεν δεσμεύει· στο web κρατά το chat
 // σε στήλη αντί να απλώνεται σε όλη την οθόνη.
@@ -104,6 +104,17 @@ export const font = {
   bold: 'Poppins_700Bold',
   semi: 'Poppins_600SemiBold',
   medium: 'Poppins_500Medium',
+};
+
+export const textSize = {
+  micro: 10,
+  caption: 11,
+  small: 12,
+  body: 13,
+  base: 14,
+  lead: 15,
+  heading: 20,
+  hero: 26,
 };
 
 // ── Chat: "Paper" ──────────────────────────────────────────────────────

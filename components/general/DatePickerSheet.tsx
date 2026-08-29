@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, font, radius, space } from '../../theme';
+import SheetHeader from './SheetHeader';
 import { addMonths, keyOf, monthGrid, parseDateKey } from '../../lib/datetime';
 
 type DatePickerSheetProps = {
@@ -41,7 +42,7 @@ export default function DatePickerSheet({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
       <Pressable style={styles.backdrop} onPress={onCancel}>
         <Pressable style={styles.sheet} onPress={() => {}}>
-          <Text style={styles.title}>{title}</Text>
+          <SheetHeader title={title} onClose={onCancel} />
 
           <View style={styles.monthRow}>
             <Pressable
@@ -120,7 +121,6 @@ const styles = StyleSheet.create({
     padding: space.lg,
     gap: space.md,
   },
-  title: { color: colors.text, fontFamily: font.bold, fontSize: 20 },
 
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   month: { color: colors.textFaint, fontFamily: font.semi, fontSize: 12, letterSpacing: 0.8 },

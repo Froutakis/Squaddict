@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent } from '../../services/serviceEvents';
-import { colors, font, gradientFor, radius, shadow, solidFor, space, tint } from '../../theme';
+import { colors, font, gradientFor, radius, shadow, solidFor, space, textSize, tint } from '../../theme';
 import { countdownLabel, dateParts, daysUntil } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import AttendeeStack from './Attendee';
@@ -81,14 +81,14 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 13,
+    gap: space.md,
+    paddingVertical: space.md,
+    paddingHorizontal: space.md,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     borderLeftWidth: 3,
-    paddingVertical: 13,
-    paddingHorizontal: 14,
     ...shadow.card,
   },
   pressed: { opacity: 0.75 },
@@ -103,20 +103,20 @@ const styles = StyleSheet.create({
   month: {
     color: colors.textOnBrand,
     fontFamily: font.bold,
-    fontSize: 9.5,
+    fontSize: textSize.micro,
     letterSpacing: 1,
     opacity: 0.92,
   },
-  day: { color: colors.textOnBrand, fontFamily: font.display, fontSize: 19 },
-  body: { flex: 1, minWidth: 0 },
-  squadRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  day: { color: colors.textOnBrand, fontFamily: font.display, fontSize: textSize.heading },
+  body: { flex: 1, minWidth: 0, gap: 2 },
+  squadRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   squadDot: { width: 6, height: 6, borderRadius: radius.pill },
-  squadName: { fontFamily: font.bold, fontSize: 11, flexShrink: 1 },
-  title: { marginTop: 2, color: colors.text, fontFamily: font.bold, fontSize: 15.5, letterSpacing: -0.2 },
-  meta: { marginTop: 2, color: colors.textSoft, fontFamily: font.medium, fontSize: 12.5 },
+  squadName: { fontFamily: font.bold, fontSize: textSize.caption, flexShrink: 1 },
+  title: { color: colors.text, fontFamily: font.bold, fontSize: textSize.lead, letterSpacing: -0.2 },
+  meta: { color: colors.textSoft, fontFamily: font.medium, fontSize: textSize.small },
   side: { alignItems: 'flex-end', gap: space.xs },
-  pill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.pill },
-  pillText: { fontFamily: font.bold, fontSize: 10.5 },
+  pill: { paddingHorizontal: space.sm, paddingVertical: space.xxs, borderRadius: radius.pill },
+  pillText: { fontFamily: font.bold, fontSize: textSize.micro },
   pillIn: { backgroundColor: tint.success },
   pillTextIn: { color: colors.success },
   pillOut: { backgroundColor: tint.danger },
