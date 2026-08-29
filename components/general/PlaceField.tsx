@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { searchPlaces, type Place } from '../../services/servicePlaces';
+import { reversePlace, searchPlaces, type Place } from '../../services/servicePlaces';
+import { getCurrentCoords } from '../../services/serviceLocation';
 import { colors, font, radius, space } from '../../theme';
 
 type PlaceFieldProps = {
@@ -14,11 +15,17 @@ type PlaceFieldProps = {
 
 const DEBOUNCE_MS = 500;
 
+const SEARCH_FAILED = 'Could not reach the map service. Try again.';
+const PERMISSION_OFF = 'Location is off for Parea. Turn it on in Settings, or search for the spot.';
+const NO_FIX = 'Could not work out where you are. Search for the spot instead.';
+const NO_NAME = 'Could not name that spot. Search for it instead.';
+
 export default function PlaceField({ label, place, onChange, loading = false, error }: PlaceFieldProps) {
   const [query, setQuery] = useState(place?.label ?? '');
   const [results, setResults] = useState<Place[]>([]);
   const [searching, setSearching] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
 
   const dirty = useRef(false);
@@ -37,7 +44,7 @@ export default function PlaceField({ label, place, onChange, loading = false, er
 
       const controller = new AbortController();
       setSearching(true);
-      setFailed(false);
+      setProblem(null);
 
       const timer = setTimeout(function () {
         searchPlaces(trimmed, controller.signal)
@@ -47,7 +54,7 @@ export default function PlaceField({ label, place, onChange, loading = false, er
           })
           .catch(function (e) {
             if (e?.name === 'AbortError') return;
-            setFailed(true);
+            setProblem(SEARCH_FAILED);
             setSearching(false);
           });
       }, DEBOUNCE_MS);
@@ -70,7 +77,36 @@ export default function PlaceField({ label, place, onChange, loading = false, er
     dirty.current = false;
     setQuery(found.label);
     setResults([]);
+    setProblem(null);
     onChange(found);
+  }
+
+  async function handleUseMyLocation() {
+    setLocating(true);
+    setProblem(null);
+
+    const position = await getCurrentCoords();
+
+    if (!position.ok) {
+      setLocating(false);
+      setProblem(position.reason === 'denied' ? PERMISSION_OFF : NO_FIX);
+      return;
+    }
+
+    try {
+      const found = await reversePlace(position.coords);
+      setLocating(false);
+
+      if (!found) {
+        setProblem(NO_NAME);
+        return;
+      }
+
+      handlePick(found);
+    } catch {
+      setLocating(false);
+      setProblem(SEARCH_FAILED);
+    }
   }
 
   const showResults = focused && results.length > 0 && !place;
@@ -94,7 +130,7 @@ export default function PlaceField({ label, place, onChange, loading = false, er
           placeholderTextColor={colors.textFaint}
           autoCapitalize="none"
           autoCorrect={false}
-          editable={!loading}
+          editable={!loading && !locating}
           onFocus={() => setFocused(true)}
           onBlur={() => setTimeout(() => setFocused(false), 150)}
           selectionColor={colors.primary}
@@ -108,6 +144,7 @@ export default function PlaceField({ label, place, onChange, loading = false, er
             onPress={function () {
               dirty.current = true;
               setQuery('');
+              setProblem(null);
               onChange(null);
             }}
           >
@@ -138,7 +175,25 @@ export default function PlaceField({ label, place, onChange, loading = false, er
         </View>
       ) : null}
 
-      {failed ? <Text style={styles.error}>Could not reach the map service. Try again.</Text> : null}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Use my current location"
+        accessibilityState={{ disabled: locating || loading }}
+        onPress={handleUseMyLocation}
+        disabled={locating || loading}
+        style={({ pressed }) => [styles.useMine, pressed && styles.useMinePressed]}
+      >
+        {locating ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <Ionicons name="navigate-circle-outline" size={18} color={colors.primary} />
+        )}
+        <Text style={styles.useMineText}>
+          {locating ? 'Finding you...' : 'Use my current location'}
+        </Text>
+      </Pressable>
+
+      {problem ? <Text style={styles.error}>{problem}</Text> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
@@ -187,5 +242,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     paddingHorizontal: space.md,
   },
+  useMine: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 2 },
+  useMinePressed: { opacity: 0.6 },
+  useMineText: { color: colors.primary, fontFamily: font.semi, fontSize: 13 },
   error: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
 });
