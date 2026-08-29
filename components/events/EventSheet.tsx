@@ -5,10 +5,11 @@ import { ActivityIndicator, Linking, Modal, Platform, Pressable, ScrollView, Sty
 import type { Attendee, MyEvent, RsvpStatus } from '../../services/serviceEvents';
 import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/serviceEvents';
 import { getMemberNames } from '../../services/serviceGroup';
-import { colors, font, gradientFor, radius, space } from '../../theme';
+import { colors, font, gradientFor, radius, space, textSize } from '../../theme';
 import { formatDateTime } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import { mapsUrl } from '../../lib/maps';
+import CloseButton from '../general/CloseButton';
 import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 import RsvpButtons from './RsvpButtons';
 
@@ -122,8 +123,20 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
   const isOwner = event?.createdBy === currentUserId;
 
   return (
-    <Modal visible={!!event} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+    <Modal
+      visible={!!event}
+      transparent
+      animationType="slide"
+      onRequestClose={function () {
+        if (!saving) onClose();
+      }}
+    >
+      <Pressable
+        style={styles.backdrop}
+        onPress={function () {
+          if (!saving) onClose();
+        }}
+      >
         <Pressable style={styles.sheet} onPress={() => {}}>
           {event ? (
             <>
@@ -134,6 +147,13 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
                 style={styles.header}
               >
                 <View style={styles.grabber} />
+
+                <CloseButton
+                  tone="light"
+                  onPress={onClose}
+                  disabled={saving}
+                  style={styles.close}
+                />
 
                 <View style={styles.squadPill}>
                   <View style={styles.squadDot} />
@@ -288,58 +308,60 @@ function Section({ title, people, dot, empty }: SectionProps) {
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: colors.surface,
+    maxHeight: '85%',
+    overflow: 'hidden',
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    overflow: 'hidden',
-    maxHeight: '85%',
+    backgroundColor: colors.surface,
   },
+
   header: {
+    gap: space.xxs,
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
     paddingBottom: space.lg,
-    gap: 3,
   },
   grabber: {
     width: 40,
     height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.5)',
     alignSelf: 'center',
     marginBottom: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.5)',
   },
+  close: { position: 'absolute', top: space.sm, right: space.md, zIndex: 1 },
   squadPill: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    gap: 7,
-    paddingLeft: 7,
-    paddingRight: 13,
-    paddingVertical: 6,
+    gap: space.xs,
+    paddingLeft: space.xs,
+    paddingRight: space.sm,
+    paddingVertical: space.xs,
+    marginBottom: space.xs,
     borderRadius: radius.pill,
     backgroundColor: 'rgba(255,255,255,0.22)',
-    marginBottom: space.xs,
   },
   squadDot: { width: 14, height: 14, borderRadius: radius.pill, backgroundColor: '#FFFFFF' },
-  squadName: { color: '#FFFFFF', fontFamily: font.bold, fontSize: 12.5, flexShrink: 1 },
-  title: { color: '#FFFFFF', fontFamily: font.display, fontSize: 26, lineHeight: 32, letterSpacing: -0.5 },
-  when: { color: '#FFFFFF', fontFamily: font.semi, fontSize: 15, marginTop: 4 },
-  where: { color: 'rgba(255,255,255,0.82)', fontFamily: font.medium, fontSize: 15 },
-  whereSub: { color: 'rgba(255,255,255,0.6)', fontFamily: font.medium, fontSize: 12.5, lineHeight: 17 },
+  squadName: { flexShrink: 1, color: '#FFFFFF', fontFamily: font.bold, fontSize: textSize.small },
+  title: { color: '#FFFFFF', fontFamily: font.display, fontSize: textSize.hero, lineHeight: 32, letterSpacing: -0.5 },
+  when: { color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.lead },
+  where: { color: 'rgba(255,255,255,0.82)', fontFamily: font.medium, fontSize: textSize.lead },
+  whereSub: { color: 'rgba(255,255,255,0.6)', fontFamily: font.medium, fontSize: textSize.small, lineHeight: 17 },
+
   body: {
+    gap: space.sm,
     paddingHorizontal: space.lg,
     paddingTop: space.md,
     paddingBottom: space.xl,
-    gap: space.sm,
   },
-  description: { color: colors.text, fontFamily: font.medium, fontSize: 14, lineHeight: 20 },
-  error: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
-  loader: { marginVertical: space.lg },
+  description: { color: colors.text, fontFamily: font.medium, fontSize: textSize.base, lineHeight: 20 },
+
   maps: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: space.xs,
     paddingVertical: space.sm,
     borderRadius: radius.md,
     borderWidth: 1,
@@ -347,52 +369,57 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   mapsPressed: { opacity: 0.7 },
-  mapsText: { color: colors.primary, fontFamily: font.semi, fontSize: 14 },
+  mapsText: { color: colors.primary, fontFamily: font.semi, fontSize: textSize.base },
+
+  error: { color: colors.danger, fontFamily: font.medium, fontSize: textSize.body },
+  loader: { marginVertical: space.lg },
+
   list: { maxHeight: 260 },
   listContent: { gap: space.md, paddingBottom: space.sm },
   section: { gap: space.sm },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   sectionDot: { width: 8, height: 8, borderRadius: radius.pill },
-  sectionTitle: { color: colors.text, fontFamily: font.semi, fontSize: 13.5 },
-  empty: { color: colors.textFaint, fontFamily: font.medium, fontSize: 13.5 },
+  sectionTitle: { color: colors.text, fontFamily: font.semi, fontSize: textSize.body },
+  empty: { color: colors.textFaint, fontFamily: font.medium, fontSize: textSize.body },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingLeft: 5,
-    paddingRight: 14,
-    paddingVertical: 5,
+    gap: space.xs,
+    paddingLeft: space.xs,
+    paddingRight: space.md,
+    paddingVertical: space.xs,
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceAlt,
   },
-  chipName: { color: colors.text, fontFamily: font.semi, fontSize: 13.5, flexShrink: 1 },
+  chipName: { flexShrink: 1, color: colors.text, fontFamily: font.semi, fontSize: textSize.body },
+
   ownerRow: { flexDirection: 'row', gap: space.sm },
   ownerBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
-    paddingVertical: 12,
+    gap: space.xs,
+    paddingVertical: space.sm,
     borderRadius: radius.md,
     borderWidth: 1.5,
     borderColor: colors.border,
   },
   pressed: { opacity: 0.7 },
-  editText: { color: colors.textSoft, fontFamily: font.semi, fontSize: 14 },
-  deleteText: { color: colors.danger, fontFamily: font.semi, fontSize: 14 },
+  editText: { color: colors.textSoft, fontFamily: font.semi, fontSize: textSize.base },
+  deleteText: { color: colors.danger, fontFamily: font.semi, fontSize: textSize.base },
   confirmRow: { flexDirection: 'row', gap: space.sm },
   confirmBtn: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: space.sm,
     borderRadius: radius.md,
     borderWidth: 1.5,
   },
   cancelBtn: { borderColor: colors.border, backgroundColor: colors.surface },
-  cancelText: { color: colors.textSoft, fontFamily: font.semi, fontSize: 14 },
+  cancelText: { color: colors.textSoft, fontFamily: font.semi, fontSize: textSize.base },
   dangerBtn: { borderColor: colors.danger, backgroundColor: colors.danger },
-  dangerText: { color: '#FFFFFF', fontFamily: font.semi, fontSize: 14 },
+  dangerText: { color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.base },
 });

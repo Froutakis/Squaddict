@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { RsvpStatus } from '../../services/serviceEvents';
-import { colors, font, radius, space, tint } from '../../theme';
+import { colors, font, radius, space, textSize, tint } from '../../theme';
 
 type RsvpButtonsProps = {
   status?: RsvpStatus;
@@ -92,14 +92,7 @@ function Option({ label, icon, tone, active, disabled, compact, onDark, stretch,
       ]}
     >
       {compact ? null : <Ionicons name={icon} size={17} color={active ? accent : idleText} />}
-      <Text
-        style={[
-          styles.label,
-          compact && styles.labelCompact,
-          { color: active ? accent : idleText },
-        ]}
-        numberOfLines={1}
-      >
+      <Text style={[styles.label, { color: active ? accent : idleText }]} numberOfLines={1}>
         {label}
       </Text>
     </Pressable>
@@ -113,19 +106,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: space.xs,
     paddingHorizontal: space.md,
-    paddingVertical: 11,
+    paddingVertical: space.sm,
     borderRadius: radius.pill,
     borderWidth: 1.5,
   },
-  optionCompact: { paddingHorizontal: 13, paddingVertical: 6 },
+  optionCompact: { paddingHorizontal: space.md, paddingVertical: space.xs },
   optionFill: { flex: 1 },
   idleLight: { backgroundColor: colors.surface, borderColor: colors.border },
   idleDark: { backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.18)' },
   activeDark: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
   pressed: { opacity: 0.7 },
   disabled: { opacity: 0.5 },
-  label: { fontFamily: font.semi, fontSize: 15 },
-  labelCompact: { fontSize: 15 },
+  label: { fontFamily: font.semi, fontSize: textSize.lead },
 });

@@ -10,6 +10,7 @@ import {
 import { colors, font, radius, space } from '../../theme';
 import AuthField from '../general/AuthField';
 import Button from '../general/Button';
+import SheetHeader from '../general/SheetHeader';
 
 type Mode = 'create' | 'join';
 
@@ -91,12 +92,22 @@ export default function GroupFormSheet({ visible, onClose, onDone }: GroupFormSh
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={function () {
+        if (!saving) onClose();
+      }}
+    >
+      <Pressable
+        style={styles.backdrop}
+        onPress={function () {
+          if (!saving) onClose();
+        }}
+      >
         <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.grabber} />
-
-          <Text style={styles.sheetTitle}>New squad</Text>
+          <SheetHeader title="New squad" onClose={onClose} closeDisabled={saving} grabber />
 
           <View style={styles.tabs}>
             {TABS.map((tab) => {
@@ -175,15 +186,6 @@ const styles = StyleSheet.create({
     paddingBottom: space.xl,
     gap: space.sm,
   },
-  grabber: {
-    width: 40,
-    height: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.border,
-    alignSelf: 'center',
-    marginBottom: space.xs,
-  },
-  sheetTitle: { color: colors.text, fontFamily: font.bold, fontSize: 20 },
   tabs: {
     flexDirection: 'row',
     gap: 4,

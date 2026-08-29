@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, font, radius } from '../../theme';
+import { colors, font, radius, textSize } from '../../theme';
 import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 
 type AttendeeStackProps = {
@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
   },
   moreLight: { backgroundColor: colors.surfaceAlt, borderColor: colors.surface },
   moreDark: { backgroundColor: 'rgba(255,255,255,0.2)', borderColor: '#FFFFFF' },
-  moreText: { fontFamily: font.semi, fontSize: 10 },
+  moreText: { fontFamily: font.semi, fontSize: textSize.micro },
   moreTextLight: { color: colors.textSoft },
   moreTextDark: { color: '#FFFFFF' },
 });

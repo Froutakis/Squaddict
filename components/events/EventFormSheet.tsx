@@ -10,6 +10,7 @@ import Button from '../general/Button';
 import DateField from '../general/DateField';
 import GroupBar from '../general/GroupBar';
 import PlaceField from '../general/PlaceField';
+import SheetHeader from '../general/SheetHeader';
 
 type EventFormSheetProps = {
   visible: boolean;
@@ -115,10 +116,26 @@ export default function EventFormSheet({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={function () {
+        if (!saving) onClose();
+      }}
+    >
+      <Pressable
+        style={styles.backdrop}
+        onPress={function () {
+          if (!saving) onClose();
+        }}
+      >
         <Pressable style={styles.sheet} onPress={() => {}}>
-          <Text style={styles.sheetTitle}>{editing ? 'Edit event' : 'Create new event'}</Text>
+          <SheetHeader
+            title={editing ? 'Edit event' : 'Create new event'}
+            onClose={onClose}
+            closeDisabled={saving}
+          />
 
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
             <AuthField
@@ -226,7 +243,6 @@ const styles = StyleSheet.create({
     padding: space.lg,
     gap: space.md,
   },
-  sheetTitle: { color: colors.text, fontFamily: font.bold, fontSize: 20 },
   form: { gap: space.md, paddingBottom: space.md },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
   dateColumn: { flex: 2 },

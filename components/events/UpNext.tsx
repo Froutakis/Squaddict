@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent, RsvpStatus } from '../../services/serviceEvents';
-import { font, gradientFor, radius, shadow, space } from '../../theme';
+import { font, gradientFor, radius, shadow, space, textSize } from '../../theme';
 import { countdownLabel, formatDateTime } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import AttendeeStack from './Attendee';
@@ -35,16 +35,14 @@ export default function UpNext({ event, onPress, onRsvp, saving = false }: UpNex
           <View style={styles.pill}>
             <Text style={styles.pillText}>{event.groupName}</Text>
           </View>
-          <View style={styles.group}>
-            <Text style={styles.groupText}>{countdownLabel(event.date)}</Text>
-          </View>
+          <Text style={styles.countdown} numberOfLines={1}>{countdownLabel(event.date)}</Text>
         </View>
 
         <Text style={styles.title} numberOfLines={2}>{event.title}</Text>
 
         <View style={styles.metaRow}>
           <Ionicons name="time-outline" size={15} color={SOFT} />
-          <Text style={styles.metaText} numberOfLines={1}>{meta}</Text>
+          <Text style={[styles.metaLine, styles.metaFill]} numberOfLines={1}>{meta}</Text>
         </View>
         {place.primary ? (
           <View style={styles.metaRow}>
@@ -80,19 +78,20 @@ export default function UpNext({ event, onPress, onRsvp, saving = false }: UpNex
 }
 
 const styles = StyleSheet.create({
-  card: { borderRadius: radius.xl, padding: space.md, gap: 9, ...shadow.button },
+  card: { borderRadius: radius.xl, padding: space.md, gap: space.sm, ...shadow.button },
+
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
-  pill: { backgroundColor: FAINT, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill },
-  pillText: { color: WHITE, fontFamily: font.bold, fontSize: 10.5, letterSpacing: 0.5 },
-  group: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
-  groupDot: { width: 7, height: 7, borderRadius: radius.pill, backgroundColor: WHITE },
-  groupText: { color: SOFT, fontFamily: font.semi, fontSize: 12 },
-  title: { color: WHITE, fontFamily: font.bold, fontSize: 21, lineHeight: 26 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  pill: { paddingHorizontal: space.sm, paddingVertical: space.xxs, borderRadius: radius.pill, backgroundColor: FAINT },
+  pillText: { color: WHITE, fontFamily: font.bold, fontSize: textSize.micro, letterSpacing: 0.5 },
+  countdown: { flexShrink: 1, color: SOFT, fontFamily: font.semi, fontSize: textSize.small },
+
+  title: { color: WHITE, fontFamily: font.bold, fontSize: textSize.heading, lineHeight: 26 },
+
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   metaStack: { flex: 1, gap: 1 },
-  metaText: { flex: 1, color: SOFT, fontFamily: font.medium, fontSize: 13 },
-  metaLine: { color: SOFT, fontFamily: font.medium, fontSize: 13 },
-  metaSub: { color: 'rgba(255,255,255,0.62)', fontFamily: font.medium, fontSize: 11.5 },
-  bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, marginTop: space.xs },
-  rsvpRow: {flexDirection: 'row', alignItems: 'center', flex: 1}
+  metaFill: { flex: 1 },
+  metaLine: { color: SOFT, fontFamily: font.medium, fontSize: textSize.body },
+  metaSub: { color: 'rgba(255,255,255,0.62)', fontFamily: font.medium, fontSize: textSize.caption },
+
+  rsvpRow: { flexDirection: 'row', alignItems: 'center', flex: 1 },
 });
