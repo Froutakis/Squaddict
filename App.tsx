@@ -12,6 +12,8 @@ import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
 import GroupChatScreen from './screens/GroupChatScreen';
 import BottomNav, { type NavTab } from './components/general/BottomNav';
+import { getCurrentCoords } from './services/serviceLocation';
+
 
 
 export default function App() {
@@ -35,6 +37,7 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null);
       setCheckingSession(false);
+      getCurrentCoords().then((r) => console.log('LOCATION', r));
     });
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
