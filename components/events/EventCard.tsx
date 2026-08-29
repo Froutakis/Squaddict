@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent } from '../../services/serviceEvents';
 import { colors, font, gradientFor, radius, shadow, solidFor, space, tint } from '../../theme';
 import { countdownLabel, dateParts, daysUntil } from '../../lib/datetime';
+import { placeLines } from '../../lib/place';
 import AttendeeStack from './Attendee';
 
 type EventCardProps = {
@@ -27,7 +28,8 @@ export default function EventCard({ event, onPress }: EventCardProps) {
 
   const days = daysUntil(event.date);
   const relative = days >= 0 ? countdownLabel(event.date).toLowerCase() : null;
-  const meta = [relative, event.startTime, event.location].filter(Boolean).join(' · ');
+  const place = placeLines(event.location, event.placeLabel);
+  const meta = [relative, event.startTime, place.primary].filter(Boolean).join(' · ');
 
   return (
     <Pressable

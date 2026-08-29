@@ -7,6 +7,7 @@ import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/se
 import { getMemberNames } from '../../services/serviceGroup';
 import { colors, font, gradientFor, radius, space } from '../../theme';
 import { formatDateTime } from '../../lib/datetime';
+import { placeLines } from '../../lib/place';
 import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 import RsvpButtons from './RsvpButtons';
 
@@ -27,6 +28,8 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+
+  const place = placeLines(event?.location, event?.placeLabel);
 
   useEffect(() => {
     const open = event;
@@ -128,8 +131,11 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
 
                 <Text style={styles.title} numberOfLines={3}>{event.title}</Text>
                 <Text style={styles.when}>{formatDateTime(event.date, event.startTime)}</Text>
-                {event.location ? (
-                  <Text style={styles.where} numberOfLines={1}>{event.location}</Text>
+                {place.primary ? (
+                  <Text style={styles.where} numberOfLines={1}>{place.primary}</Text>
+                ) : null}
+                {place.secondary ? (
+                  <Text style={styles.whereSub} numberOfLines={2}>{place.secondary}</Text>
                 ) : null}
               </LinearGradient>
 
@@ -296,6 +302,7 @@ const styles = StyleSheet.create({
   title: { color: '#FFFFFF', fontFamily: font.display, fontSize: 26, lineHeight: 32, letterSpacing: -0.5 },
   when: { color: '#FFFFFF', fontFamily: font.semi, fontSize: 15, marginTop: 4 },
   where: { color: 'rgba(255,255,255,0.82)', fontFamily: font.medium, fontSize: 15 },
+  whereSub: { color: 'rgba(255,255,255,0.6)', fontFamily: font.medium, fontSize: 12.5, lineHeight: 17 },
   body: {
     paddingHorizontal: space.lg,
     paddingTop: space.md,
