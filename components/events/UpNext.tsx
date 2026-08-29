@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent, RsvpStatus } from '../../services/serviceEvents';
 import { font, gradientFor, radius, shadow, space } from '../../theme';
 import { countdownLabel, formatDateTime } from '../../lib/datetime';
+import { placeLines } from '../../lib/place';
 import AttendeeStack from './Attendee';
 import RsvpButtons from './RsvpButtons';
 
@@ -20,6 +21,7 @@ type UpNextProps = {
 
 export default function UpNext({ event, onPress, onRsvp, saving = false }: UpNextProps) {
   const meta = formatDateTime(event.date, event.startTime);
+  const place = placeLines(event.location, event.placeLabel);
 
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={event.title}>
@@ -44,10 +46,15 @@ export default function UpNext({ event, onPress, onRsvp, saving = false }: UpNex
           <Ionicons name="time-outline" size={15} color={SOFT} />
           <Text style={styles.metaText} numberOfLines={1}>{meta}</Text>
         </View>
-        {event.location ? (
+        {place.primary ? (
           <View style={styles.metaRow}>
             <Ionicons name="location-outline" size={15} color={SOFT} />
-            <Text style={styles.metaText} numberOfLines={1}>{event.location}</Text>
+            <View style={styles.metaStack}>
+              <Text style={styles.metaLine} numberOfLines={1}>{place.primary}</Text>
+              {place.secondary ? (
+                <Text style={styles.metaSub} numberOfLines={1}>{place.secondary}</Text>
+              ) : null}
+            </View>
           </View>
         ) : null}
 
@@ -82,7 +89,10 @@ const styles = StyleSheet.create({
   groupText: { color: SOFT, fontFamily: font.semi, fontSize: 12 },
   title: { color: WHITE, fontFamily: font.bold, fontSize: 21, lineHeight: 26 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  metaStack: { flex: 1, gap: 1 },
   metaText: { flex: 1, color: SOFT, fontFamily: font.medium, fontSize: 13 },
+  metaLine: { color: SOFT, fontFamily: font.medium, fontSize: 13 },
+  metaSub: { color: 'rgba(255,255,255,0.62)', fontFamily: font.medium, fontSize: 11.5 },
   bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm, marginTop: space.xs },
   rsvpRow: {flexDirection: 'row', alignItems: 'center', flex: 1}
 });
