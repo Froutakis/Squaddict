@@ -29,6 +29,12 @@ type MessageBubbleProps = {
   status?: 'pending' | 'failed';
   /** Καλείται όταν πατηθεί μήνυμα που απέτυχε. */
   onRetry?: () => void;
+  /** Πότε διορθώθηκε· null αν δεν πειράχτηκε ποτέ. */
+  editedAt?: string | null;
+  /** Σβησμένο μήνυμα: η φυσαλίδα μένει, το κείμενο έχει ήδη φύγει από τη βάση. */
+  deleted?: boolean;
+  /** Παρατεταμένο πάτημα — ανοίγει το μενού Edit / Delete. Μόνο στα δικά μου. */
+  onLongPress?: () => void;
 };
 
 export default function MessageBubble({
@@ -40,7 +46,14 @@ export default function MessageBubble({
   isLast,
   status,
   onRetry,
+  editedAt,
+  deleted,
+  onLongPress,
 }: MessageBubbleProps) {
+  // Πατητή γίνεται η φυσαλίδα σε δύο περιπτώσεις: για επανάληψη αποστολής, ή
+  // για το μενού επεξεργασίας. Ένα σβησμένο μήνυμα δεν πατιέται καθόλου.
+  const bubblePress = !deleted && ((status === 'failed' && onRetry) || onLongPress);
+
   // Στρογγυλή γωνία μόνο στις εξωτερικές άκρες, ώστε η σερί να διαβάζεται σαν μία στήλη.
   const shape = mine
     ? {
@@ -68,18 +81,31 @@ export default function MessageBubble({
           </Text>
         ) : null}
 
-        {/* Το failed γίνεται πατητό· τα υπόλοιπα μένουν απλό View ώστε να μη
-            μαζεύει η λίστα χιλιάδες άχρηστους χειριστές αφής. */}
-        {status === 'failed' && onRetry ? (
+        {/* Σβησμένο μήνυμα: δεν δείχνουμε ποτέ το content — έχει ήδη μηδενιστεί
+            στη βάση, αλλά ούτε καν το ρωτάμε. Ό,τι κι αν έρθει, γράφουμε το ίδιο. */}
+        {deleted ? (
+          <View
+            style={[styles.bubble, styles.bubbleDeleted, shape]}
+            accessibilityLabel="Message deleted"
+          >
+            <Text style={styles.deletedText}>Message deleted</Text>
+          </View>
+        ) : bubblePress ? (
           <Pressable
-            onPress={onRetry}
+            onPress={status === 'failed' ? onRetry : undefined}
+            onLongPress={status === 'failed' ? undefined : onLongPress}
             accessibilityRole="button"
-            accessibilityLabel="Message not sent. Tap to try again."
+            accessibilityLabel={
+              status === 'failed'
+                ? 'Message not sent. Tap to try again.'
+                : 'Message options'
+            }
             style={function ({ pressed }) {
               return [
                 styles.bubble,
                 mine ? styles.bubbleMine : styles.bubbleOther,
-                styles.bubbleFailed,
+                status === 'failed' && styles.bubbleFailed,
+                status === 'pending' && styles.bubblePending,
                 shape,
                 pressed && styles.pressed,
               ];
@@ -88,6 +114,8 @@ export default function MessageBubble({
             <Text style={[styles.text, mine && styles.textMine]}>{content}</Text>
           </Pressable>
         ) : (
+          /* Χωρίς χειριστή αφής όπου δεν χρειάζεται: η λίστα δεν πρέπει να
+             μαζεύει χιλιάδες άχρηστους Pressable. */
           <View
             style={[
               styles.bubble,
@@ -107,7 +135,12 @@ export default function MessageBubble({
         ) : status === 'pending' ? (
           <Text style={styles.pendingNote}>Sending…</Text>
         ) : isLast ? (
-          <Text style={styles.time}>{timeLabel(createdAt)}</Text>
+          <Text style={styles.time}>
+            {timeLabel(createdAt)}
+            {/* Η σήμανση μένει για πάντα: αυτό είναι το αντάλλαγμα για το ότι
+                δεν βάλαμε χρονικό όριο στην επεξεργασία. */}
+            {editedAt && !deleted ? ' · edited' : ''}
+          </Text>
         ) : null}
       </View>
     </View>
@@ -145,6 +178,20 @@ const styles = StyleSheet.create({
   // Ξεθωριασμένο όσο ταξιδεύει — αρκετά για να φανεί, όχι τόσο ώστε να μη διαβάζεται.
   bubblePending: { opacity: 0.55 },
   bubbleFailed: { backgroundColor: paper.danger },
+  // Το σβησμένο δεν παίρνει ούτε το μελανί των δικών μου ούτε το λευκό των
+  // άλλων: διάστικτο περίγραμμα χωρίς γέμισμα, ώστε να διαβάζεται σαν κενό.
+  bubbleDeleted: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: paper.line,
+  },
+  deletedText: {
+    color: paper.inkFaint,
+    fontFamily: paperFont.regular,
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
   pressed: { opacity: 0.85 },
 
   sender: {

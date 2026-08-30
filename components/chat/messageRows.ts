@@ -70,6 +70,10 @@ export function buildRows(
       senderId: me?.id ?? '',
       senderName: me?.name ?? '',
       createdAt: item.createdAt,
+      // Ένα μήνυμα που δεν έχει φτάσει ακόμα στη βάση δεν έχει διορθωθεί ούτε
+      // σβηστεί — και δεν μπορεί: το μενού ανοίγει μόνο σε επιβεβαιωμένα.
+      editedAt: null,
+      deletedAt: null,
     };
   });
 

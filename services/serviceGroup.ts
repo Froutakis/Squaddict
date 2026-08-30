@@ -22,6 +22,14 @@ export type Group = {
 /** Τα δημόσια πεδία μιας Παρέας — όσα επιτρέπεται να δει και ένας μη-μέλος. */
 const GROUP_FIELDS = "id, handle, name, bio, avatar_url, member_count";
 
+/**
+ * Τα πεδία ενός μηνύματος. Ένα σημείο και όχι τέσσερα αντίγραφα: μια στήλη που
+ * ξεχνιέται σε ένα μόνο από τα ερωτήματα βγάζει μήνυμα που φαίνεται σωστό
+ * παντού εκτός από ένα σημείο της οθόνης — το χειρότερο είδος σφάλματος.
+ */
+const MESSAGE_FIELDS =
+  "id, content, sender_id, created_at, edited_at, deleted_at, profiles(display_name)";
+
 /** Ο κωδικός σφάλματος της Postgres για παραβίαση unique constraint. */
 const UNIQUE_VIOLATION = "23505";
 
@@ -278,7 +286,7 @@ export async function sendMessage(
   const { data, error } = await supabase
     .from("messages")
     .insert(row)
-    .select("id, content, sender_id, created_at, profiles(display_name)")
+    .select(MESSAGE_FIELDS)
     .single();
 
   if (error) {
@@ -292,11 +300,47 @@ export async function sendMessage(
   return toChatMessage(data);
 }
 
+/**
+ * Διορθώνει το κείμενο ενός μηνύματος.
+ *
+ * Στέλνουμε ΜΟΝΟ το content. Το edited_at το γράφει ο trigger της βάσης, ώστε η
+ * σήμανση "edited" να μη γίνεται να παραλειφθεί, και τα υπόλοιπα πεδία δεν τα
+ * αγγίζουμε καν — ο ίδιος trigger θα απέρριπτε την αλλαγή τους.
+ */
+export async function editMessage(id: string, content: string): Promise<ChatMessage> {
+  const { data, error } = await supabase
+    .from("messages")
+    .update({ content })
+    .eq("id", id)
+    .select(MESSAGE_FIELDS)
+    .single();
+  if (error) throw error;
+
+  return toChatMessage(data);
+}
+
+/**
+ * Σβήνει ένα μήνυμα — soft: η γραμμή μένει, το κείμενο το μηδενίζει ο trigger.
+ * Δεν στέλνουμε content: αν το έκανε ο πελάτης, ένας άλλος πελάτης θα μπορούσε
+ * να μην το κάνει.
+ */
+export async function deleteMessage(id: string): Promise<ChatMessage> {
+  const { data, error } = await supabase
+    .from("messages")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id)
+    .select(MESSAGE_FIELDS)
+    .single();
+  if (error) throw error;
+
+  return toChatMessage(data);
+}
+
 /** Ένα μήνυμα με το id του — για να επιβεβαιώσουμε μια αποστολή που «απέτυχε». */
 export async function getMessageById(id: string): Promise<ChatMessage | null> {
   const { data, error } = await supabase
     .from("messages")
-    .select("id, content, sender_id, created_at, profiles(display_name)")
+    .select(MESSAGE_FIELDS)
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
@@ -310,6 +354,10 @@ export type ChatMessage = {
   senderId: string;
   senderName: string;
   createdAt: string;
+  /** Πότε διορθώθηκε τελευταία φορά· null αν δεν πειράχτηκε ποτέ. */
+  editedAt: string | null;
+  /** Πότε σβήστηκε. Όταν δεν είναι null, το content είναι ήδη άδειο. */
+  deletedAt: string | null;
 };
 
 /** Μετατρέπει μια γραμμή του πίνακα messages σε ChatMessage. */
@@ -320,6 +368,10 @@ export function toChatMessage(row: any, senderName?: string): ChatMessage {
     senderId: row.sender_id,
     senderName: senderName ?? row.profiles?.display_name ?? "",
     createdAt: row.created_at,
+    // Οι στήλες λείπουν από τα payload του realtime αν ο πίνακας δεν τις είχε
+    // όταν στήθηκε η συνδρομή — γι' αυτό ?? και όχι σκέτη ανάθεση.
+    editedAt: row.edited_at ?? null,
+    deletedAt: row.deleted_at ?? null,
   };
 }
 
@@ -350,7 +402,7 @@ export async function getMessages(
 
   let query = supabase
     .from("messages")
-    .select("id, content, sender_id, created_at, profiles(display_name)")
+    .select(MESSAGE_FIELDS)
     .eq("group_id", groupId)
     // Φθίνουσα, γιατί το limit πρέπει να κόψει τα ΠΑΛΙΑ, όχι τα πρόσφατα.
     .order("created_at", { ascending: false })
@@ -393,7 +445,7 @@ export async function getMessagesAfter(
 ): Promise<MessagePage> {
   const { data, error } = await supabase
     .from("messages")
-    .select("id, content, sender_id, created_at, profiles(display_name)")
+    .select(MESSAGE_FIELDS)
     .eq("group_id", groupId)
     .gt("created_at", since)
     // Ανιούσα: εδώ το limit πρέπει να κόψει τα νεότερα, ώστε να προχωράμε
@@ -457,4 +509,35 @@ export async function getGroupPreviews(
     };
   }
   return previews;
+}
+
+/**
+ * Σημειώνει την Παρέα ως διαβασμένη μέχρι τώρα.
+ *
+ * Περνάει από RPC και όχι από απευθείας update: το group_members δεν έχει —
+ * και δεν πρέπει να αποκτήσει — update policy. Δες το 202608300001_unread.sql.
+ */
+export async function markGroupRead(groupId: string): Promise<void> {
+  const { error } = await supabase.rpc("mark_group_read", {
+    target_group: groupId,
+  });
+  if (error) throw error;
+}
+
+/**
+ * Πόσα αδιάβαστα έχει κάθε Παρέα μου, σε ένα ερώτημα.
+ *
+ * Η συνάρτηση γυρίζει γραμμή μόνο για τις Παρέες που ΕΧΟΥΝ αδιάβαστα, οπότε
+ * όποια λείπει από τον χάρτη έχει μηδέν. Οι στήλες λέγονται `squad`/`unread`
+ * για λόγους που εξηγεί το migration.
+ */
+export async function getUnreadCounts(): Promise<Record<string, number>> {
+  const { data, error } = await supabase.rpc("unread_counts");
+  if (error) throw error;
+
+  const counts: Record<string, number> = {};
+  for (const row of (data ?? []) as any[]) {
+    counts[row.squad] = row.unread;
+  }
+  return counts;
 }

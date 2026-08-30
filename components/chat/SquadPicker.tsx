@@ -13,6 +13,7 @@ import {
 import { Group } from '../../services/serviceGroup';
 import type { GroupPreview } from '../../services/serviceGroup';
 import { initialsFor } from '../general/GradientAvatar';
+import { unreadLabel } from './unread';
 import { layout, paper, paperFont, radius, solidFor, space } from '../../theme';
 
 /**
@@ -106,6 +107,8 @@ type SquadPickerProps = {
   groups: Group[];
   /** Τελευταίο μήνυμα ανά παρέα — μπορεί να λείπει όσο φορτώνει. */
   previews: Record<string, GroupPreview>;
+  /** Αδιάβαστα ανά παρέα. Όποια λείπει έχει μηδέν — δεν στέλνουμε μηδενικά. */
+  unread?: Record<string, number>;
   onSelect: (id: string) => void;
   /** Το όνομα του χρήστη για την κορυφή — άδειο όσο φορτώνει το προφίλ. */
   displayName?: string;
@@ -120,6 +123,7 @@ type SquadPickerProps = {
 export default function SquadPicker({
   groups,
   previews,
+  unread = {},
   onSelect,
   onBack,
   displayName = '',
@@ -207,12 +211,18 @@ export default function SquadPicker({
         <View style={styles.card}>
           {shown.map(function (group, index) {
             const preview = previews[group.id];
+            const badge = unreadLabel(unread[group.id] ?? 0);
 
             let line = 'No messages yet';
             if (preview) {
               line = preview.senderName
                 ? `${preview.senderName}: ${preview.content}`
                 : preview.content;
+            }
+
+            let label = `Open ${group.name}`;
+            if (badge) {
+              label = `Open ${group.name}, ${badge} unread`;
             }
 
             return (
@@ -222,7 +232,7 @@ export default function SquadPicker({
                   onSelect(group.id);
                 }}
                 accessibilityRole="button"
-                accessibilityLabel={`Open ${group.name}`}
+                accessibilityLabel={label}
                 style={rowStyle}
               >
                 {/* Διαχωριστικό μόνο ανάμεσα στις γραμμές, όχι πάνω από την πρώτη. */}
@@ -234,14 +244,31 @@ export default function SquadPicker({
                   <Text style={styles.name} numberOfLines={1}>
                     {group.name}
                   </Text>
-                  <Text style={styles.preview} numberOfLines={1}>
+                  <Text
+                    style={badge ? [styles.preview, styles.previewUnread] : styles.preview}
+                    numberOfLines={1}
+                  >
                     {line}
                   </Text>
                 </View>
 
                 <View style={styles.rowEnd}>
-                  {preview ? <Text style={styles.stamp}>{stampFor(preview.createdAt)}</Text> : null}
-                  <Ionicons name="chevron-forward" size={16} color={paper.inkFaint} />
+                  {preview ? (
+                    <Text style={badge ? [styles.stamp, styles.stampUnread] : styles.stamp}>
+                      {stampFor(preview.createdAt)}
+                    </Text>
+                  ) : null}
+
+                  {/* Το badge παίρνει τη θέση του βέλους αντί να μπει δίπλα του:
+                      δύο σύμβολα στη σειρά στριμώχνουν τη γραμμή, και το βέλος
+                      δεν λέει τίποτα που δεν λέει ήδη ολόκληρη η πατημένη σειρά. */}
+                  {badge ? (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{badge}</Text>
+                    </View>
+                  ) : (
+                    <Ionicons name="chevron-forward" size={16} color={paper.inkFaint} />
+                  )}
                 </View>
               </Pressable>
             );
@@ -354,8 +381,30 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   name: { color: paper.ink, fontFamily: paperFont.semi, fontSize: 15 },
   preview: { marginTop: 2, color: paper.inkSoft, fontFamily: paperFont.regular, fontSize: 13 },
+  // Όταν υπάρχουν αδιάβαστα, η γραμμή σκουραίνει αντί να αλλάξει χρώμα: το
+  // κεραμιδί το κρατάμε αποκλειστικά για το badge, ώστε να τραβάει αυτό το μάτι.
+  previewUnread: { color: paper.ink, fontFamily: paperFont.medium },
   rowEnd: { alignItems: 'flex-end', gap: 4 },
   stamp: { color: paper.inkFaint, fontFamily: paperFont.regular, fontSize: 11 },
+  stampUnread: { color: paper.accent, fontFamily: paperFont.medium },
+
+  // minWidth αντί για σταθερό πλάτος: το "3" μένει κύκλος, το "99+" απλώνει.
+  badge: {
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: paper.accent,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontFamily: paperFont.semi,
+    fontSize: 11,
+    // Το RN κεντράρει κάθετα με βάση το line height, όχι το οπτικό ύψος.
+    lineHeight: 14,
+  },
 
   monogram: { alignItems: 'center', justifyContent: 'center' },
   monogramText: { fontFamily: paperFont.semi, letterSpacing: 0.2 },

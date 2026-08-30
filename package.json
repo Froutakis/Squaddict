@@ -15,6 +15,8 @@
     "test-inverted-rows": "tsx debug/test-inverted-rows.ts",
     "test-outbox-rows": "tsx debug/test-outbox-rows.ts",
     "test-connection": "tsx debug/test-connection.ts",
+    "test-message-update": "tsx debug/test-message-update.ts",
+    "test-unread": "tsx debug/test-unread.ts",
     "test-pagination": "tsx --env-file=.env debug/test-pagination.ts",
     "test-location": "tsx debug/test-location.ts",
     "listen": "tsx --env-file=.env debug/listen.ts",

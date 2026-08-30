@@ -5,13 +5,23 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 export function openGroupChat(
   groupId: string,
   onNewMessage: (message: any) => void,
-  onStatus?: (status: string) => void): RealtimeChannel {
+  onStatus?: (status: string) => void,
+  onMessageUpdate?: (message: any) => void): RealtimeChannel {
+  const filter = `group_id=eq.${groupId}`;
+
   return supabase
     .channel('group-' + groupId)
     .on(
       'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'messages', filter: `group_id=eq.${groupId}` },
+      { event: 'INSERT', schema: 'public', table: 'messages', filter },
       (payload) => onNewMessage(payload.new)
+    )
+    // Διορθώσεις και διαγραφές. Και οι δύο είναι UPDATE, επειδή η διαγραφή είναι
+    // soft — γι' αυτό δεν χρειάζεται τρίτη συνδρομή σε DELETE.
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'messages', filter },
+      (payload) => onMessageUpdate?.(payload.new)
     )
     // Το subscribe καλεί αυτό σε ΚΑΘΕ αλλαγή κατάστασης, όχι μόνο την πρώτη
     // φορά — και στις επανασυνδέσεις. Εκεί στηρίζεται το catch-up.
@@ -33,9 +43,10 @@ export async function startChat(
   groupId: string,
   onNewMessage: (message: any) => void,
   limit?: number,
-  onStatus?: (status: string) => void
+  onStatus?: (status: string) => void,
+  onMessageUpdate?: (message: any) => void
 ) {
   const page = await getMessages(groupId, { limit });
-  const channel = openGroupChat(groupId, onNewMessage, onStatus);
+  const channel = openGroupChat(groupId, onNewMessage, onStatus, onMessageUpdate);
   return { messages: page.messages, hasMore: page.hasMore, channel };
 }

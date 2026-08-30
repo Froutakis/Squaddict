@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -19,6 +20,7 @@ import MessageBubble, { DateSeparator } from '../components/chat/MessageBubble';
 import SquadPicker, { SquadMonogram } from '../components/chat/SquadPicker';
 import { buildRows, type OutgoingMessage, type Row } from '../components/chat/messageRows';
 import {
+  applyMessageUpdate,
   connectionFrom,
   connectionLabel,
   mergeNewMessages,
@@ -27,11 +29,15 @@ import {
 import { newMessageId } from '../lib/ids';
 import type { Group } from '../services/serviceGroup';
 import {
+  deleteMessage,
+  editMessage,
   getGroupPreviews,
   getGroupsForUser,
   getMemberNames,
   getMessages,
   getMessagesAfter,
+  getUnreadCounts,
+  markGroupRead,
   sendMessage,
   toChatMessage,
   type ChatMessage,
@@ -66,6 +72,8 @@ export default function GroupChatScreen({
   // null = κανένα ανοιχτό chat, δηλαδή δείχνουμε τη λίστα με τις παρέες.
   const [activeId, setActiveId] = useState<string | null>(initialGroupId);
   const [previews, setPreviews] = useState<Record<string, GroupPreview>>({});
+  // Αδιάβαστα ανά παρέα. Μόνο όσες έχουν αδιάβαστα υπάρχουν στον χάρτη.
+  const [unread, setUnread] = useState<Record<string, number>>({});
   const [displayName, setDisplayName] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Δικά μου μηνύματα που δεν έχουν επιβεβαιωθεί ακόμα από τη βάση.
@@ -79,6 +87,10 @@ export default function GroupChatScreen({
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Το μήνυμα που κρατάει ανοιχτό το μενού Edit / Delete· null = κλειστό.
+  const [menuFor, setMenuFor] = useState<ChatMessage | null>(null);
+  // Το μήνυμα που διορθώνεται αυτή τη στιγμή στον composer.
+  const [editing, setEditing] = useState<ChatMessage | null>(null);
 
   // Τα ονόματα των μελών ζουν και σε ref: ο realtime handler φτιάχνεται μία φορά
   // ανά παρέα και πρέπει να βλέπει πάντα τον τρέχοντα χάρτη.
@@ -96,6 +108,10 @@ export default function GroupChatScreen({
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
   const connectionRef = useRef<Connection>('connecting');
+  // Το τελευταίο mark_group_read που ταξιδεύει. Το loadUnread το περιμένει πριν
+  // ρωτήσει τη βάση: αλλιώς, βγαίνοντας από ένα chat, το unread_counts μπορεί να
+  // προλάβει το mark και να ξαναανάψει το badge που μόλις σβήσαμε.
+  const markingRef = useRef<Promise<unknown>>(Promise.resolve());
 
   // Φέρνει τα τελευταία μηνύματα για την προεπισκόπηση της λίστας.
   // Αν αποτύχει το αφήνουμε να περάσει: η λίστα δουλεύει και χωρίς previews.
@@ -111,6 +127,38 @@ export default function GroupChatScreen({
       // σιωπηλά — η προεπισκόπηση είναι διακόσμηση, όχι περιεχόμενο.
     }
   }, []);
+
+  // Ίδια λογική με τα previews: αν αποτύχει, η λίστα δουλεύει χωρίς badges.
+  const loadUnread = useCallback(async function load() {
+    try {
+      await markingRef.current;
+      setUnread(await getUnreadCounts());
+    } catch {
+      // σιωπηλά
+    }
+  }, []);
+
+  // Σημειώνει την παρέα διαβασμένη και σβήνει ΑΜΕΣΩΣ το badge της, χωρίς να
+  // περιμένει τη βάση: το badge είναι δική μας ένδειξη, δεν έχει νόημα να
+  // μένει αναμμένο ενώ κοιτάς τη συνομιλία. Αν το αίτημα αποτύχει, ο μετρητής
+  // απλώς επανέρχεται στο επόμενο loadUnread.
+  const markRead = useCallback(
+    function mark(groupId: string) {
+      setUnread(function (current) {
+        if (!(groupId in current)) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[groupId];
+        return next;
+      });
+
+      markingRef.current = markGroupRead(groupId).catch(function () {
+        // σιωπηλά — ο μετρητής θα διορθωθεί στο επόμενο loadUnread.
+      });
+    },
+    [],
+  );
 
   // 1. Το όνομα του χρήστη — μόνο για τον χαιρετισμό, γι' αυτό αν αποτύχει
   // απλώς μένει άδειο και ο χαιρετισμός εμφανίζεται χωρίς όνομα.
@@ -149,6 +197,7 @@ export default function GroupChatScreen({
 
         setGroups(myGroups);
         loadPreviews(myGroups);
+        loadUnread();
       } catch {
         // Δεν μας ενδιαφέρει ΤΙ έσκασε, μόνο ότι απέτυχε.
         if (!cancelled) {
@@ -168,7 +217,7 @@ export default function GroupChatScreen({
     return function cleanup() {
       cancelled = true;
     };
-  }, [user.id, loadPreviews]);
+  }, [user.id, loadPreviews, loadUnread]);
 
   // 3. Ιστορικό + realtime κανάλι της ενεργής παρέας.
   useEffect(() => {
@@ -185,6 +234,11 @@ export default function GroupChatScreen({
     // Το activeId είναι ήδη ελεγμένο παραπάνω, αλλά η handleStatus είναι hoisted
     // function declaration και η TypeScript δεν κρατά τη στένωση μέσα της.
     const chatGroupId: string = activeId;
+
+    // Άνοιγμα = διάβασμα. Εδώ και όχι στην openGroup, ώστε να καλύπτεται και το
+    // initialGroupId — όταν η οθόνη ανοίγει κατευθείαν σε συνομιλία, δεν περνάει
+    // ποτέ από την openGroup.
+    markRead(chatGroupId);
 
     let cancelled = false;
     // Χρειάζεται ρητός τύπος: με σκέτο `= null` η TS θα κλείδωνε τον τύπο σε `null`.
@@ -226,6 +280,17 @@ export default function GroupChatScreen({
         // Νέος πίνακας με το μήνυμα στο τέλος.
         // Ποτέ prev.push() — το state του React δεν το πειράζουμε επί τόπου.
         return [...prev, incoming];
+      });
+    }
+
+    // Διόρθωση ή διαγραφή από άλλον. Και τα δύο φτάνουν σαν UPDATE, επειδή η
+    // διαγραφή είναι soft.
+    function handleUpdatedRow(row: any) {
+      const senderName = namesRef.current[row.sender_id];
+      const updated = toChatMessage(row, senderName);
+
+      setMessages(function (prev) {
+        return applyMessageUpdate(prev, updated);
       });
     }
 
@@ -333,7 +398,13 @@ export default function GroupChatScreen({
         const memberIds = Object.keys(names);
         setMemberCount(memberIds.length);
 
-        const chat = await startChat(groupId, handleIncomingRow, undefined, handleStatus);
+        const chat = await startChat(
+          groupId,
+          handleIncomingRow,
+          undefined,
+          handleStatus,
+          handleUpdatedRow,
+        );
 
         // Αν άλλαξε παρέα όσο άνοιγε το κανάλι, το cleanup έχει ήδη τρέξει και δεν
         // ξέρει γι' αυτό το κανάλι. Κλείσ' το εδώ, αλλιώς μένει ανοιχτό socket.
@@ -362,11 +433,15 @@ export default function GroupChatScreen({
 
     return function cleanup() {
       cancelled = true;
+      // Κλείσιμο = διάβασμα, δεύτερη φορά: όσα ήρθαν ΟΣΟ κοιτούσες τη συνομιλία
+      // τα είδες κι αυτά. Χωρίς αυτό, βγαίνοντας από ένα ανοιχτό chat θα έβρισκες
+      // badge για μηνύματα που μόλις διάβασες.
+      markRead(chatGroupId);
       if (channel) {
         closeGroupChat(channel);
       }
     };
-  }, [activeId]);
+  }, [activeId, markRead]);
 
   /**
    * Η αποστολή, από τη στιγμή που το μήνυμα είναι ήδη στην οθόνη.
@@ -415,6 +490,84 @@ export default function GroupChatScreen({
       deliver(activeId, id, text);
     },
     [activeId, deliver],
+  );
+
+  /**
+   * Διόρθωση και διαγραφή, και οι δύο αισιόδοξες.
+   *
+   * Η αλλαγή φαίνεται αμέσως και, αν η βάση την απορρίψει, η οθόνη γυρίζει στο
+   * μήνυμα όπως ήταν. Κρατάμε ολόκληρο το παλιό αντικείμενο για την επαναφορά
+   * αντί για ένα flag: ο trigger μπορεί να αρνηθεί για λόγους που δεν ξέρουμε
+   * εκ των προτέρων, και τότε το μόνο σωστό είναι να ξαναδείξουμε ό,τι ίσχυε.
+   */
+  const applyEdit = useCallback(
+    async function apply(target: ChatMessage, text: string) {
+      if (text === target.content) {
+        return;
+      }
+
+      setError(null);
+      setMessages(function (prev) {
+        return applyMessageUpdate(prev, {
+          ...target,
+          content: text,
+          editedAt: new Date().toISOString(),
+        });
+      });
+
+      try {
+        const saved = await editMessage(target.id, text);
+        setMessages(function (prev) {
+          return applyMessageUpdate(prev, saved);
+        });
+      } catch {
+        setMessages(function (prev) {
+          return applyMessageUpdate(prev, target);
+        });
+        setError("Couldn't save that edit.");
+      }
+    },
+    [],
+  );
+
+  const applyDelete = useCallback(
+    async function apply(target: ChatMessage) {
+      setError(null);
+      setMessages(function (prev) {
+        return applyMessageUpdate(prev, {
+          ...target,
+          content: '',
+          deletedAt: new Date().toISOString(),
+        });
+      });
+
+      try {
+        const saved = await deleteMessage(target.id);
+        setMessages(function (prev) {
+          return applyMessageUpdate(prev, saved);
+        });
+      } catch {
+        setMessages(function (prev) {
+          return applyMessageUpdate(prev, target);
+        });
+        setError("Couldn't delete that message.");
+      }
+    },
+    [],
+  );
+
+  // Ο composer έχει δύο δουλειές πλέον. Ποια από τις δύο, το λέει το `editing`.
+  const handleComposerSend = useCallback(
+    function submit(text: string) {
+      if (editing) {
+        const target = editing;
+        setEditing(null);
+        applyEdit(target, text);
+        return;
+      }
+      handleSend(text);
+    },
+    [editing, applyEdit, handleSend],
   );
 
   // Δεύτερη προσπάθεια για μήνυμα που απέτυχε — με το ΙΔΙΟ id, ώστε μια αποστολή
@@ -551,6 +704,9 @@ export default function GroupChatScreen({
     setActiveId(null);
     setError(null);
     loadPreviews(groups);
+    // Το markRead του cleanup έσβησε ήδη τοπικά το badge αυτής της παρέας· αυτό
+    // εδώ φέρνει τους μετρητές των ΑΛΛΩΝ, που μπορεί να άλλαξαν όσο έλειπες.
+    loadUnread();
   }
 
   // ---- Βοηθητικές συναρτήσεις εμφάνισης ----
@@ -599,8 +755,93 @@ export default function GroupChatScreen({
         onRetry={function () {
           retrySend(message.id);
         }}
+        editedAt={message.editedAt}
+        deleted={message.deletedAt !== null}
+        // Το μενού ανοίγει μόνο στα δικά μου και μόνο σε όσα έχει επιβεβαιώσει
+        // η βάση: ένα μήνυμα που ταξιδεύει ακόμα δεν έχει τι να διορθώσει.
+        onLongPress={
+          isMine && !item.status
+            ? function () {
+                setMenuFor(message);
+              }
+            : undefined
+        }
       />
     );
+  }
+
+  /**
+   * Το μενού ενός μηνύματος. Modal και όχι φύλλο μέσα στη λίστα: πρέπει να
+   * σκεπάσει και τον composer, και να κλείνει με το πίσω κουμπί στο Android.
+   */
+  function renderMessageMenu() {
+    const target = menuFor;
+    if (!target) {
+      return null;
+    }
+
+    function close() {
+      setMenuFor(null);
+    }
+
+    return (
+      <Modal
+        transparent
+        visible
+        animationType="fade"
+        onRequestClose={close}
+        accessibilityViewIsModal
+      >
+        {/* Το πάτημα εκτός του φύλλου κλείνει — το αναμενόμενο σε action sheet. */}
+        <Pressable style={styles.menuBackdrop} onPress={close} accessibilityLabel="Close menu">
+          {/* Δεύτερο Pressable χωρίς onPress: σταματά το πάτημα ώστε να μην
+              κλείνει το μενού όταν πατάς μέσα του. */}
+          <Pressable style={styles.menuSheet}>
+            <Text style={styles.menuPreview} numberOfLines={2}>
+              {target.content}
+            </Text>
+
+            <Pressable
+              onPress={function () {
+                setMenuFor(null);
+                setEditing(target);
+              }}
+              accessibilityRole="button"
+              style={menuItemStyle}
+            >
+              <Ionicons name="pencil" size={17} color={paper.ink} />
+              <Text style={styles.menuText}>Edit</Text>
+            </Pressable>
+
+            <View style={styles.menuDivider} />
+
+            <Pressable
+              onPress={function () {
+                setMenuFor(null);
+                // Αν το μήνυμα που σβήνουμε είναι αυτό που διορθώναμε, η
+                // διόρθωση δεν έχει πλέον αντικείμενο.
+                setEditing(function (current) {
+                  return current && current.id === target.id ? null : current;
+                });
+                applyDelete(target);
+              }}
+              accessibilityRole="button"
+              style={menuItemStyle}
+            >
+              <Ionicons name="trash-outline" size={17} color={paper.danger} />
+              <Text style={[styles.menuText, styles.menuTextDanger]}>Delete</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    );
+  }
+
+  function menuItemStyle({ pressed }: { pressed: boolean }): StyleProp<ViewStyle> {
+    if (pressed) {
+      return [styles.menuItem, styles.menuItemPressed];
+    }
+    return styles.menuItem;
   }
 
   function renderEmptyList() {
@@ -630,6 +871,7 @@ export default function GroupChatScreen({
         <SquadPicker
           groups={groups}
           previews={previews}
+          unread={unread}
           displayName={displayName}
           onSelect={openGroup}
           onBack={onBack}
@@ -697,7 +939,20 @@ export default function GroupChatScreen({
             />
           )}
 
-          <ChatComposer onSend={handleSend} disabled={!activeId} />
+          {/* Το key ξαναστήνει τον composer όταν αλλάζει το μήνυμα που
+              διορθώνουμε — έτσι το initialText διαβάζεται ξανά χωρίς effect. */}
+          <ChatComposer
+            key={editing ? 'edit-' + editing.id : 'new'}
+            initialText={editing ? editing.content : ''}
+            editing={editing !== null}
+            onCancel={function () {
+              setEditing(null);
+            }}
+            onSend={handleComposerSend}
+            disabled={!activeId}
+          />
+
+          {renderMessageMenu()}
         </KeyboardAvoidingView>
       </View>
     </SafeAreaView>
@@ -708,6 +963,43 @@ const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: paper.bg, alignItems: 'center', justifyContent: 'center' },
   screen: { flex: 1, backgroundColor: paper.bg },
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
+
+  // Μενού μηνύματος: φύλλο στο κάτω μέρος, όπως τα action sheets του συστήματος.
+  menuBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(31, 30, 29, 0.35)',
+  },
+  menuSheet: {
+    width: '100%',
+    maxWidth: layout.column,
+    alignSelf: 'center',
+    paddingVertical: space.xs,
+    paddingBottom: space.md,
+    backgroundColor: paper.bg,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+  },
+  // Το κείμενο του μηνύματος στην κορυφή, ώστε να ξέρεις σε ποιο ενεργείς.
+  menuPreview: {
+    paddingHorizontal: space.md,
+    paddingTop: space.sm,
+    paddingBottom: space.sm,
+    color: paper.inkFaint,
+    fontFamily: paperFont.regular,
+    fontSize: 13,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: 14,
+  },
+  menuItemPressed: { backgroundColor: paper.surfaceAlt },
+  menuDivider: { height: 1, marginLeft: space.md, backgroundColor: paper.lineSoft },
+  menuText: { color: paper.ink, fontFamily: paperFont.medium, fontSize: 15 },
+  menuTextDanger: { color: paper.danger },
 
   // Header της συνομιλίας: μία λεπτή γραμμή τον χωρίζει από τα μηνύματα — καμία σκιά.
   topBar: {
