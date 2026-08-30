@@ -4,9 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { reversePlace, searchPlaces, type Place } from '../../services/servicePlaces';
 import { getCurrentCoords } from '../../services/serviceLocation';
 import { colors, font, radius, space } from '../../theme';
+import { fieldStyles } from '../../fieldStyles';
 
 type PlaceFieldProps = {
-  label: string;
+  label?: string;
   place: Place | null;
   onChange: (place: Place | null) => void;
   loading?: boolean;
@@ -122,11 +123,11 @@ export default function PlaceField({ label, place, onChange, loading = false, er
   const showResults = focused && results.length > 0 && !place;
 
   return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+    <View style={fieldStyles.field}>
+      {label ? <Text style={fieldStyles.label}>{label}</Text> : null}
 
       <Pressable
-        style={[styles.inputBox, focused && styles.focused, !!error && styles.errorBox]}
+        style={[fieldStyles.box, focused && fieldStyles.focused, !!error && fieldStyles.errorBox]}
         onPress={function () {
           inputRef.current?.focus();
         }}
@@ -216,22 +217,7 @@ export default function PlaceField({ label, place, onChange, loading = false, er
 }
 
 const styles = StyleSheet.create({
-  field: { gap: 8 },
-  label: { color: colors.textStrong, fontFamily: font.semi, fontSize: 15 },
-  inputBox: {
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: space.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-  },
-  input: { flex: 1, minHeight: 54, color: colors.text, fontFamily: font.medium, fontSize: 16 },
-  focused: { borderColor: colors.primary },
-  errorBox: { borderColor: colors.danger },
+  input: { flex: 1, minHeight: 48, color: colors.text, fontFamily: font.medium, fontSize: 15 },
   results: {
     borderWidth: 1,
     borderColor: colors.border,

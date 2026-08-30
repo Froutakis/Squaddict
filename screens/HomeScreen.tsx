@@ -22,6 +22,8 @@ import GroupFormSheet from '../components/group/GroupFormSheet';
 
 type HomeScreenProps = {
   user: AuthUser;
+  /** Αυξάνεται κάθε φορά που πατιέται το + του BottomNav. */
+  createNonce?: number;
 };
 
 function unansweredFirst(list: MyEvent[]): MyEvent[] {
@@ -30,7 +32,7 @@ function unansweredFirst(list: MyEvent[]): MyEvent[] {
   );
 }
 
-export default function HomeScreen({ user }: HomeScreenProps) {
+export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const [displayName, setDisplayName] = useState('');
   const [groups, setGroups] = useState<Group[]>([]);
   const [events, setEvents] = useState<MyEvent[]>([]);
@@ -105,6 +107,10 @@ export default function HomeScreen({ user }: HomeScreenProps) {
       setRsvpError('Could not save your answer. Try again.');
     }
   }
+
+  useEffect(() => {
+    if (createNonce > 0) openNewEvent(selectedDate);
+  }, [createNonce]);
 
   function openNewEvent(date: string | null) {
     setEditEvent(null);
@@ -232,7 +238,7 @@ export default function HomeScreen({ user }: HomeScreenProps) {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <HomeHeader displayName={displayName} onCreate={() => openNewEvent(selectedDate)} />
+        <HomeHeader displayName={displayName} />
         {renderBody()}
       </ScrollView>
 
@@ -280,6 +286,7 @@ const styles = StyleSheet.create({
     maxWidth: layout.column,
     alignSelf: 'center',
     paddingVertical: space.md,
+    paddingBottom: 110,
     gap: space.md,
   },
   body: { paddingHorizontal: space.lg, gap: space.sm },

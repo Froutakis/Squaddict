@@ -1,12 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { brand, colors, font, radius, shadow, space } from '../../theme';
+import { StyleSheet, Text, View } from 'react-native';
+import { colors, font, space, textSize } from '../../theme';
 import { todayLabel } from '../../lib/datetime';
+import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 
 type HomeHeaderProps = {
   displayName: string;
-  onCreate: () => void;
 };
 
 function firstName(displayName: string) {
@@ -17,7 +15,7 @@ function firstName(displayName: string) {
   return trimmed.split(/\s+/)[0];
 }
 
-export default function HomeHeader({ displayName, onCreate }: HomeHeaderProps) {
+export default function HomeHeader({ displayName }: HomeHeaderProps) {
   const name = firstName(displayName);
 
   let greeting = 'Hey';
@@ -34,31 +32,21 @@ export default function HomeHeader({ displayName, onCreate }: HomeHeaderProps) {
         </Text>
       </View>
 
-      <Pressable
-        onPress={onCreate}
-        accessibilityRole="button"
-        accessibilityLabel="Propose an outing"
-        style={({ pressed }) => [styles.createWrap, pressed && styles.pressed]}
-      >
-        <LinearGradient
-          colors={brand}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.create}
-        >
-          <Ionicons name="add" size={22} color={colors.textOnBrand} />
-        </LinearGradient>
-      </Pressable>
+      {displayName.trim() !== '' ? (
+        <GradientAvatar
+          label={displayName}
+          initials={initialsFor(displayName)}
+          size={40}
+        />
+      ) : null}
     </View>
   );
 }
 
-const BUTTON = 42;
-
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: space.sm,
     paddingHorizontal: space.lg,
@@ -66,30 +54,17 @@ const styles = StyleSheet.create({
   },
   text: { flex: 1 },
   date: {
-    color: colors.textSoft,
-    fontFamily: font.semi,
-    fontSize: 11.5,
-    letterSpacing: 1,
+    color: colors.textFaint,
+    fontFamily: font.mono,
+    fontSize: textSize.caption,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   greeting: {
     marginTop: 3,
     color: colors.text,
     fontFamily: font.display,
-    fontSize: 26,
+    fontSize: textSize.hero,
     letterSpacing: -0.5,
   },
-  createWrap: {
-    ...shadow.button,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
-  },
-  create: {
-    width: BUTTON,
-    height: BUTTON,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pressed: { opacity: 0.7 },
 });

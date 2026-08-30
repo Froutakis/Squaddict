@@ -55,12 +55,15 @@ type GroupChatScreenProps = {
   initialGroupId?: string | null;
   /** Αν λείπει, δεν εμφανίζεται βελάκι πίσω από τη λίστα — η πλοήγηση γίνεται από το BottomNav. */
   onBack?: () => void;
+  /** Ενημερώνει τον γονέα όταν ανοίγει ή κλείνει συνομιλία, ώστε να κρύψει το BottomNav. */
+  onThreadChange?: (open: boolean) => void;
 };
 
 export default function GroupChatScreen({
   user,
   initialGroupId = null,
   onBack,
+  onThreadChange,
 }: GroupChatScreenProps) {
   const [groups, setGroups] = useState<Group[]>([]);
   // null = κανένα ανοιχτό chat, δηλαδή δείχνουμε τη λίστα με τις παρέες.
@@ -96,6 +99,10 @@ export default function GroupChatScreen({
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
   const connectionRef = useRef<Connection>('connecting');
+
+  useEffect(() => {
+    onThreadChange?.(activeId !== null);
+  }, [activeId, onThreadChange]);
 
   // Φέρνει τα τελευταία μηνύματα για την προεπισκόπηση της λίστας.
   // Αν αποτύχει το αφήνουμε να περάσει: η λίστα δουλεύει και χωρίς previews.
