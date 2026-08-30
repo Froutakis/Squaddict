@@ -64,3 +64,43 @@ export function mergeNewMessages(
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
 }
+
+/**
+ * Αντικαθιστά ένα μήνυμα που άλλαξε — διορθώθηκε ή σβήστηκε.
+ *
+ * Δύο πράγματα κρατάει σκόπιμα:
+ *
+ * 1. Αν το id δεν υπάρχει στη λίστα, γυρίζει την ίδια λίστα αντί να το
+ *    προσθέσει. Ένα UPDATE για μήνυμα που δεν έχουμε φορτώσει αφορά παλιότερη
+ *    σελίδα ιστορικού· προσθέτοντάς το θα εμφανιζόταν στο τέλος της οθόνης, εκτός
+ *    χρονολογικής σειράς.
+ * 2. Αν τίποτα δεν άλλαξε πραγματικά, γυρίζει την ΙΔΙΑ αναφορά — έτσι η React
+ *    δεν ξανασχεδιάζει τη λίστα για το echo της δικής μας αλλαγής.
+ *
+ * Η σειρά δεν πειράζεται ποτέ: ο trigger της βάσης απαγορεύει αλλαγή στο
+ * created_at, οπότε ένα ενημερωμένο μήνυμα μένει εκεί που ήταν.
+ */
+export function applyMessageUpdate(
+  existing: ChatMessage[],
+  updated: ChatMessage,
+): ChatMessage[] {
+  const index = existing.findIndex((message) => message.id === updated.id);
+  if (index === -1) {
+    return existing;
+  }
+
+  const current = existing[index];
+  const same =
+    current.content === updated.content &&
+    current.editedAt === updated.editedAt &&
+    current.deletedAt === updated.deletedAt;
+  if (same) {
+    return existing;
+  }
+
+  const next = existing.slice();
+  // Το όνομα αποστολέα δεν έρχεται με το realtime payload — το κρατάμε από την
+  // εκδοχή που ήδη έχουμε, αλλιώς η φυσαλίδα θα έχανε το όνομά της μετά από edit.
+  next[index] = { ...updated, senderName: updated.senderName || current.senderName };
+  return next;
+}
