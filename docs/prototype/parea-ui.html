@@ -1,0 +1,2326 @@
+<title>Parea Screen Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+Sans:wght@400;700;800&family=Commissioner:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+
+<style>
+/* ─── board tokens ─────────────────────────────────────────────── */
+:root{
+  --disp:"Alegreya Sans","Trebuchet MS",sans-serif;
+  --ui:"Commissioner","Helvetica Neue",Arial,sans-serif;
+  --mono:"DM Mono",ui-monospace,Menlo,monospace;
+
+  --bg:#E7ECF3;
+  --bg2:#DCE3EC;
+  --fg:#0C1926;
+  --fg2:#54667A;
+  --fg3:#7D8DA0;
+  --line:#C9D4E1;
+  --cob:#2145E6;
+  --sun:#FFC53D;
+  --rust:#D5442F;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0B1219; --bg2:#111B25; --fg:#E9EFF6; --fg2:#9AAABB; --fg3:#6D7F92;
+    --line:#22303D; --cob:#6E90FF; --sun:#FFC53D; --rust:#FF7A5E;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0B1219; --bg2:#111B25; --fg:#E9EFF6; --fg2:#9AAABB; --fg3:#6D7F92;
+  --line:#22303D; --cob:#6E90FF; --sun:#FFC53D; --rust:#FF7A5E;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--fg);
+  font-family:var(--ui); font-size:15px; line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1440px;margin:0 auto;padding:56px 32px 120px}
+@media (max-width:720px){ .wrap{padding:36px 18px 80px} }
+
+/* ─── masthead ─────────────────────────────────────────────────── */
+.mast{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:48px;align-items:end;
+  padding-bottom:34px;border-bottom:2px solid var(--fg)}
+@media (max-width:900px){ .mast{grid-template-columns:1fr;gap:28px;align-items:start} }
+.eyebrow{font:600 11px/1 var(--ui);letter-spacing:.22em;text-transform:uppercase;color:var(--fg3)}
+.mast h1{
+  font-family:var(--disp);font-weight:800;letter-spacing:-.035em;line-height:.88;
+  font-size:clamp(58px,10vw,124px);margin:18px 0 0;text-wrap:balance;
+}
+.mast h1 em{font-style:normal;color:var(--cob)}
+.mast p{margin:16px 0 0;max-width:52ch;color:var(--fg2);font-size:16px}
+.mast p.deck{font-family:var(--disp);font-weight:700;font-size:22px;color:var(--fg);margin-top:18px;
+  letter-spacing:-.01em}
+.specs{display:flex;flex-direction:column;gap:14px}
+.spec{display:grid;grid-template-columns:74px 1fr;gap:14px;align-items:baseline;
+  border-top:1px solid var(--line);padding-top:12px}
+.spec dt{font:600 10px/1.6 var(--ui);letter-spacing:.16em;text-transform:uppercase;color:var(--fg3)}
+.spec dd{margin:0;font-size:13.5px;color:var(--fg2)}
+.spec dd b{color:var(--fg);font-weight:600}
+.swatches{display:flex;gap:6px;margin-top:2px}
+.sw{width:30px;height:30px;border-radius:8px;border:1px solid rgba(12,25,38,.14)}
+.sw span{display:block;height:100%;font:500 8px/30px var(--mono);text-align:center;opacity:0}
+
+/* ─── sections ─────────────────────────────────────────────────── */
+.sec{margin-top:72px}
+.sec-head{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
+  border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:32px}
+.sec-head h2{font-family:var(--disp);font-weight:800;font-size:30px;letter-spacing:-.02em;margin:0}
+.sec-head p{margin:0;color:var(--fg2);font-size:14px;max-width:60ch}
+.rail{display:flex;flex-wrap:wrap;gap:40px 34px}
+.slot{width:calc(390px * var(--k));display:flex;flex-direction:column;gap:14px}
+.cap b{display:block;font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:-.01em}
+.cap span{display:block;color:var(--fg2);font-size:13px;line-height:1.5;margin-top:3px}
+.cap .tagline{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--cob);margin-top:6px}
+
+/* ─── device ───────────────────────────────────────────────────── */
+:root{--k:.78}
+@media (max-width:1180px){ :root{--k:.72} }
+@media (max-width:520px){ :root{--k:.86} }
+.frame{
+  width:calc(390px * var(--k)); height:calc(844px * var(--k));
+  position:relative; flex:none;
+  transition:transform .35s cubic-bezier(.2,.8,.2,1);
+}
+.slot:hover .frame{transform:translateY(-6px)}
+@media (prefers-reduced-motion:reduce){ .frame,.slot:hover .frame{transition:none;transform:none} }
+.phone{
+  width:390px;height:844px;transform:scale(var(--k));transform-origin:0 0;
+  position:relative;border-radius:56px;background:#05090D;
+  padding:11px;box-shadow:0 30px 60px -24px rgba(6,17,28,.55), 0 0 0 1px rgba(255,255,255,.08) inset;
+}
+.island{position:absolute;left:50%;top:22px;transform:translateX(-50%);width:120px;height:34px;
+  border-radius:20px;background:#05090D;z-index:9}
+
+/* ─── screen shell (fixed light palette — this is the product) ─── */
+.scr{
+  --sbg:#EDF0F5; --spaper:#FFFFFF; --sink:#0C1926; --sink2:#5A6B7D; --sink3:#7A8898;
+  --sline:#DFE5EE; --scob:#2145E6; --ssun:#FFC53D; --solive:#1F7A57; --srust:#D5442F;
+  --scobtint:#E4EAFD; --ssuntint:#FFF3D6; --solivetint:#E2F1EA;
+  position:absolute;inset:11px;border-radius:45px;overflow:hidden;
+  background:var(--sbg);color:var(--sink);
+  display:flex;flex-direction:column;font-family:var(--ui);
+}
+.scr *{box-sizing:border-box}
+.statusbar{height:58px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 26px 4px;font:600 14px var(--ui);letter-spacing:.01em;position:relative;z-index:8}
+.statusbar .t{font-variant-numeric:tabular-nums}
+.body{flex:1;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none}
+.body::-webkit-scrollbar{display:none}
+.pad{padding:0 18px}
+.hi{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:138px;height:5px;
+  border-radius:3px;background:rgba(12,25,38,.28);z-index:20}
+.scr.dark .hi{background:rgba(255,255,255,.4)}
+
+/* ─── atoms ────────────────────────────────────────────────────── */
+.row{display:flex;align-items:center;gap:10px}
+.col{display:flex;flex-direction:column}
+.sp{flex:1}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.lbl{font:600 10px/1 var(--ui);letter-spacing:.15em;text-transform:uppercase;color:var(--sink3)}
+.sub{color:var(--sink2);font-size:13px}
+.tiny{font-size:11.5px;color:var(--sink3)}
+.dsp{font-family:var(--disp);font-weight:800;letter-spacing:-.025em;line-height:1.02}
+.ic{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round;flex:none}
+.ic.sm{width:16px;height:16px;stroke-width:1.9}
+.ic.lg{width:26px;height:26px}
+
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;flex:none;
+  font:600 11.5px var(--ui);color:#fff;letter-spacing:.01em}
+.av.xs{width:24px;height:24px;font-size:9.5px}
+.av.lg{width:46px;height:46px;font-size:16px}
+.av.xl{width:72px;height:72px;font-size:26px;font-family:var(--disp);font-weight:800}
+.c1{background:#2145E6}.c2{background:#1F7A57}.c3{background:#D5442F}
+.c4{background:#0C1926}.c5{background:#5A6B7D}.c6{background:#FFC53D;color:#0C1926}
+.stack{display:flex}
+.stack .av{margin-left:-8px;box-shadow:0 0 0 2px var(--spaper)}
+.stack .av:first-child{margin-left:0}
+
+.chip{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 12px;border-radius:15px;
+  background:var(--spaper);border:1px solid var(--sline);font:500 12.5px var(--ui);color:var(--sink2);white-space:nowrap}
+.chip.on{background:var(--sink);border-color:var(--sink);color:#fff}
+.chip.cob{background:var(--scobtint);border-color:transparent;color:var(--scob);font-weight:600}
+.btn{display:flex;align-items:center;justify-content:center;gap:7px;height:48px;border-radius:16px;
+  background:var(--scob);color:#fff;font:600 15px var(--ui);border:none;white-space:nowrap}
+.tk-stub .mono{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn.ghost{background:transparent;border:1.5px solid var(--sline);color:var(--sink)}
+.btn.ink{background:var(--sink)}
+.btn.sm{height:36px;border-radius:12px;font-size:13px;padding:0 16px}
+.card{background:var(--spaper);border-radius:20px;padding:14px}
+.shadow{box-shadow:0 1px 2px rgba(12,25,38,.05), 0 8px 22px -12px rgba(12,25,38,.22)}
+
+/* ─── the signature: a plan is a ticket ────────────────────────── */
+.tk{position:relative;background:var(--spaper);border-radius:20px;
+  box-shadow:0 1px 2px rgba(12,25,38,.05), 0 10px 26px -14px rgba(12,25,38,.3)}
+.tk-main{padding:15px 16px 13px}
+.tk-perf{position:relative;height:0;border-top:1.6px dashed #CFD8E4;margin:0 12px}
+.tk-perf::before,.tk-perf::after{content:"";position:absolute;top:-10px;width:20px;height:20px;
+  border-radius:50%;background:var(--sbg)}
+.tk-perf::before{left:-22px}
+.tk-perf::after{right:-22px}
+.tk-stub{padding:11px 16px 13px;display:flex;align-items:center;gap:10px}
+.tk.hero{background:var(--sink);color:#fff}
+.tk.hero .tk-perf{border-color:rgba(255,255,255,.28)}
+.tk.hero .sub,.tk.hero .tiny,.tk.hero .lbl{color:rgba(255,255,255,.62)}
+.tk.hero .stack .av{box-shadow:0 0 0 2px var(--sink)}
+
+.punch{width:26px;height:26px;border-radius:50%;flex:none;
+  border:1.6px dashed #C3CEDC;background:transparent}
+.punch.on{border:none;background:var(--sbg);
+  box-shadow:inset 0 2px 3px rgba(12,25,38,.3), 0 0 0 3px var(--ssun)}
+.tk.hero .punch{border-color:rgba(255,255,255,.4)}
+.tk.hero .punch.on{background:#05090D;box-shadow:inset 0 2px 3px #000, 0 0 0 3px var(--ssun)}
+.code{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--sink3,var(--fg3));text-transform:uppercase}
+
+/* ─── memories: the stub keeps a picture ───────────────────────── */
+.ph{position:relative;overflow:hidden;background:#1A2430;isolation:isolate}
+.ph::before{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 42%,transparent 38%,rgba(6,14,22,.36) 100%)}
+.ph::after{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;opacity:.13;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.ph-roof{background:
+  radial-gradient(circle at 76% 26%,rgba(255,208,120,.9) 0 2.5px,transparent 3.5px),
+  radial-gradient(circle at 58% 33%,rgba(255,196,90,.75) 0 2px,transparent 3px),
+  radial-gradient(circle at 34% 38%,rgba(255,180,80,.65) 0 2px,transparent 3px),
+  radial-gradient(circle at 20% 30%,rgba(255,228,168,.5) 0 1.5px,transparent 2.5px),
+  radial-gradient(ellipse 150% 55% at 50% 108%,rgba(226,128,62,.55),transparent 72%),
+  linear-gradient(180deg,#101E33 0%,#1B2C46 46%,#33334A 100%)}
+.ph-sea{background:
+  radial-gradient(circle at 72% 18%,rgba(255,244,208,.9) 0 13px,transparent 40px),
+  linear-gradient(180deg,#8EC5E8 0%,#BFDCEC 33%,#2E7FA8 34%,#12506F 100%)}
+.ph-taverna{background:
+  radial-gradient(circle at 28% 22%,rgba(255,210,132,.85) 0 17px,transparent 58px),
+  radial-gradient(circle at 78% 64%,rgba(255,168,88,.4) 0 30px,transparent 80px),
+  linear-gradient(160deg,#4A2E1E 0%,#6B4526 52%,#2A1A11 100%)}
+.ph-hike{background:
+  radial-gradient(ellipse 90% 26% at 50% 30%,rgba(255,255,255,.55),transparent 72%),
+  linear-gradient(180deg,#C9DCE6 0%,#9FBFC9 25%,#3F6B4B 26%,#274A34 64%,#1B3527 100%)}
+.ph-market{background:
+  repeating-linear-gradient(96deg,rgba(206,74,54,.45) 0 9px,rgba(244,234,214,.45) 9px 18px),
+  linear-gradient(180deg,#D9CBB2 0%,#A98D6A 58%,#6B5340 100%)}
+.ph-cinema{background:
+  radial-gradient(ellipse 40% 24% at 50% 38%,rgba(228,240,255,.95),rgba(120,150,190,.16) 68%,transparent 78%),
+  linear-gradient(180deg,#0E1524 0%,#141D30 100%)}
+.ph-vinyl{background:
+  radial-gradient(circle at 30% 28%,rgba(226,80,60,.55) 0 32px,transparent 76px),
+  radial-gradient(circle at 74% 68%,rgba(94,72,200,.5) 0 28px,transparent 72px),
+  linear-gradient(150deg,#241726 0%,#301B2C 55%,#15101C 100%)}
+.ph-dawn{background:linear-gradient(180deg,#F2B990 0%,#E88E76 20%,#9C7E96 46%,#4C5A72 72%,#2B3446 100%)}
+.ph-tavli{background:
+  radial-gradient(ellipse 70% 44% at 32% 22%,rgba(255,232,182,.7),transparent 72%),
+  radial-gradient(ellipse 40% 30% at 80% 84%,rgba(28,16,8,.55),transparent 74%),
+  repeating-linear-gradient(74deg,rgba(92,54,28,.3) 0 24px,rgba(184,136,88,.22) 24px 48px),
+  linear-gradient(168deg,#8A5A33 0%,#6B4224 55%,#3D2411 100%)}
+.ph-ferry{background:
+  radial-gradient(circle at 22% 28%,rgba(255,255,255,.7) 0 9px,transparent 26px),
+  linear-gradient(180deg,#DCE9F2 0%,#A9CBE0 39%,#3E7EA6 40%,#1C536F 100%)}
+
+.mtile{position:relative;border-radius:12px;overflow:hidden;aspect-ratio:3/4}
+.mtile .mday{position:absolute;left:6px;top:5px;z-index:3;font:500 9.5px var(--mono);color:#fff;
+  text-shadow:0 1px 3px rgba(0,0,0,.65)}
+.mtile .mcap{position:absolute;left:6px;right:6px;bottom:5px;z-index:3;color:#fff;
+  font:600 9px var(--ui);line-height:1.2;text-shadow:0 1px 4px rgba(0,0,0,.75)}
+.mtile .mpunch{position:absolute;right:5px;top:5px;z-index:3;width:10px;height:10px;border-radius:50%;
+  background:rgba(0,0,0,.5);box-shadow:0 0 0 2px var(--ssun)}
+.mempty{border-radius:12px;aspect-ratio:3/4;border:1.3px dashed var(--sline);
+  display:grid;place-items:center;font:500 9.5px var(--mono);color:var(--sink3)}
+.mgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.mgrid.big{grid-template-columns:repeat(3,1fr);gap:7px}
+.inset{position:absolute;left:10px;top:10px;z-index:4;width:62px;height:82px;border-radius:11px;
+  border:2px solid rgba(255,255,255,.9);overflow:hidden;box-shadow:0 6px 16px -6px rgba(0,0,0,.7)}
+
+.cover{height:130px;flex:none;position:relative}
+.cover.tall{height:188px}
+.covertag{position:absolute;right:14px;bottom:12px;z-index:4;color:#fff;
+  font:600 9.5px var(--ui);letter-spacing:.14em;text-transform:uppercase;
+  background:rgba(0,0,0,.36);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  padding:5px 10px;border-radius:9px}
+
+/* ─── squad to squad ───────────────────────────────────────────── */
+.duo{display:flex}
+.duo .av{margin-left:-11px;box-shadow:0 0 0 2.5px var(--spaper)}
+.duo .av:first-child{margin-left:0}
+.splitbar{height:7px;border-radius:4px;overflow:hidden;display:flex;background:var(--sline)}
+.splitbar i{display:block;height:100%}
+.msg .who2{font:500 9.5px var(--mono);letter-spacing:.08em}
+.roomnote{display:flex;gap:9px;align-items:flex-start;background:var(--ssuntint);border-radius:16px;
+  padding:11px 13px;color:#6A5416;font-size:11.5px;line-height:1.45}
+.clock{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 8px;border-radius:7px;
+  background:var(--ssuntint);color:#6A5416;font:500 10px var(--mono);letter-spacing:.06em}
+.clock.hot{background:#FBE6E1;color:#96311F}
+.roll{display:flex;align-items:center;gap:8px;background:var(--spaper);border-radius:16px;padding:9px 11px;
+  box-shadow:0 1px 2px rgba(12,25,38,.06)}
+.roll .ph{width:34px;height:44px;border-radius:9px;flex:none}
+
+/* ─── tab bar ──────────────────────────────────────────────────── */
+.tabs{position:absolute;left:14px;right:14px;bottom:26px;height:66px;border-radius:26px;z-index:15;
+  display:flex;align-items:center;justify-content:space-around;padding:0 6px;
+  background:rgba(255,255,255,.78);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
+  border:1px solid rgba(12,25,38,.07);box-shadow:0 12px 34px -12px rgba(12,25,38,.34)}
+.tab{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--sink3);width:56px}
+.tab span{font:600 9.5px var(--ui);letter-spacing:.03em}
+.tab.on{color:var(--scob)}
+.tabplus{width:48px;height:48px;border-radius:17px;background:var(--scob);color:#fff;
+  display:grid;place-items:center;box-shadow:0 8px 18px -6px rgba(33,69,230,.7)}
+.fade{position:absolute;left:0;right:0;bottom:0;height:140px;z-index:12;pointer-events:none;
+  background:linear-gradient(to top,var(--sbg) 22%,rgba(237,240,245,0))}
+
+/* ─── fake map ─────────────────────────────────────────────────── */
+.map{position:relative;background-color:#E3E9F0;overflow:hidden}
+.map::before{content:"";position:absolute;inset:-20%;
+  background-image:
+    linear-gradient(118deg,transparent 0 63%,#C8DCF0 63% 100%),
+    radial-gradient(ellipse 130px 88px at 24% 74%,#D6E8CE 0 99%,transparent 100%),
+    radial-gradient(ellipse 76px 58px at 78% 20%,#D6E8CE 0 99%,transparent 100%),
+    repeating-linear-gradient(0deg,transparent 0 45px,rgba(255,255,255,.78) 45px 49px),
+    repeating-linear-gradient(90deg,transparent 0 57px,rgba(255,255,255,.78) 57px 61px),
+    repeating-linear-gradient(29deg,transparent 0 120px,rgba(255,255,255,.92) 120px 128px)}
+.pin{position:absolute;width:30px;height:30px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);
+  background:var(--scob);display:grid;place-items:center;box-shadow:0 5px 12px -3px rgba(12,25,38,.5)}
+.pin b{transform:rotate(45deg);color:#fff;font:600 11px var(--ui)}
+.pin.sun{background:var(--ssun)}.pin.sun b{color:#0C1926}
+.pin.ink{background:var(--sink)}
+.uloc{position:absolute;width:16px;height:16px;border-radius:50%;background:var(--scob);
+  box-shadow:0 0 0 4px #fff,0 0 0 14px rgba(33,69,230,.16)}
+
+/* ─── inputs ───────────────────────────────────────────────────── */
+.field{height:50px;border-radius:15px;background:var(--spaper);border:1px solid var(--sline);
+  display:flex;align-items:center;gap:10px;padding:0 14px;font-size:14.5px;color:var(--sink3)}
+.field.filled{color:var(--sink);font-weight:500}
+.seg{display:flex;background:#E1E7F0;border-radius:13px;padding:3px;gap:3px}
+.seg div{flex:1;height:32px;display:grid;place-items:center;border-radius:10px;
+  font:600 12.5px var(--ui);color:var(--sink2)}
+.seg div.on{background:var(--spaper);color:var(--sink);box-shadow:0 1px 3px rgba(12,25,38,.14)}
+.switch{width:50px;height:30px;border-radius:15px;background:var(--sline);position:relative;flex:none}
+.switch.on{background:var(--solive)}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;
+  background:#fff;box-shadow:0 2px 4px rgba(12,25,38,.28)}
+.switch.on::after{left:23px}
+.divider{height:1px;background:var(--sline)}
+
+/* ─── footer ───────────────────────────────────────────────────── */
+.foot{margin-top:88px;padding-top:26px;border-top:2px solid var(--fg);
+  display:flex;gap:26px;flex-wrap:wrap;justify-content:space-between;align-items:flex-start}
+.foot p{margin:0;max-width:56ch;color:var(--fg2);font-size:13.5px}
+.foot .code{color:var(--fg3)}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--cob);outline-offset:3px;border-radius:4px}
+</style>
+
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h13A2.5 2.5 0 0 1 21 8.5v1.7a1.8 1.8 0 0 0 0 3.6v1.7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 15.5v-1.7a1.8 1.8 0 0 0 0-3.6Z"/><path d="M14 6v12" stroke-dasharray="2 2.6"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.4 8.6-2 4.8-4.8 2 2-4.8Z"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20.5 12a8 8 0 0 1-11.7 7.1L4 20.6l1.5-4.8A8 8 0 1 1 20.5 12Z"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 4 1.4 5.4 1.4 5.4H4.6S6 13 6 9Z"/><path d="M10 18a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m5 9 7 7 7-7"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V4m0 0L8.5 7.5M12 4l3.5 3.5"/><path d="M5.5 12.5V19a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-6.5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M4.5 12h15M12 4.5 19.5 12 12 19.5"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3.5 8.8A1.8 1.8 0 0 1 5.3 7h2.2l1.2-2h6.6l1.2 2h2.2a1.8 1.8 0 0 1 1.8 1.8v8.4a1.8 1.8 0 0 1-1.8 1.8H5.3a1.8 1.8 0 0 1-1.8-1.8Z"/><circle cx="12" cy="13" r="3.4"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9.5" cy="8.5" r="3.2"/><path d="M3.6 19a5.9 5.9 0 0 1 11.8 0"/><path d="M16 6.2a3.2 3.2 0 0 1 0 6M17.5 14.4A5.9 5.9 0 0 1 20.4 19"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.4 3.5 8.5S14.4 18.6 12 20.5C9.6 18.6 8.5 15.6 8.5 12S9.6 5.9 12 3.5Z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4.8" y="10.5" width="14.4" height="9.5" rx="2.4"/><path d="M8.4 10.5V8a3.6 3.6 0 0 1 7.2 0v2.5"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.8" y="5.5" width="16.4" height="14.7" rx="3"/><path d="M3.8 10h16.4M8.4 3.5v4M15.6 3.5v4"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.4"/><path d="M15.5 5.5h-9a2.4 2.4 0 0 0-2.4 2.4v9"/></symbol>
+  <symbol id="i-status" viewBox="0 0 70 14">
+    <g fill="currentColor" stroke="none">
+      <rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="6" width="3" height="6" rx="1"/>
+      <rect x="10" y="3.5" width="3" height="8.5" rx="1"/><rect x="15" y="1" width="3" height="11" rx="1"/>
+      <path d="M28.6 4.1a9.4 9.4 0 0 1 11.8 0l-1.6 2a6.9 6.9 0 0 0-8.6 0Zm2.6 3.3a5.4 5.4 0 0 1 6.6 0l-1.6 2a2.9 2.9 0 0 0-3.4 0Zm2.1 3.2a1.9 1.9 0 0 1 2.4 0l-1.2 1.5Z"/>
+    </g>
+    <rect x="49" y="2.5" width="17" height="9" rx="2.6" fill="none" stroke="currentColor" stroke-width="1" opacity=".45"/>
+    <rect x="50.5" y="4" width="12" height="6" rx="1.4" fill="currentColor" stroke="none"/>
+    <path d="M67.4 6v4a2 2 0 0 0 0-4Z" fill="currentColor" stroke="none" opacity=".45"/>
+  </symbol>
+</svg>
+
+<div class="wrap">
+
+<header class="mast">
+  <div>
+    <p class="eyebrow">Parea &middot; interface direction</p>
+    <h1>A plan<br>is a <em>ticket</em>.</h1>
+    <p class="deck">You punch it going in. You keep it after.</p>
+    <p>Group chats are where plans go to die. Parea turns the "we should do something" message into an object you can hold: a stub with a date, a spot, and a hole punched through it when you commit. Then the night happens, and the stub comes back with a photo on it. Nineteen screens — squads as real profiles that talk to each other, plans, RSVPs, the map, the thread, and a calendar of everything you actually showed up to.</p>
+  </div>
+  <dl class="specs">
+    <div class="spec"><dt>Palette</dt><dd>
+      <div class="swatches">
+        <div class="sw" style="background:#EDF0F5"><span>chalk</span></div>
+        <div class="sw" style="background:#0C1926"><span>ink</span></div>
+        <div class="sw" style="background:#2145E6"><span>cobalt</span></div>
+        <div class="sw" style="background:#FFC53D"><span>sun</span></div>
+        <div class="sw" style="background:#1F7A57"><span>olive</span></div>
+        <div class="sw" style="background:#D5442F"><span>rust</span></div>
+      </div>
+      Whitewash and Aegean cobalt. <b>Sun yellow does one job only</b> — it rings the punch hole when you're in.
+    </dd></div>
+    <div class="spec"><dt>Type</dt><dd><b>Alegreya Sans</b> 800 for anything you read at a glance, <b>Commissioner</b> for interface text, <b>DM Mono</b> for ticket codes, times and distances. All three carry Greek.</dd></div>
+    <div class="spec"><dt>Shape</dt><dd>Perforated cards, 20px corners, one floating glass tab bar. No gradients, no accent rails.</dd></div>
+    <div class="spec"><dt>Squads</dt><dd>A squad is a <b>profile</b>, not a chat room: handle, bio, members, a wall of nights. Two squads follow each other and throw one night together.</dd></div>
+    <div class="spec"><dt>Rooms</dt><dd>A plan can open a <b>room that lives 48 hours</b> — one day before the night, one day after. That is the only place two pareas talk, and it is the only thread with a clock on it.</dd></div>
+    <div class="spec"><dt>After</dt><dd>When a room shuts, what was in it becomes the memory. A month of those reads as a grid, the way a calendar of nights should.</dd></div>
+    <div class="spec"><dt>Scroll</dt><dd>Every screen below scrolls inside its own frame. Try it.</dd></div>
+  </dl>
+</header>
+
+<!-- ══════════════ SECTION: WAY IN ══════════════ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>Way in</h2>
+    <p>Two doors: sign in, or arrive holding a code someone texted you.</p>
+  </div>
+  <div class="rail">
+
+    <!-- S1 · WELCOME -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="statusbar"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+        <div class="body" style="display:flex;flex-direction:column">
+          <div class="pad" style="padding-top:26px">
+            <div class="row" style="gap:8px">
+              <svg class="ic" style="color:var(--scob)"><use href="#i-ticket"/></svg>
+              <span class="dsp" style="font-size:20px">Parea</span>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:44px">
+            <h2 class="dsp" style="font-size:46px;margin:0">Plans that<br>actually<br>happen.</h2>
+            <p class="sub" style="margin:14px 0 0;max-width:27ch">Pick a night, pick a spot, see who's really coming. No more scrolling back to find the address.</p>
+          </div>
+
+          <div class="pad" style="margin-top:34px">
+            <div class="tk" style="transform:rotate(-2.2deg)">
+              <div class="tk-main">
+                <div class="row"><span class="code">PAREA &middot; ADMIT ALL</span><span class="sp"></span><span class="code">№ 0001</span></div>
+                <div class="dsp" style="font-size:25px;margin-top:8px">Souvlaki &amp; tavli</div>
+                <div class="row sub" style="margin-top:5px;font-size:12.5px">
+                  <svg class="ic sm"><use href="#i-clock"/></svg><span class="mono">FRI 21:00</span>
+                  <svg class="ic sm"><use href="#i-pin"/></svg><span>Petralona</span>
+                </div>
+              </div>
+              <div class="tk-perf"></div>
+              <div class="tk-stub">
+                <div class="punch on"></div>
+                <div class="col" style="gap:1px"><span class="lbl">You</span><b style="font-size:13px">In</b></div>
+                <span class="sp"></span>
+                <div class="stack">
+                  <div class="av xs c1">Δ</div><div class="av xs c2">Ν</div><div class="av xs c3">Μ</div><div class="av xs c5">+4</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sp"></div>
+          <div class="pad" style="padding-bottom:34px;display:flex;flex-direction:column;gap:10px;margin-top:40px">
+            <div class="field filled"><svg class="ic sm" style="color:var(--sink3)"><use href="#i-user"/></svg>dimitris@parea.app</div>
+            <div class="field"><svg class="ic sm"><use href="#i-lock"/></svg><span style="letter-spacing:.24em;color:var(--sink)">••••••••</span></div>
+            <div class="btn" style="margin-top:4px">Sign in</div>
+            <div class="btn ghost">Create an account</div>
+            <p class="tiny" style="text-align:center;margin:6px 0 0">Or <b style="color:var(--scob)">join with an invite code</b></p>
+          </div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>Sign in</b>
+        <span>The hero isn't a logo lockup — it's the product's one object, tilted like it fell out of a pocket. The punched stub is the whole promise in one frame.</span>
+        <span class="tagline">Auth · already built</span>
+      </div>
+    </div>
+
+    <!-- S2 · JOIN BY CODE -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="statusbar"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+        <div class="body">
+          <div class="pad row" style="padding-top:8px">
+            <svg class="ic lg"><use href="#i-left"/></svg><span class="sp"></span>
+            <span style="font-weight:600;font-size:15px">Join a squad</span><span class="sp"></span>
+            <svg class="ic lg" style="opacity:0"><use href="#i-x"/></svg>
+          </div>
+
+          <div class="pad" style="margin-top:26px">
+            <h2 class="dsp" style="font-size:34px;margin:0">Got a code?</h2>
+            <p class="sub" style="margin:8px 0 0;max-width:30ch">Every squad has one. It rotates whenever an admin wants it to.</p>
+          </div>
+
+          <div class="pad" style="margin-top:24px;display:flex;gap:7px">
+            <div class="cardcode">A</div><div class="cardcode">T</div><div class="cardcode">B</div>
+            <div class="cardcode dash">–</div>
+            <div class="cardcode">4</div><div class="cardcode">K</div><div class="cardcode on">2</div>
+          </div>
+
+          <div class="pad" style="margin-top:26px">
+            <span class="lbl">This is</span>
+            <div class="card shadow" style="margin-top:8px;display:flex;gap:12px;align-items:center">
+              <div class="av lg c1">AB</div>
+              <div class="col" style="gap:2px;min-width:0">
+                <b style="font-size:16px">Attic Birds</b>
+                <span class="mono tiny">@atticbirds · 8 members</span>
+                <span class="tiny" style="color:var(--sink2)">Rooftops, late dinners, worse ideas.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:16px">
+            <span class="lbl">You'd walk into</span>
+            <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+              <div class="tk"><div class="tk-main row" style="padding:12px 14px">
+                <div class="col" style="gap:2px;min-width:0"><b style="font-size:14px">Rooftop drinks</b>
+                  <span class="mono tiny">THU 21:00 · Ampelokipi</span></div>
+                <span class="sp"></span><div class="stack"><div class="av xs c2">Ν</div><div class="av xs c6">Ε</div><div class="av xs c5">+4</div></div>
+              </div></div>
+              <div class="tk"><div class="tk-main row" style="padding:12px 14px">
+                <div class="col" style="gap:2px;min-width:0"><b style="font-size:14px">Sunday hike, Parnitha</b>
+                  <span class="mono tiny">SUN 08:30 · Thrakomakedones</span></div>
+                <span class="sp"></span><div class="stack"><div class="av xs c1">Δ</div><div class="av xs c3">Μ</div></div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:22px;padding-bottom:130px;display:flex;flex-direction:column;gap:10px">
+            <div class="btn">Join Attic Birds</div>
+            <p class="tiny" style="text-align:center;margin:0">Members see every plan in the squad, including the private ones.</p>
+          </div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>Join with a code</b>
+        <span>Before you commit, you see what you're committing to: the squad, and the next two plans on its books. The code field uses the mono face so a texted code and a typed code look identical.</span>
+        <span class="tagline">Invite codes · already built</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+<style>
+.cardcode{flex:1;height:60px;border-radius:14px;background:var(--spaper);border:1px solid var(--sline);
+  display:grid;place-items:center;font-family:var(--mono);font-size:24px;font-weight:500;color:var(--sink)}
+.cardcode.dash{flex:0 0 16px;background:none;border:none;color:var(--sink3)}
+.cardcode.on{border:2px solid var(--scob);color:var(--scob)}
+</style>
+
+<!-- ══════════════ SECTION: THE WEEK ══════════════ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>The week</h2>
+    <p>The home tab answers one question — what am I doing next, and what is still waiting on me?</p>
+  </div>
+  <div class="rail">
+
+    <!-- S3 · TODAY -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="statusbar"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+        <div class="body">
+          <div class="pad row" style="padding-top:6px;align-items:flex-start">
+            <div class="col" style="gap:2px">
+              <span class="lbl mono">WED 2 SEPT</span>
+              <span class="dsp" style="font-size:27px">Evening, Dimitri</span>
+            </div>
+            <span class="sp"></span>
+            <div style="position:relative"><svg class="ic lg"><use href="#i-bell"/></svg>
+              <i style="position:absolute;top:0;right:1px;width:8px;height:8px;border-radius:50%;background:var(--srust);box-shadow:0 0 0 2px var(--sbg)"></i></div>
+            <div class="av c1" style="margin-left:4px">Δ</div>
+          </div>
+
+          <div class="pad" style="margin-top:20px">
+            <div class="row" style="margin-bottom:9px"><span class="lbl">Up next</span><span class="sp"></span><span class="code">in 26 hours</span></div>
+            <div class="tk hero">
+              <div class="tk-main" style="padding:16px 17px 14px">
+                <div class="row"><span class="chip" style="background:rgba(255,255,255,.12);border-color:transparent;color:#fff;height:24px;font-size:11px">@atticbirds</span>
+                  <span class="sp"></span><span class="code" style="color:rgba(255,255,255,.5)">№ 0412</span></div>
+                <div class="dsp" style="font-size:30px;margin-top:10px">Rooftop drinks</div>
+                <div class="row" style="margin-top:10px;gap:14px;font-size:13px">
+                  <span class="row" style="gap:6px"><svg class="ic sm"><use href="#i-clock"/></svg><span class="mono">THU 21:00</span></span>
+                  <span class="row" style="gap:6px"><svg class="ic sm"><use href="#i-pin"/></svg><span>A for Athens</span></span>
+                </div>
+              </div>
+              <div class="tk-perf"></div>
+              <div class="tk-stub" style="padding:12px 17px 14px">
+                <div class="punch on"></div>
+                <div class="col" style="gap:0"><b style="font-size:13.5px">You are in</b><span class="tiny" style="color:rgba(255,255,255,.55)">Punched 2 days ago</span></div>
+                <span class="sp"></span>
+                <div class="col" style="align-items:flex-end;gap:3px">
+                  <div class="stack"><div class="av xs c2">Ν</div><div class="av xs c6">Ε</div><div class="av xs c3">Μ</div><div class="av xs c5">+3</div></div>
+                  <span class="tiny mono" style="color:rgba(255,255,255,.55)">6 IN · 2 OUT</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:14px">
+            <div class="card shadow row" style="padding:10px;gap:12px">
+              <div class="ph ph-vinyl" style="width:50px;height:64px;border-radius:12px;flex:none"></div>
+              <div class="col" style="gap:2px;min-width:0">
+                <span class="lbl">Last night</span>
+                <b style="font-size:14.5px;margin-top:2px">Vinyl night at Nikos place</b>
+                <span class="tiny">Nikos and Elena posted. Add yours by midnight.</span>
+              </div>
+              <span class="sp"></span>
+              <div class="btn sm ink" style="width:40px;padding:0;flex:none"><svg class="ic sm"><use href="#i-camera"/></svg></div>
+            </div>
+          </div>
+
+          <div style="margin-top:22px">
+            <div class="pad row" style="margin-bottom:9px"><span class="lbl">Your week</span><span class="sp"></span><span class="code" style="color:var(--scob)">CALENDAR</span></div>
+            <div class="hscroll">
+              <div class="day"><span>W</span><b>2</b><i class="dot cob"></i></div>
+              <div class="day on"><span>T</span><b>3</b><i class="dot sun"></i></div>
+              <div class="day"><span>F</span><b>4</b></div>
+              <div class="day"><span>S</span><b>5</b><i class="dot cob"></i></div>
+              <div class="day"><span>S</span><b>6</b><i class="dot ol"></i></div>
+              <div class="day"><span>M</span><b>7</b></div>
+              <div class="day"><span>T</span><b>8</b><i class="dot ru"></i></div>
+              <div class="day"><span>W</span><b>9</b></div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:22px">
+            <div class="row" style="margin-bottom:9px"><span class="lbl">Waiting on you</span>
+              <span class="sp"></span><span class="badge">2</span></div>
+
+            <div class="tk" style="margin-bottom:10px">
+              <div class="tk-main" style="padding:13px 15px 11px">
+                <div class="row"><span class="code">@kolonaki.run</span><span class="sp"></span><span class="code">SAT 08:00</span></div>
+                <b class="dsp" style="font-size:17px;display:block;margin-top:5px">Morning run, Lycabettus</b>
+                <span class="tiny" style="display:block;margin-top:3px">Nikos asked · 4 in so far</span>
+              </div>
+              <div class="tk-perf"></div>
+              <div class="tk-stub" style="gap:8px">
+                <div class="punch"></div>
+                <div class="btn sm ink sp">I am in</div>
+                <div class="btn sm ghost" style="padding:0 14px">Pass</div>
+              </div>
+            </div>
+
+            <div class="tk">
+              <div class="tk-main" style="padding:13px 15px 11px">
+                <div class="row"><span class="code">@atticbirds</span><span class="sp"></span><span class="code">SUN 08:30</span></div>
+                <b class="dsp" style="font-size:17px;display:block;margin-top:5px">Parnitha, the long way</b>
+                <span class="tiny" style="display:block;margin-top:3px">Maria asked · 2 in so far</span>
+              </div>
+              <div class="tk-perf"></div>
+              <div class="tk-stub" style="gap:8px">
+                <div class="punch"></div>
+                <div class="btn sm ink sp">I am in</div>
+                <div class="btn sm ghost" style="padding:0 14px">Pass</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:22px;padding-bottom:150px">
+            <span class="lbl">Later this month</span>
+            <div style="margin-top:9px;display:flex;flex-direction:column;gap:8px">
+              <div class="card row" style="padding:12px 14px;gap:12px">
+                <div class="datechip"><span>SEP</span><b>12</b></div>
+                <div class="col" style="gap:2px;min-width:0"><b style="font-size:14px">Vinyl night at Nikos place</b><span class="mono tiny">20:30 · Exarchia · @atticbirds</span></div>
+                <span class="sp"></span><div class="punch on sm2"></div>
+              </div>
+              <div class="card row" style="padding:12px 14px;gap:12px">
+                <div class="datechip"><span>SEP</span><b>19</b></div>
+                <div class="col" style="gap:2px;min-width:0"><b style="font-size:14px">Aegina, one night</b><span class="mono tiny">07:00 ferry · Piraeus · @atticbirds</span></div>
+                <span class="sp"></span><div class="punch sm2"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fade"></div>
+        <div class="tabs">
+          <div class="tab on"><svg class="ic"><use href="#i-ticket"/></svg><span>Today</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-compass"/></svg><span>Explore</span></div>
+          <div class="tabplus"><svg class="ic"><use href="#i-plus"/></svg></div>
+          <div class="tab"><svg class="ic"><use href="#i-chat"/></svg><span>Parea</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-user"/></svg><span>You</span></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>Today</b>
+        <span>One dark ticket owns the top of the screen — the next thing you actually have to show up for. Everything under it is lighter and smaller. "Waiting on you" is the only section that can act on you, so it is the only one with buttons.</span>
+        <span class="tagline">Up next · RSVP · my plans</span>
+      </div>
+    </div>
+
+    <!-- S4 · CALENDAR -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="statusbar"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+        <div class="body">
+          <div class="pad row" style="padding-top:6px">
+            <span class="dsp" style="font-size:26px">September</span>
+            <span class="mono" style="font-size:19px;color:var(--sink3)">2026</span>
+            <span class="sp"></span>
+            <svg class="ic"><use href="#i-left"/></svg><svg class="ic"><use href="#i-right"/></svg>
+          </div>
+
+          <div style="margin-top:14px">
+            <div class="hscroll">
+              <span class="chip on">All squads</span>
+              <span class="chip"><i class="dot cob"></i>Attic Birds</span>
+              <span class="chip"><i class="dot ol"></i>Kolonaki Run</span>
+              <span class="chip"><i class="dot ru"></i>Work lot</span>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:18px">
+            <div class="cal">
+              <span class="cw">M</span><span class="cw">T</span><span class="cw">W</span><span class="cw">T</span><span class="cw">F</span><span class="cw">S</span><span class="cw">S</span>
+              <span></span>
+              <span class="cd">1</span>
+              <span class="cd today">2<i class="dot cob"></i></span>
+              <span class="cd">3<i class="dot sun"></i></span>
+              <span class="cd">4</span>
+              <span class="cd sel">5<i class="dot cob"></i></span>
+              <span class="cd">6<i class="dot ol"></i></span>
+              <span class="cd">7</span><span class="cd">8<i class="dot ru"></i></span><span class="cd">9</span><span class="cd">10</span>
+              <span class="cd">11</span><span class="cd">12<i class="dot cob"></i></span><span class="cd">13</span>
+              <span class="cd">14</span><span class="cd">15</span><span class="cd">16<i class="dot ru"></i></span><span class="cd">17</span>
+              <span class="cd">18</span><span class="cd">19<i class="dot cob"></i></span><span class="cd">20<i class="dot ol"></i></span>
+              <span class="cd">21</span><span class="cd">22</span><span class="cd">23</span><span class="cd">24</span>
+              <span class="cd">25</span><span class="cd">26<i class="dot cob"></i></span><span class="cd">27</span>
+              <span class="cd">28</span><span class="cd">29</span><span class="cd">30</span>
+            </div>
+          </div>
+
+          <div style="margin-top:22px;background:var(--spaper);border-radius:26px 26px 0 0;
+               box-shadow:0 -8px 26px -18px rgba(12,25,38,.5);padding:12px 18px 150px;min-height:320px">
+            <div style="width:38px;height:4px;border-radius:2px;background:var(--sline);margin:0 auto 14px"></div>
+            <div class="row"><span class="dsp" style="font-size:20px">Saturday 5</span><span class="sp"></span>
+              <span class="chip cob" style="height:28px"><svg class="ic sm"><use href="#i-plus"/></svg>Add plan</span></div>
+
+            <div style="margin-top:16px">
+              <div class="tl">
+                <span class="mono tlt">08:00</span>
+                <div class="tlbar ol"></div>
+                <div class="col" style="gap:2px;padding-bottom:20px;min-width:0">
+                  <b style="font-size:14.5px">Morning run, Lycabettus</b>
+                  <span class="tiny mono">@kolonaki.run · 4 in</span>
+                  <div class="row" style="gap:6px;margin-top:7px"><div class="punch sm2"></div><span class="tiny">Not answered</span></div>
+                </div>
+              </div>
+              <div class="tl">
+                <span class="mono tlt">21:30</span>
+                <div class="tlbar cob"></div>
+                <div class="col" style="gap:2px;min-width:0">
+                  <b style="font-size:14.5px">Dinner, Nea Filothei</b>
+                  <span class="tiny mono">@atticbirds · 7 in</span>
+                  <div class="row" style="gap:6px;margin-top:7px"><div class="punch on sm2"></div><span class="tiny">You are in</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <div class="tab on"><svg class="ic"><use href="#i-ticket"/></svg><span>Today</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-compass"/></svg><span>Explore</span></div>
+          <div class="tabplus"><svg class="ic"><use href="#i-plus"/></svg></div>
+          <div class="tab"><svg class="ic"><use href="#i-chat"/></svg><span>Parea</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-user"/></svg><span>You</span></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>Month</b>
+        <span>Dots are squads, not categories — one glance tells you which parea owns which night. Tapping a day raises a sheet that lays the plans on a real time axis, because two plans on one Saturday is a scheduling problem, not a list.</span>
+        <span class="tagline">Calendar · squad filter</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<style>
+.hscroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:0 18px}
+.hscroll::-webkit-scrollbar{display:none}
+.day{flex:none;width:46px;height:66px;border-radius:16px;background:var(--spaper);border:1px solid var(--sline);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.day span{font:600 10px var(--ui);color:var(--sink3);letter-spacing:.08em}
+.day b{font-family:var(--mono);font-size:17px;font-weight:500}
+.day.on{background:var(--sink);border-color:var(--sink);color:#fff}
+.day.on span{color:rgba(255,255,255,.6)}
+.day .dot{margin-top:2px}
+.dot{width:5px;height:5px;border-radius:50%;background:var(--scob);display:inline-block;flex:none}
+.dot.cob{background:var(--scob)}.dot.ol{background:var(--solive)}
+.dot.ru{background:var(--srust)}.dot.sun{background:var(--ssun)}
+.punch.sm2{width:19px;height:19px}
+.punch.on.sm2{box-shadow:inset 0 2px 3px rgba(12,25,38,.3), 0 0 0 2px var(--ssun)}
+.badge{min-width:20px;height:20px;border-radius:10px;background:var(--srust);color:#fff;
+  font:600 11px/1 var(--ui);display:grid;place-items:center;padding:0 6px}
+.datechip{width:42px;height:44px;border-radius:12px;background:var(--sbg);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;flex:none}
+.datechip span{font:600 8.5px var(--ui);letter-spacing:.12em;color:var(--sink3)}
+.datechip b{font-family:var(--mono);font-size:16px;font-weight:500;line-height:1.1}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px 0;text-align:center}
+.cw{font:600 10px/22px var(--ui);color:var(--sink3);letter-spacing:.1em}
+.cd{height:44px;display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:15px;position:relative;isolation:isolate}
+.cd .dot{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:4.5px;height:4.5px}
+.cd.today{color:var(--scob);font-weight:500}
+.cd.sel::before{content:"";position:absolute;inset:1px 5px;border-radius:13px;background:var(--sink);z-index:-1}
+.cd.sel{color:#fff}
+.tl{display:grid;grid-template-columns:42px 3px 1fr;gap:10px;align-items:stretch}
+.tlt{font-size:11.5px;color:var(--sink3);padding-top:2px;text-align:right}
+.tlbar{border-radius:2px;background:var(--scob);min-height:56px}
+.tlbar.ol{background:var(--solive)}
+</style>
+
+<!-- ══════════════ SECTION: THE PLAN ══════════════ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>The plan</h2>
+    <p>Opening one, and making one. The two screens the whole app exists to serve.</p>
+  </div>
+  <div class="rail">
+
+    <!-- S5 · PLAN DETAIL -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="body" style="padding-top:0">
+          <div class="map" style="height:250px;flex:none">
+            <div class="statusbar" style="color:#0C1926"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+            <div class="row" style="padding:6px 18px 0;position:relative;z-index:3">
+              <div class="glassbtn"><svg class="ic"><use href="#i-left"/></svg></div>
+              <span class="sp"></span>
+              <div class="glassbtn"><svg class="ic"><use href="#i-share"/></svg></div>
+              <div class="glassbtn"><svg class="ic"><use href="#i-more"/></svg></div>
+            </div>
+            <div class="pin" style="left:172px;top:130px"><b>6</b></div>
+            <div class="uloc" style="left:70px;top:196px"></div>
+          </div>
+
+          <div style="margin-top:-26px;background:var(--sbg);border-radius:28px 28px 0 0;position:relative;z-index:4;padding:18px 18px 200px">
+            <div class="row"><span class="chip"><div class="av xs c1" style="width:18px;height:18px;font-size:8px">AB</div>@atticbirds</span>
+              <span class="sp"></span><span class="code">№ 0412</span></div>
+            <h2 class="dsp" style="font-size:33px;margin:12px 0 0">Rooftop drinks</h2>
+            <p class="sub" style="margin:8px 0 0">Same as last time, but we are booking a table so we do not stand around for an hour. Bring cash for the bill split.</p>
+
+            <div class="card shadow" style="margin-top:16px;padding:4px 14px">
+              <div class="mrow"><svg class="ic" style="color:var(--scob)"><use href="#i-clock"/></svg>
+                <div class="col" style="gap:1px"><b style="font-size:14.5px">Thursday 3 September</b><span class="tiny mono">21:00 — 00:30</span></div>
+                <span class="sp"></span><span class="chip cob" style="height:26px">Add to iOS</span></div>
+              <div class="divider"></div>
+              <div class="mrow"><svg class="ic" style="color:var(--scob)"><use href="#i-pin"/></svg>
+                <div class="col" style="gap:1px"><b style="font-size:14.5px">A for Athens</b><span class="tiny">Miaouli 2, Monastiraki · 3.1 km away</span></div>
+                <span class="sp"></span><span class="chip cob" style="height:26px">Maps</span></div>
+              <div class="divider"></div>
+              <div class="mrow"><div class="av xs c2">Ν</div>
+                <div class="col" style="gap:1px"><b style="font-size:14.5px">Nikos proposed this</b><span class="tiny">Monday, 18:42</span></div></div>
+            </div>
+
+            <div class="row" style="margin-top:18px;gap:6px;flex-wrap:wrap">
+              <span class="chip">Drinks</span><span class="chip">Music</span><span class="chip"><svg class="ic sm"><use href="#i-lock"/></svg>Squad only</span>
+            </div>
+
+            <div class="row" style="margin-top:22px"><span class="lbl">Who is in</span><span class="sp"></span>
+              <span class="mono tiny">6 IN · 2 OUT · 0 SILENT</span></div>
+
+            <div class="card shadow" style="margin-top:9px;padding:14px">
+              <div class="whogrid">
+                <div class="who"><div class="av c1">Δ</div><span>You</span><i class="tick"></i></div>
+                <div class="who"><div class="av c2">Ν</div><span>Nikos</span><i class="tick"></i></div>
+                <div class="who"><div class="av c3">Μ</div><span>Maria</span><i class="tick"></i></div>
+                <div class="who"><div class="av c6">Ε</div><span>Elena</span><i class="tick"></i></div>
+                <div class="who"><div class="av c5">Θ</div><span>Thanos</span><i class="tick"></i></div>
+                <div class="who"><div class="av c4">Κ</div><span>Katerina</span><i class="tick"></i></div>
+              </div>
+              <div class="divider" style="margin:13px 0"></div>
+              <div class="row"><span class="tiny">Cannot make it</span><span class="sp"></span>
+                <div class="stack"><div class="av xs c5" style="opacity:.45">Γ</div><div class="av xs c5" style="opacity:.45">Σ</div></div></div>
+            </div>
+
+            <div class="card shadow" style="margin-top:12px;padding:13px 14px">
+              <div class="row" style="gap:11px">
+                <svg class="ic" style="color:var(--sink)"><use href="#i-chat"/></svg>
+                <div class="col" style="gap:1px;min-width:0"><b style="font-size:14px">The room is open</b>
+                  <span class="tiny">Maria: "corner table, come up the back stairs"</span></div>
+                <span class="sp"></span><span class="clock">19H 42M</span>
+              </div>
+              <div class="livebar" style="background:var(--sline);margin-top:12px"><i style="width:41%;background:var(--ssun)"></i></div>
+              <div class="row" style="margin-top:7px">
+                <span class="tiny">14 messages · 3 photos</span><span class="sp"></span>
+                <span class="tiny">Shuts 24h after the night</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actionbar">
+          <div class="col" style="gap:1px;padding-left:4px"><span class="lbl">Your ticket</span>
+            <b style="font-size:14px">Punched</b></div>
+          <span class="sp"></span>
+          <div class="btn ghost" style="height:44px;padding:0 16px;border-radius:14px">Change</div>
+          <div class="punchbtn"><div class="punch on"></div></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>A plan, opened</b>
+        <span>The map is the header, not a thumbnail buried at the bottom — where it is decides whether you go. Attendance is faces with a tick, never a bare number, and the two people who said no stay visible but dimmed.</span>
+        <span class="tagline">Event sheet · attendees · maps</span>
+      </div>
+    </div>
+
+    <!-- S6 · NEW PLAN -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr" style="background:var(--spaper)">
+        <div class="statusbar"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+        <div class="body" style="background:var(--spaper)">
+          <div class="pad row" style="padding-top:2px">
+            <span class="sub" style="font-size:15px">Cancel</span><span class="sp"></span>
+            <b style="font-size:15px">New plan</b><span class="sp"></span>
+            <span style="font-size:15px;color:transparent" aria-hidden="true">Cancel</span>
+          </div>
+
+          <div class="pad" style="margin-top:26px">
+            <span class="lbl">Calling it</span>
+            <div class="dsp" style="font-size:31px;margin-top:6px">Rooftop drinks<i class="caret"></i></div>
+            <div class="divider" style="margin-top:12px"></div>
+          </div>
+
+          <div style="margin-top:20px">
+            <span class="lbl" style="padding:0 18px">With which parea</span>
+            <div class="hscroll" style="margin-top:9px">
+              <span class="chip on"><div class="av xs c1" style="width:18px;height:18px;font-size:8px">AB</div>Attic Birds</span>
+              <span class="chip"><div class="av xs c2" style="width:18px;height:18px;font-size:8px">KR</div>Kolonaki Run</span>
+              <span class="chip"><div class="av xs c3" style="width:18px;height:18px;font-size:8px">W</div>Work lot</span>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:22px">
+            <span class="lbl">When</span>
+            <div class="row" style="margin-top:9px;gap:8px">
+              <div class="field filled sp" style="height:46px"><svg class="ic sm" style="color:var(--scob)"><use href="#i-cal"/></svg><span class="mono">THU 3 SEP</span></div>
+              <div class="field filled" style="height:46px;width:88px;justify-content:center"><span class="mono">21:00</span></div>
+              <div class="field" style="height:46px;width:88px;justify-content:center"><span class="mono">end</span></div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:20px">
+            <span class="lbl">Spot</span>
+            <div class="field filled" style="margin-top:9px"><svg class="ic sm" style="color:var(--scob)"><use href="#i-search"/></svg>A for Athens<span class="sp"></span><span class="tiny mono">3.1 KM</span></div>
+            <div class="card" style="margin-top:8px;padding:0;overflow:hidden;border:1px solid var(--sline)">
+              <div class="sugg"><svg class="ic sm" style="color:var(--sink3)"><use href="#i-pin"/></svg>
+                <div class="col" style="gap:1px"><b style="font-size:13.5px">A for Athens</b><span class="tiny">Miaouli 2, Monastiraki</span></div>
+                <span class="sp"></span><svg class="ic sm" style="color:var(--scob)"><use href="#i-check"/></svg></div>
+              <div class="divider"></div>
+              <div class="sugg"><svg class="ic sm" style="color:var(--sink3)"><use href="#i-pin"/></svg>
+                <div class="col" style="gap:1px"><b style="font-size:13.5px">Couleur Locale</b><span class="tiny">Normanou 3, Monastiraki</span></div></div>
+              <div class="divider"></div>
+              <div class="map" style="height:104px">
+                <div class="pin" style="left:168px;top:34px"><b>1</b></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:22px">
+            <span class="lbl" style="padding:0 18px">What kind of night</span>
+            <div class="pad" style="margin-top:9px;display:flex;gap:7px;flex-wrap:wrap">
+              <span class="chip on">Drinks</span><span class="chip on">Music</span><span class="chip">Food</span>
+              <span class="chip">Coffee</span><span class="chip">Sports</span><span class="chip">Outdoors</span>
+              <span class="chip">Culture</span><span class="chip">Games</span><span class="chip">Travel</span>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:22px">
+            <span class="lbl">Note</span>
+            <div class="card" style="margin-top:9px;background:var(--sbg);min-height:78px;color:var(--sink2);font-size:13.5px">
+              Booking a table this time. Bring cash for the split.<i class="caret"></i>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:20px;padding-bottom:170px">
+            <div class="card row" style="background:var(--sbg);padding:14px;gap:12px;align-items:flex-start">
+              <svg class="ic" style="color:var(--sink2);margin-top:2px"><use href="#i-globe"/></svg>
+              <div class="col" style="gap:2px;min-width:0">
+                <b style="font-size:14.5px">Open to Parea</b>
+                <span class="tiny" style="line-height:1.45">Anyone nearby can find this plan and ask to come. Off means Attic Birds only.</span>
+              </div>
+              <div class="switch on"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="actionbar" style="background:rgba(255,255,255,.86)">
+          <div class="btn sp">Post plan</div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>New plan</b>
+        <span>The title is typed straight into the display face at full size — you are writing the headline of the ticket, so it looks like one while you type. Place search shows results and the map in the same card, so picking a spot never leaves the form.</span>
+        <span class="tagline">Create event · tags · place lookup · public toggle</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<style>
+.glassbtn{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:var(--sink);
+  background:rgba(255,255,255,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  box-shadow:0 4px 12px -4px rgba(12,25,38,.35)}
+.mrow{display:flex;align-items:center;gap:12px;padding:12px 0}
+.whogrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px 8px}
+.who{display:flex;flex-direction:column;align-items:center;gap:5px;position:relative}
+.who span{font-size:11.5px;color:var(--sink2)}
+.who .tick{position:absolute;top:20px;left:calc(50% + 8px);width:15px;height:15px;border-radius:50%;
+  background:var(--solive);box-shadow:0 0 0 2px var(--spaper)}
+.who .tick::after{content:"";position:absolute;left:4px;top:5px;width:6px;height:3px;
+  border-left:1.6px solid #fff;border-bottom:1.6px solid #fff;transform:rotate(-45deg)}
+.actionbar{position:absolute;left:0;right:0;bottom:0;z-index:16;display:flex;align-items:center;gap:10px;
+  padding:14px 18px 34px;background:rgba(237,240,245,.86);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid rgba(12,25,38,.07)}
+.punchbtn{width:56px;height:44px;border-radius:14px;background:var(--sink);display:grid;place-items:center}
+.punchbtn .punch{width:22px;height:22px;background:#05090D;box-shadow:inset 0 2px 3px #000,0 0 0 2.5px var(--ssun)}
+.sugg{display:flex;align-items:center;gap:11px;padding:11px 13px}
+.caret{display:inline-block;width:2px;height:.85em;background:var(--scob);margin-left:3px;
+  transform:translateY(2px);animation:blink 1.1s steps(2,start) infinite}
+@keyframes blink{to{opacity:0}}
+@media (prefers-reduced-motion:reduce){.caret{animation:none}}
+</style>
+
+<!-- ══════════════ SECTION: OUT THERE ══════════════ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>Out there</h2>
+    <p>Public plans within a radius you set, ranked by distance, your tags, and how soon they are. The same feed, read two ways.</p>
+  </div>
+  <div class="rail">
+
+    <!-- S7 · EXPLORE MAP -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="map" style="position:absolute;inset:0"></div>
+        <div class="statusbar" style="position:relative;z-index:5"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+
+        <div class="pad" style="position:relative;z-index:5">
+          <div class="row" style="gap:8px">
+            <div class="field sp" style="height:46px;background:rgba(255,255,255,.9);backdrop-filter:blur(14px);border-color:rgba(12,25,38,.08)">
+              <svg class="ic sm"><use href="#i-search"/></svg>Plans and squads near me</div>
+            <div class="seg" style="width:96px;background:rgba(255,255,255,.9);backdrop-filter:blur(14px)">
+              <div class="on">Map</div><div>List</div></div>
+          </div>
+          <div class="hscroll" style="padding:0;margin-top:10px">
+            <span class="chip on"><svg class="ic sm"><use href="#i-pin"/></svg>25 km</span>
+            <span class="chip">Tonight</span><span class="chip">Drinks</span><span class="chip">Coffee</span><span class="chip">Outdoors</span>
+          </div>
+        </div>
+
+        <div style="position:relative;z-index:4;flex:1">
+          <div class="pin ink" style="left:60px;top:74px"><b>3</b></div>
+          <div class="pin" style="left:150px;top:34px"><b>6</b></div>
+          <div class="pin sun" style="left:214px;top:130px"><b>12</b></div>
+          <div class="pin ink" style="left:96px;top:196px"><b>2</b></div>
+          <div class="pin ink" style="left:262px;top:238px"><b>4</b></div>
+          <div class="uloc" style="left:158px;top:170px"></div>
+          <div class="glassbtn" style="position:absolute;right:18px;top:6px"><svg class="ic"><use href="#i-compass"/></svg></div>
+        </div>
+
+        <div style="position:relative;z-index:6;padding-bottom:112px">
+          <div style="display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding:0 18px 6px">
+            <div class="tk" style="flex:none;width:290px">
+              <div class="tk-main" style="padding:13px 15px 11px">
+                <div class="row"><span class="chip cob" style="height:22px;font-size:10.5px">1.2 KM</span><span class="sp"></span><span class="code">TONIGHT 22:00</span></div>
+                <b class="dsp" style="font-size:19px;display:block;margin-top:7px">Rebetiko at Kapnikarea</b>
+                <span class="tiny" style="display:block;margin-top:3px">@plaka.nights · open to Parea</span>
+              </div>
+              <div class="tk-perf"></div>
+              <div class="tk-stub" style="gap:9px">
+                <div class="stack"><div class="av xs c2">Α</div><div class="av xs c5">Π</div><div class="av xs c6">Ρ</div><div class="av xs c4">+9</div></div>
+                <span class="sp"></span><div class="btn sm ink" style="padding:0 15px">Ask to come</div>
+              </div>
+            </div>
+            <div class="tk" style="flex:none;width:290px">
+              <div class="tk-main" style="padding:13px 15px 11px">
+                <div class="row"><span class="chip cob" style="height:22px;font-size:10.5px">2.8 KM</span><span class="sp"></span><span class="code">SAT 09:00</span></div>
+                <b class="dsp" style="font-size:19px;display:block;margin-top:7px">Filopappou loop, slow pace</b>
+                <span class="tiny" style="display:block;margin-top:3px">@athens.slowrun · open to Parea</span>
+              </div>
+              <div class="tk-perf"></div>
+              <div class="tk-stub" style="gap:9px">
+                <div class="stack"><div class="av xs c1">Δ</div><div class="av xs c3">Λ</div></div>
+                <span class="sp"></span><div class="btn sm ink" style="padding:0 15px">Ask to come</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <div class="tab"><svg class="ic"><use href="#i-ticket"/></svg><span>Today</span></div>
+          <div class="tab on"><svg class="ic"><use href="#i-compass"/></svg><span>Explore</span></div>
+          <div class="tabplus"><svg class="ic"><use href="#i-plus"/></svg></div>
+          <div class="tab"><svg class="ic"><use href="#i-chat"/></svg><span>Parea</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-user"/></svg><span>You</span></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>Explore, on the map</b>
+        <span>Pins carry the number going, so a busy night reads before you tap anything. The one plan in sun yellow is the closest match to your tags — the accent earns its place by meaning something.</span>
+        <span class="tagline">Public feed · radius · location</span>
+      </div>
+    </div>
+
+    <!-- S8 · EXPLORE LIST -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="statusbar"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+        <div class="body">
+          <div class="pad row" style="padding-top:6px;align-items:flex-start">
+            <div class="col" style="gap:2px">
+              <span class="dsp" style="font-size:27px">Explore</span>
+              <span class="row tiny" style="gap:5px"><svg class="ic sm" style="color:var(--scob)"><use href="#i-pin"/></svg>Athens · within 25 km</span>
+            </div>
+            <span class="sp"></span>
+            <div class="seg" style="width:96px"><div>Map</div><div class="on">List</div></div>
+          </div>
+
+          <div class="pad" style="margin-top:14px">
+            <div class="field"><svg class="ic sm"><use href="#i-search"/></svg>Plans and squads near me</div>
+          </div>
+
+          <div class="hscroll" style="margin-top:10px">
+            <span class="chip on">Tonight</span><span class="chip">This week</span>
+            <span class="chip">Drinks</span><span class="chip">Coffee</span><span class="chip">Outdoors</span><span class="chip">Music</span>
+          </div>
+
+          <div class="pad" style="margin-top:20px">
+            <div class="row"><span class="lbl">Closest to you</span><span class="sp"></span><span class="code">14 PLANS</span></div>
+
+            <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">
+              <div class="tk">
+                <div class="tk-main" style="padding:13px 15px 11px">
+                  <div class="row"><span class="chip cob" style="height:22px;font-size:10.5px">1.2 KM</span>
+                    <span class="sp"></span><span class="code">TONIGHT 22:00</span></div>
+                  <b class="dsp" style="font-size:19px;display:block;margin-top:7px">Rebetiko at Kapnikarea</b>
+                  <div class="row tiny" style="gap:5px;margin-top:4px"><svg class="ic sm"><use href="#i-pin"/></svg>Plaka · Kapnikarea square</div>
+                  <div class="row" style="gap:5px;margin-top:8px"><span class="chip" style="height:24px;font-size:11px">Music</span><span class="chip" style="height:24px;font-size:11px">Drinks</span></div>
+                </div>
+                <div class="tk-perf"></div>
+                <div class="tk-stub" style="gap:9px">
+                  <div class="av xs c2">PN</div><span class="mono tiny">@plaka.nights · 12 in</span>
+                  <span class="sp"></span><div class="btn sm ink" style="padding:0 15px">Ask to come</div>
+                </div>
+              </div>
+
+              <div class="tk">
+                <div class="tk-main" style="padding:13px 15px 11px">
+                  <div class="row"><span class="chip cob" style="height:22px;font-size:10.5px">2.8 KM</span>
+                    <span class="sp"></span><span class="code">SAT 09:00</span></div>
+                  <b class="dsp" style="font-size:19px;display:block;margin-top:7px">Filopappou loop, slow pace</b>
+                  <div class="row tiny" style="gap:5px;margin-top:4px"><svg class="ic sm"><use href="#i-pin"/></svg>Filopappou Hill · main gate</div>
+                  <div class="row" style="gap:5px;margin-top:8px"><span class="chip" style="height:24px;font-size:11px">Sports</span><span class="chip" style="height:24px;font-size:11px">Outdoors</span></div>
+                </div>
+                <div class="tk-perf"></div>
+                <div class="tk-stub" style="gap:9px">
+                  <div class="av xs c5">AS</div><span class="mono tiny">@athens.slowrun · 4 in</span>
+                  <span class="sp"></span><div class="btn sm ink" style="padding:0 15px">Ask to come</div>
+                </div>
+              </div>
+
+              <div class="tk">
+                <div class="tk-main" style="padding:13px 15px 11px">
+                  <div class="row"><span class="chip cob" style="height:22px;font-size:10.5px">4.4 KM</span>
+                    <span class="sp"></span><span class="code">SUN 11:00</span></div>
+                  <b class="dsp" style="font-size:19px;display:block;margin-top:7px">Flea market then brunch</b>
+                  <div class="row tiny" style="gap:5px;margin-top:4px"><svg class="ic sm"><use href="#i-pin"/></svg>Avissynias square</div>
+                </div>
+                <div class="tk-perf"></div>
+                <div class="tk-stub" style="gap:9px">
+                  <div class="av xs c3">SM</div><span class="mono tiny">@sunday.market · 7 in</span>
+                  <span class="sp"></span><div class="btn sm ink" style="padding:0 15px">Ask to come</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:26px;padding-bottom:150px">
+            <div class="row"><span class="lbl">Squads with room</span><span class="sp"></span><span class="code">NEAR YOU</span></div>
+            <div style="margin-top:10px;display:flex;flex-direction:column;gap:9px">
+              <div class="card shadow row" style="gap:12px;align-items:flex-start">
+                <div class="av lg c5">PN</div>
+                <div class="col" style="gap:2px;min-width:0">
+                  <b style="font-size:15px">Plaka Nights</b>
+                  <span class="mono tiny">@plaka.nights · 24 members · 3 plans</span>
+                  <span class="tiny" style="color:var(--sink2);line-height:1.45">Live music, cheap wine, no plans past midnight.</span>
+                </div>
+                <span class="sp"></span><div class="btn sm ghost" style="padding:0 14px">Follow</div>
+              </div>
+              <div class="card shadow row" style="gap:12px;align-items:flex-start">
+                <div class="av lg c2">AS</div>
+                <div class="col" style="gap:2px;min-width:0">
+                  <b style="font-size:15px">Athens Slow Run</b>
+                  <span class="mono tiny">@athens.slowrun · 61 members · 2 plans</span>
+                  <span class="tiny" style="color:var(--sink2);line-height:1.45">Saturday mornings. Nobody is timing you.</span>
+                </div>
+                <span class="sp"></span><div class="btn sm ghost" style="padding:0 14px">Follow</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fade"></div>
+        <div class="tabs">
+          <div class="tab"><svg class="ic"><use href="#i-ticket"/></svg><span>Today</span></div>
+          <div class="tab on"><svg class="ic"><use href="#i-compass"/></svg><span>Explore</span></div>
+          <div class="tabplus"><svg class="ic"><use href="#i-plus"/></svg></div>
+          <div class="tab"><svg class="ic"><use href="#i-chat"/></svg><span>Parea</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-user"/></svg><span>You</span></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>Explore, as a list</b>
+        <span>Distance sits where the ticket price would be on a real stub. Squads come after plans, because you join a parea for the nights it throws, not the other way round.</span>
+        <span class="tagline">Feed ranking · squad discovery</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════ SECTION: THE PAREA ══════════════ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>The parea</h2>
+    <p>A squad is a profile with a wall, not a group chat with a name. Two squads never get a permanent inbox — they get a room hung on one night, open for 48 hours and then gone.</p>
+  </div>
+  <div class="rail">
+
+    <!-- S9 · SQUADS -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="statusbar"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+        <div class="body">
+          <div class="pad row" style="padding-top:6px">
+            <span class="dsp" style="font-size:27px">Parea</span>
+            <span class="sp"></span>
+            <div class="glassbtn" style="box-shadow:none;background:var(--spaper);border:1px solid var(--sline)"><svg class="ic"><use href="#i-plus"/></svg></div>
+          </div>
+
+          <div class="pad" style="margin-top:14px">
+            <div class="field"><svg class="ic sm"><use href="#i-search"/></svg>Search squads and people</div>
+          </div>
+
+          <div class="pad" style="margin-top:22px">
+            <span class="lbl">Loud right now</span>
+            <div class="card shadow" style="margin-top:9px;padding:0;overflow:hidden">
+              <div class="lrow">
+                <div class="av lg c1">AB</div>
+                <div class="col" style="gap:2px;min-width:0;flex:1">
+                  <div class="row"><b style="font-size:15px">Attic Birds</b><span class="sp"></span><span class="tiny mono">18:42</span></div>
+                  <span class="tiny" style="color:var(--sink);font-weight:500">Maria: booking for 21:15, do not be late</span>
+                  <div class="row" style="gap:6px;margin-top:2px">
+                    <span class="typing"><i></i><i></i><i></i></span>
+                    <span class="tiny">Nikos is typing</span>
+                    <span class="sp"></span><span class="badge">7</span>
+                  </div>
+                </div>
+              </div>
+              <div class="divider"></div>
+              <div class="lrow">
+                <div class="av lg c2">KR</div>
+                <div class="col" style="gap:2px;min-width:0;flex:1">
+                  <div class="row"><b style="font-size:15px">Kolonaki Run</b><span class="sp"></span><span class="tiny mono">17:10</span></div>
+                  <span class="tiny">Nikos posted a plan · Morning run, Lycabettus</span>
+                  <div class="row" style="gap:6px;margin-top:4px"><span class="chip cob" style="height:22px;font-size:10.5px">Waiting on you</span></div>
+                </div>
+              </div>
+              <div class="divider"></div>
+              <div class="lrow">
+                <div class="av lg c3">W</div>
+                <div class="col" style="gap:2px;min-width:0;flex:1">
+                  <div class="row"><b style="font-size:15px">Work lot</b><span class="sp"></span><span class="tiny mono">Mon</span></div>
+                  <span class="tiny">Katerina: someone left a jacket at the bar</span>
+                </div>
+              </div>
+              <div class="divider"></div>
+              <div class="lrow">
+                <div class="av lg c5">PN</div>
+                <div class="col" style="gap:2px;min-width:0;flex:1">
+                  <div class="row"><b style="font-size:15px">Plaka Nights</b><span class="sp"></span><span class="tiny mono">Sun</span></div>
+                  <span class="tiny">You follow this squad · 3 open plans</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:24px">
+            <div class="row"><span class="lbl">Rooms open</span><span class="sp"></span><span class="code">EACH LASTS 48 HOURS</span></div>
+            <div class="card shadow" style="margin-top:9px;padding:0;overflow:hidden">
+              <div class="lrow">
+                <div class="duo"><div class="av c1">AB</div><div class="av c5">PN</div></div>
+                <div class="col" style="gap:2px;min-width:0;flex:1">
+                  <div class="row"><b style="font-size:14.5px">The back room, Saturday</b><span class="sp"></span><span class="clock">19H 42M</span></div>
+                  <span class="tiny">Alkis, Plaka Nights: bring the tavli boards, we have none</span>
+                  <span class="tiny mono" style="margin-top:2px">3 PHOTOS · 8 + 24 IN THE ROOM</span>
+                </div>
+              </div>
+              <div class="divider"></div>
+              <div class="lrow">
+                <div class="av lg c1">AB</div>
+                <div class="col" style="gap:2px;min-width:0;flex:1">
+                  <div class="row"><b style="font-size:14.5px">Rooftop drinks</b><span class="sp"></span><span class="clock hot">4H 06M</span></div>
+                  <span class="tiny">Maria: corner table, come up the back stairs</span>
+                  <span class="tiny mono" style="margin-top:2px">9 PHOTOS · CLOSES TONIGHT</span>
+                </div>
+              </div>
+              <div class="divider"></div>
+              <div class="lrow" style="opacity:.55">
+                <div class="ph ph-vinyl" style="width:46px;height:46px;border-radius:50%;flex:none"></div>
+                <div class="col" style="gap:2px;min-width:0;flex:1">
+                  <div class="row"><b style="font-size:14.5px">Vinyl night</b><span class="sp"></span><span class="tiny mono">CLOSED</span></div>
+                  <span class="tiny">41 messages and 12 photos went to the memory</span>
+                </div>
+                <svg class="ic sm" style="color:var(--sink3)"><use href="#i-right"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:24px;padding-bottom:150px">
+            <span class="lbl">Start something</span>
+            <div class="row" style="margin-top:9px;gap:9px">
+              <div class="card shadow col sp" style="gap:6px;padding:15px">
+                <svg class="ic" style="color:var(--scob)"><use href="#i-users"/></svg>
+                <b style="font-size:14.5px">Make a squad</b>
+                <span class="tiny" style="line-height:1.4">Pick a handle, invite four people, post a night.</span>
+              </div>
+              <div class="card shadow col sp" style="gap:6px;padding:15px">
+                <svg class="ic" style="color:var(--scob)"><use href="#i-ticket"/></svg>
+                <b style="font-size:14.5px">Enter a code</b>
+                <span class="tiny" style="line-height:1.4">Somebody texted you six characters. Use them.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fade"></div>
+        <div class="tabs">
+          <div class="tab"><svg class="ic"><use href="#i-ticket"/></svg><span>Today</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-compass"/></svg><span>Explore</span></div>
+          <div class="tabplus"><svg class="ic"><use href="#i-plus"/></svg></div>
+          <div class="tab on"><svg class="ic"><use href="#i-chat"/></svg><span>Parea</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-user"/></svg><span>You</span></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>Your squads</b>
+        <span>Two kinds of thread, kept apart. Above: your pareas, permanent, sorted by what is actually happening rather than a red dot you have to decode. Below: rooms, each counting down, and one already shut with its contents filed into a memory.</span>
+        <span class="tagline">Squad list · open rooms · countdown</span>
+      </div>
+    </div>
+
+    <!-- S10 · CHAT -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="statusbar"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+        <div class="chathead">
+          <svg class="ic lg"><use href="#i-left"/></svg>
+          <div class="av c1">AB</div>
+          <div class="col" style="gap:0;min-width:0">
+            <b style="font-size:15px">Attic Birds</b>
+            <span class="tiny mono">8 MEMBERS · 2 PLANS UP</span>
+          </div>
+          <span class="sp"></span>
+          <svg class="ic lg"><use href="#i-more"/></svg>
+        </div>
+
+        <div class="body" style="padding:14px 16px 0;display:flex;flex-direction:column;gap:9px">
+          <div class="daymark"><span>Today</span></div>
+
+          <div class="msg">
+            <div class="av xs c2">Ν</div>
+            <div class="col" style="gap:3px;align-items:flex-start">
+              <span class="tiny mono">NIKOS</span>
+              <div class="bub">rooftop thursday? the one with the tables outside</div>
+            </div>
+          </div>
+
+          <div class="msg">
+            <div class="av xs c3">Μ</div>
+            <div class="col" style="gap:3px;align-items:flex-start">
+              <span class="tiny mono">MARIA</span>
+              <div class="bub">only if we book. last time we stood for an hour like idiots</div>
+            </div>
+          </div>
+
+          <div class="msg me">
+            <div class="bub mine">i can call them tomorrow morning</div>
+          </div>
+
+          <div class="planpost">
+            <span class="lbl" style="padding-left:2px">Nikos posted a plan</span>
+            <div class="tk" style="margin-top:7px">
+              <div class="tk-main" style="padding:13px 15px 11px">
+                <div class="row"><span class="code">№ 0412</span><span class="sp"></span><span class="code">THU 21:00</span></div>
+                <b class="dsp" style="font-size:19px;display:block;margin-top:6px">Rooftop drinks</b>
+                <div class="row tiny" style="gap:5px;margin-top:4px"><svg class="ic sm"><use href="#i-pin"/></svg>A for Athens, Monastiraki</div>
+              </div>
+              <div class="tk-perf"></div>
+              <div class="tk-stub" style="gap:8px">
+                <div class="punch on"></div>
+                <div class="col" style="gap:0"><span class="tiny">You and 5 others</span><b style="font-size:12.5px">are in</b></div>
+                <span class="sp"></span><div class="btn sm ghost" style="padding:0 14px">Open</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="msg">
+            <div class="av xs c6">Ε</div>
+            <div class="col" style="gap:3px;align-items:flex-start">
+              <span class="tiny mono">ELENA</span>
+              <div class="bub">in. bringing the person from the wedding, you will like her</div>
+            </div>
+          </div>
+
+          <div class="msg me">
+            <div class="col" style="gap:3px;align-items:flex-end">
+              <div class="bub mine">booked, 21:15, table on the corner</div>
+              <span class="tiny mono" style="font-size:10px">SEEN BY 6</span>
+            </div>
+          </div>
+
+          <div class="msg">
+            <div class="av xs c2">Ν</div>
+            <div class="bub" style="padding:12px 14px"><span class="typing"><i></i><i></i><i></i></span></div>
+          </div>
+
+          <div style="height:110px;flex:none"></div>
+        </div>
+
+        <div class="composer">
+          <div class="glassbtn" style="width:36px;height:36px;background:var(--spaper);box-shadow:none;border:1px solid var(--sline)"><svg class="ic sm"><use href="#i-plus"/></svg></div>
+          <div class="field sp" style="height:44px;border-radius:22px">Message Attic Birds</div>
+          <div class="glassbtn" style="width:36px;height:36px;background:var(--spaper);box-shadow:none;border:1px solid var(--sline)"><svg class="ic sm"><use href="#i-camera"/></svg></div>
+          <div class="sendbtn"><svg class="ic sm"><use href="#i-send"/></svg></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>Squad thread</b>
+        <span>The risk worth taking: a plan posted in chat is the same ticket you see everywhere else, punchable in place. You never leave the conversation to say you are coming, and the thread keeps a record of when the night got real.</span>
+        <span class="tagline">Realtime chat · inline RSVP</span>
+      </div>
+    </div>
+
+    <!-- S11 · SQUAD PROFILE -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="body">
+          <div class="cover tall ph ph-roof">
+            <div class="statusbar" style="color:#fff;position:relative;z-index:5"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+            <div class="pad row" style="padding-top:2px;position:relative;z-index:4;color:#fff">
+              <div class="glassbtn" style="background:rgba(0,0,0,.34);color:#fff;box-shadow:none"><svg class="ic"><use href="#i-left"/></svg></div>
+              <span class="sp"></span>
+              <div class="glassbtn" style="background:rgba(0,0,0,.34);color:#fff;box-shadow:none"><svg class="ic"><use href="#i-more"/></svg></div>
+            </div>
+            <span class="covertag">34 nights on this wall</span>
+          </div>
+
+          <div class="pad" style="margin-top:-30px;position:relative;z-index:5">
+            <div class="av xl c1" style="box-shadow:0 0 0 4px var(--sbg)">AB</div>
+            <h2 class="dsp" style="font-size:29px;margin:11px 0 0">Attic Birds</h2>
+            <div class="row" style="gap:8px;margin-top:2px">
+              <span class="mono tiny">@atticbirds</span>
+              <span class="tiny">· Athens · since 2021</span>
+            </div>
+            <p class="sub" style="margin:9px 0 0;max-width:34ch">Rooftops, late dinners, worse ideas. If it starts before nine we are not interested.</p>
+
+            <div class="card shadow row" style="margin-top:14px;padding:14px 8px;text-align:center">
+              <div class="stat"><b>8</b><span>Members</span></div>
+              <div class="statline"></div>
+              <div class="stat"><b>34</b><span>Nights kept</span></div>
+              <div class="statline"></div>
+              <div class="stat"><b>6</b><span>Squads known</span></div>
+            </div>
+
+            <div class="row" style="margin-top:12px;gap:8px">
+              <div class="btn sm ink sp">Post a plan</div>
+              <div class="btn sm ghost sp"><svg class="ic sm"><use href="#i-chat"/></svg>Thread</div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:20px">
+            <div class="seg"><div class="on">Plans</div><div>Memories</div><div>Members</div></div>
+          </div>
+
+          <div class="pad" style="margin-top:16px">
+            <div class="row"><span class="lbl">On the books</span><span class="sp"></span><span class="code">2 UPCOMING</span></div>
+            <div style="margin-top:10px;display:flex;flex-direction:column;gap:9px">
+              <div class="card row" style="padding:12px 14px;gap:12px">
+                <div class="datechip"><span>SEP</span><b>03</b></div>
+                <div class="col" style="gap:2px;min-width:0"><b style="font-size:14px">Rooftop drinks</b><span class="mono tiny">21:00 · Monastiraki · 6 in</span></div>
+                <span class="sp"></span><div class="punch on sm2"></div>
+              </div>
+              <div class="card row" style="padding:12px 14px;gap:12px">
+                <div class="datechip"><span>SEP</span><b>19</b></div>
+                <div class="col" style="gap:2px;min-width:0"><b style="font-size:14px">Aegina, one night</b><span class="mono tiny">07:00 ferry · Piraeus · 3 in</span></div>
+                <span class="sp"></span><div class="punch sm2"></div>
+              </div>
+              <div class="card row" style="padding:12px 14px;gap:12px;border:1.4px dashed var(--sline);background:transparent">
+                <div class="duo" style="flex:none"><div class="av xs c1">AB</div><div class="av xs c5">PN</div></div>
+                <div class="col" style="gap:2px;min-width:0"><b style="font-size:14px">Saturday with Plaka Nights</b><span class="mono tiny">Proposed · waiting on both squads</span></div>
+                <span class="sp"></span><svg class="ic sm" style="color:var(--sink3)"><use href="#i-right"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:20px">
+            <span class="lbl">Invite code</span>
+            <div class="card shadow" style="margin-top:9px">
+              <div class="row">
+                <span class="mono" style="font-size:26px;letter-spacing:.14em">ATB-4K2</span>
+                <span class="sp"></span>
+                <div class="glassbtn" style="width:34px;height:34px;background:var(--sbg);box-shadow:none"><svg class="ic sm"><use href="#i-copy"/></svg></div>
+                <div class="glassbtn" style="width:34px;height:34px;background:var(--sbg);box-shadow:none"><svg class="ic sm"><use href="#i-share"/></svg></div>
+              </div>
+              <div class="divider" style="margin:12px 0"></div>
+              <div class="row"><span class="tiny" style="max-width:24ch;line-height:1.45">Anyone with this code joins instantly. Rotate it and the old one stops working.</span>
+                <span class="sp"></span><div class="btn sm ghost" style="padding:0 14px">Rotate</div></div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:20px;padding-bottom:60px">
+            <div class="row"><span class="lbl">Members</span><span class="sp"></span><span class="code">8 · YOU ARE ADMIN</span></div>
+            <div class="card shadow" style="margin-top:9px">
+              <div class="whogrid" style="grid-template-columns:repeat(4,1fr);gap:14px 6px">
+                <div class="who"><div class="av c1">Δ</div><span>You</span></div>
+                <div class="who"><div class="av c2">Ν</div><span>Nikos</span></div>
+                <div class="who"><div class="av c3">Μ</div><span>Maria</span></div>
+                <div class="who"><div class="av c6">Ε</div><span>Elena</span></div>
+                <div class="who"><div class="av c5">Θ</div><span>Thanos</span></div>
+                <div class="who"><div class="av c4">Κ</div><span>Katerina</span></div>
+                <div class="who"><div class="av c5">Γ</div><span>Giorgos</span></div>
+                <div class="who"><div class="av" style="background:var(--sbg);color:var(--sink2);border:1.5px dashed var(--sline)"><svg class="ic sm"><use href="#i-plus"/></svg></div><span>Invite</span></div>
+              </div>
+            </div>
+            <div class="row" style="margin-top:22px;justify-content:center">
+              <span style="font-size:14px;color:var(--srust);font-weight:500">Leave Attic Birds</span>
+            </div>
+          </div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>Your squad, as a profile</b>
+        <span>A squad stops being a chat room and becomes something with a face: a cover taken from its own best night, a handle, a bio, and three numbers that say what it is. "Nights kept" is the one that matters — a parea is measured in evenings, not members.</span>
+        <span class="tagline">Squad profile · invite code · joint plan</span>
+      </div>
+    </div>
+
+    <!-- S12 · ANOTHER SQUAD -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="body">
+          <div class="cover tall ph ph-taverna">
+            <div class="statusbar" style="color:#fff;position:relative;z-index:5"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+            <div class="pad row" style="padding-top:2px;position:relative;z-index:4;color:#fff">
+              <div class="glassbtn" style="background:rgba(0,0,0,.34);color:#fff;box-shadow:none"><svg class="ic"><use href="#i-left"/></svg></div>
+              <span class="sp"></span>
+              <div class="glassbtn" style="background:rgba(0,0,0,.34);color:#fff;box-shadow:none"><svg class="ic"><use href="#i-share"/></svg></div>
+            </div>
+            <span class="covertag">61 nights on this wall</span>
+          </div>
+
+          <div class="pad" style="margin-top:-30px;position:relative;z-index:5">
+            <div class="av xl c5" style="box-shadow:0 0 0 4px var(--sbg)">PN</div>
+            <h2 class="dsp" style="font-size:29px;margin:11px 0 0">Plaka Nights</h2>
+            <div class="row" style="gap:8px;margin-top:2px">
+              <span class="mono tiny">@plaka.nights</span>
+              <span class="tiny">· Athens · since 2019</span>
+            </div>
+            <p class="sub" style="margin:9px 0 0;max-width:34ch">Live music, cheap wine, no plans past midnight. Open to Parea most Saturdays.</p>
+
+            <div class="card shadow row" style="margin-top:14px;padding:14px 8px;text-align:center">
+              <div class="stat"><b>24</b><span>Members</span></div>
+              <div class="statline"></div>
+              <div class="stat"><b>61</b><span>Nights kept</span></div>
+              <div class="statline"></div>
+              <div class="stat"><b>3</b><span>Open plans</span></div>
+            </div>
+
+            <div class="row" style="margin-top:12px;gap:8px">
+              <div class="btn sm ink sp">Follow</div>
+              <div class="btn sm ghost sp"><svg class="ic sm"><use href="#i-ticket"/></svg>Propose a night</div>
+            </div>
+
+            <div class="card row" style="margin-top:10px;padding:11px 13px;gap:10px;background:var(--scobtint)">
+              <div class="stack"><div class="av xs c3">Μ</div><div class="av xs c6">Ε</div></div>
+              <span class="tiny" style="color:var(--scob);font-weight:600">Maria and Elena are already in here</span>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:20px">
+            <div class="seg"><div>Plans</div><div class="on">Memories</div><div>Members</div></div>
+          </div>
+
+          <div class="pad" style="margin-top:16px">
+            <div class="row"><span class="lbl">Nights they kept</span><span class="sp"></span><span class="code">PUBLIC</span></div>
+            <div class="mgrid big" style="margin-top:10px">
+              <div class="mtile ph ph-taverna"><span class="mday">24 AUG</span><span class="mcap">Back room, 2am</span></div>
+              <div class="mtile ph ph-market"><span class="mday">17 AUG</span><span class="mcap">Sunday market</span></div>
+              <div class="mtile ph ph-vinyl"><span class="mday">09 AUG</span><span class="mcap">Rebetiko</span></div>
+              <div class="mtile ph ph-roof"><span class="mday">02 AUG</span><span class="mcap">Roof, Plaka</span></div>
+              <div class="mtile ph ph-cinema"><span class="mday">27 JUL</span><span class="mcap">Open air</span></div>
+              <div class="mtile ph ph-sea"><span class="mday">19 JUL</span><span class="mcap">Vouliagmeni</span></div>
+            </div>
+            <div class="row" style="margin-top:10px;justify-content:center">
+              <span class="chip">See all 61 nights</span>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:22px;padding-bottom:150px">
+            <span class="lbl">You can come to these</span>
+            <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">
+              <div class="tk">
+                <div class="tk-main" style="padding:13px 15px 11px">
+                  <div class="row"><span class="chip cob" style="height:22px;font-size:10.5px">1.2 KM</span><span class="sp"></span><span class="code">TONIGHT 22:00</span></div>
+                  <b class="dsp" style="font-size:19px;display:block;margin-top:7px">Rebetiko at Kapnikarea</b>
+                </div>
+                <div class="tk-perf"></div>
+                <div class="tk-stub" style="gap:9px">
+                  <div class="stack"><div class="av xs c2">Α</div><div class="av xs c5">Π</div><div class="av xs c4">+10</div></div>
+                  <span class="sp"></span><div class="btn sm ink" style="padding:0 15px">Ask to come</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fade"></div>
+        <div class="tabs">
+          <div class="tab"><svg class="ic"><use href="#i-ticket"/></svg><span>Today</span></div>
+          <div class="tab on"><svg class="ic"><use href="#i-compass"/></svg><span>Explore</span></div>
+          <div class="tabplus"><svg class="ic"><use href="#i-plus"/></svg></div>
+          <div class="tab"><svg class="ic"><use href="#i-chat"/></svg><span>Parea</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-user"/></svg><span>You</span></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>Somebody else's squad</b>
+        <span>The same profile, seen from outside: Follow and Message replace Post a plan, and the tab that opens by default is Memories — because what convinces you to follow a parea is the nights it already had, not the ones it has scheduled.</span>
+        <span class="tagline">Squad discovery · follow · squad DM</span>
+      </div>
+    </div>
+
+    <!-- S13 · SQUAD TO SQUAD -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="statusbar"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+        <div class="chathead" style="flex-direction:column;align-items:stretch;gap:10px">
+          <div class="row" style="gap:11px">
+            <svg class="ic lg"><use href="#i-left"/></svg>
+            <div class="duo"><div class="av c1">AB</div><div class="av c5">PN</div></div>
+            <div class="col" style="gap:0;min-width:0">
+              <b style="font-size:15px">The back room, Saturday</b>
+              <span class="tiny mono">ATTIC BIRDS + PLAKA NIGHTS</span>
+            </div>
+            <span class="sp"></span>
+            <svg class="ic lg"><use href="#i-more"/></svg>
+          </div>
+          <div class="row" style="gap:9px">
+            <span class="code" style="color:var(--sink)">ROOM CLOSES IN 19H 42M</span>
+            <div class="livebar" style="flex:1;background:var(--sline);margin:0"><i style="width:41%;background:var(--ssun)"></i></div>
+          </div>
+        </div>
+
+        <div class="roomnote" style="flex:none;border-radius:0;padding:9px 16px;align-items:center">
+          <svg class="ic sm"><use href="#i-clock"/></svg>
+          <span>Open a day before, shut a day after. What lands here goes on the memory.</span>
+        </div>
+
+        <div class="body" style="padding:14px 16px 0;display:flex;flex-direction:column;gap:9px">
+          <div class="msg">
+            <div class="av xs c5">Α</div>
+            <div class="col" style="gap:3px;align-items:flex-start">
+              <span class="who2" style="color:#5A6B7D">ALKIS · PLAKA NIGHTS</span>
+              <div class="bub">we hold the back room saturday. it fits about thirty</div>
+            </div>
+          </div>
+
+          <div class="msg me">
+            <div class="col" style="gap:3px;align-items:flex-end">
+              <span class="who2" style="color:var(--scob)">NIKOS · ATTIC BIRDS</span>
+              <div class="bub mine">we are eight, nine if Thanos finds a babysitter</div>
+            </div>
+          </div>
+
+          <div class="planpost">
+            <span class="lbl" style="padding-left:2px">Joint night, waiting on both squads</span>
+            <div class="tk" style="margin-top:7px">
+              <div class="tk-main" style="padding:13px 15px 11px">
+                <div class="row" style="gap:6px">
+                  <span class="chip" style="height:22px;font-size:10.5px">@atticbirds</span>
+                  <span class="chip" style="height:22px;font-size:10.5px">@plaka.nights</span>
+                  <span class="sp"></span><span class="code">№ 0431</span>
+                </div>
+                <b class="dsp" style="font-size:20px;display:block;margin-top:7px">The back room, Saturday</b>
+                <div class="row tiny" style="gap:5px;margin-top:4px"><svg class="ic sm"><use href="#i-pin"/></svg>Normanou 3, Monastiraki · 21:30</div>
+                <div class="splitbar" style="margin-top:11px">
+                  <i style="width:26%;background:var(--scob)"></i>
+                  <i style="width:38%;background:#5A6B7D"></i>
+                </div>
+                <div class="row" style="margin-top:6px">
+                  <span class="tiny mono" style="color:var(--scob)">4 ATTIC BIRDS</span>
+                  <span class="sp"></span><span class="tiny mono">9 PLAKA NIGHTS</span>
+                </div>
+              </div>
+              <div class="tk-perf"></div>
+              <div class="tk-stub" style="gap:8px">
+                <div class="punch"></div>
+                <div class="btn sm ink sp">I am in</div>
+                <div class="btn sm ghost" style="padding:0 14px">Pass</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="msg me">
+            <div class="col" style="gap:3px;align-items:flex-end">
+              <span class="who2" style="color:var(--scob)">MARIA · ATTIC BIRDS</span>
+              <div class="bub mine">boards are in my car. see you at half nine</div>
+            </div>
+          </div>
+
+          <div class="roll">
+            <div class="ph ph-taverna"></div>
+            <div class="ph ph-vinyl"></div>
+            <div class="ph ph-tavli"></div>
+            <div class="col" style="gap:1px;min-width:0">
+              <b style="font-size:12.5px">3 photos in the room</b>
+              <span class="tiny">Kept on the memory when it shuts</span>
+            </div>
+          </div>
+
+          <div style="height:78px;flex:none"></div>
+        </div>
+
+        <div class="composer">
+          <div class="glassbtn" style="width:36px;height:36px;background:var(--spaper);box-shadow:none;border:1px solid var(--sline)"><svg class="ic sm"><use href="#i-camera"/></svg></div>
+          <div class="field sp" style="height:44px;border-radius:22px">Say something in the room</div>
+          <div class="sendbtn"><svg class="ic sm"><use href="#i-send"/></svg></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>The room</b>
+        <span>Two squads never get a permanent inbox. They get a room hung on one night: open 24 hours before, shut 24 hours after, with the clock on the header the whole time. Every message is stamped with the person and their parea, and the joint plan splits attendance into two bars — a night with two pareas fails when one side quietly does not show.</span>
+        <span class="tagline">48-hour room · joint plan · split RSVP</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<style>
+.lrow{display:flex;gap:12px;align-items:flex-start;padding:13px 14px}
+.typing{display:inline-flex;gap:3px;align-items:center}
+.typing i{width:5px;height:5px;border-radius:50%;background:var(--sink3);animation:bounce 1.1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}
+.typing i:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-3px);opacity:1}}
+@media (prefers-reduced-motion:reduce){.typing i{animation:none}}
+.chathead{flex:none;display:flex;align-items:center;gap:11px;padding:2px 16px 12px;
+  background:rgba(255,255,255,.8);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border-bottom:1px solid var(--sline);z-index:7}
+.daymark{display:flex;align-items:center;justify-content:center;margin:2px 0 4px}
+.daymark span{font:600 10px var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--sink3);
+  background:rgba(12,25,38,.05);padding:4px 10px;border-radius:9px}
+.msg{display:flex;gap:8px;align-items:flex-end;max-width:80%}
+.msg.me{align-self:flex-end;justify-content:flex-end}
+.bub{background:var(--spaper);border-radius:18px 18px 18px 5px;padding:9px 13px;font-size:14px;line-height:1.4;
+  box-shadow:0 1px 2px rgba(12,25,38,.06)}
+.bub.mine{background:var(--sink);color:#fff;border-radius:18px 18px 5px 18px}
+.planpost{align-self:stretch;margin:6px 0}
+.composer{position:absolute;left:0;right:0;bottom:0;z-index:16;display:flex;align-items:center;gap:8px;
+  padding:10px 14px 32px;background:rgba(237,240,245,.9);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid rgba(12,25,38,.06)}
+.sendbtn{width:36px;height:36px;border-radius:50%;background:var(--scob);color:#fff;display:grid;place-items:center;flex:none}
+</style>
+
+<!-- ══════════════ SECTION: AFTERWARDS ══════════════ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>Afterwards</h2>
+    <p>The ticket does not end at the door. When a plan is over it asks for a picture, and what comes back becomes a calendar of the nights you actually kept.</p>
+  </div>
+  <div class="rail">
+
+    <!-- S14 · THE ASK -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr dark" style="background:#080E16">
+        <div class="ph ph-vinyl" style="position:absolute;inset:0"></div>
+        <div class="statusbar" style="color:#fff;position:relative;z-index:5"><span class="t">1:12</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+
+        <div class="pad row" style="position:relative;z-index:5;color:#fff;padding-top:4px">
+          <div class="glassbtn" style="background:rgba(0,0,0,.32);color:#fff;box-shadow:none"><svg class="ic"><use href="#i-x"/></svg></div>
+          <span class="sp"></span>
+          <div class="glassbtn" style="background:rgba(0,0,0,.32);color:#fff;box-shadow:none"><svg class="ic"><use href="#i-camera"/></svg></div>
+        </div>
+
+        <div class="inset ph ph-roof" style="top:112px"></div>
+
+        <div style="position:relative;z-index:5;margin-top:auto;padding:0 18px 34px;color:#fff">
+          <div class="live" style="border-radius:22px">
+            <div class="row"><span class="code" style="color:rgba(255,255,255,.6)">№ 0409 · PUNCHED 20:41</span>
+              <span class="sp"></span><span class="code" style="color:var(--ssun)">2H 14M LEFT</span></div>
+            <div class="dsp" style="font-size:25px;margin-top:8px;color:#fff">Vinyl night is over</div>
+            <p style="margin:6px 0 0;font-size:13px;color:rgba(255,255,255,.7);line-height:1.45;max-width:30ch">
+              Two photos, front and back, before the window closes. Whatever you post lands on the wall for everyone who was there.</p>
+            <div class="row" style="margin-top:13px">
+              <div class="stack"><div class="av xs c2">Ν</div><div class="av xs c6">Ε</div></div>
+              <span class="tiny" style="color:rgba(255,255,255,.62);margin-left:5px">Nikos and Elena already posted</span>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:18px;justify-content:center;gap:26px;align-items:center">
+            <span style="font-size:13.5px;color:rgba(255,255,255,.6);width:52px;text-align:center">Skip</span>
+            <div class="shutter"></div>
+            <span style="font-size:13.5px;color:rgba(255,255,255,.6);width:52px;text-align:center">Roll</span>
+          </div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>The ask</b>
+        <span>The one moment Parea is allowed to interrupt you: right after a plan ends, with a window that closes. It names the ticket you punched and who has posted already, because that is what actually makes you lift the phone.</span>
+        <span class="tagline">Post-event capture · window · both cameras</span>
+      </div>
+    </div>
+
+    <!-- S15 · MEMORIES CALENDAR -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="statusbar"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+        <div class="body">
+          <div class="pad row" style="padding-top:6px">
+            <span class="dsp" style="font-size:27px">Memories</span><span class="sp"></span>
+            <span class="chip"><svg class="ic sm"><use href="#i-cal"/></svg>2026</span>
+          </div>
+
+          <div class="pad" style="margin-top:12px">
+            <div class="seg"><div class="on">Yours</div><div>Attic Birds</div><div>Everyone</div></div>
+          </div>
+
+          <div class="pad" style="margin-top:14px">
+            <div class="card shadow row" style="padding:13px 14px;gap:12px">
+              <div class="col" style="gap:1px"><b class="dsp" style="font-size:22px">34</b><span class="tiny">nights kept</span></div>
+              <div class="statline"></div>
+              <div class="col" style="gap:1px"><b class="dsp" style="font-size:22px">11</b><span class="tiny">this month</span></div>
+              <span class="sp"></span>
+              <div class="col" style="gap:1px;align-items:flex-end"><span class="tiny mono">LONGEST RUN</span><b style="font-size:13px">6 weekends</b></div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:22px">
+            <div class="row"><span class="dsp" style="font-size:19px">September</span><span class="sp"></span><span class="code">1 SO FAR</span></div>
+            <div class="mgrid" style="margin-top:10px">
+              <span class="cw">M</span><span class="cw">T</span><span class="cw">W</span><span class="cw">T</span><span class="cw">F</span><span class="cw">S</span><span class="cw">S</span>
+              <span></span>
+              <div class="mtile ph ph-dawn"><span class="mday">1</span><span class="mpunch"></span></div>
+              <div class="mempty">2</div>
+              <div class="mempty" style="opacity:.4">3</div>
+              <div class="mempty" style="opacity:.4">4</div>
+              <div class="mempty" style="opacity:.4">5</div>
+              <div class="mempty" style="opacity:.4">6</div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:22px;padding-bottom:150px">
+            <div class="row"><span class="dsp" style="font-size:19px">August</span><span class="sp"></span><span class="code">11 NIGHTS</span></div>
+            <div class="mgrid" style="margin-top:10px">
+              <span class="cw">M</span><span class="cw">T</span><span class="cw">W</span><span class="cw">T</span><span class="cw">F</span><span class="cw">S</span><span class="cw">S</span>
+              <span></span><span></span><span></span><span></span><span></span>
+              <div class="mtile ph ph-sea"><span class="mday">1</span><span class="mpunch"></span></div>
+              <div class="mtile ph ph-taverna"><span class="mday">2</span><span class="mpunch"></span></div>
+
+              <div class="mempty">3</div><div class="mempty">4</div>
+              <div class="mtile ph ph-market"><span class="mday">5</span><span class="mpunch"></span></div>
+              <div class="mempty">6</div><div class="mempty">7</div>
+              <div class="mtile ph ph-roof"><span class="mday">8</span><span class="mpunch"></span></div>
+              <div class="mtile ph ph-tavli"><span class="mday">9</span><span class="mpunch"></span></div>
+
+              <div class="mempty">10</div><div class="mempty">11</div>
+              <div class="mtile ph ph-cinema"><span class="mday">12</span><span class="mpunch"></span></div>
+              <div class="mempty">13</div><div class="mempty">14</div>
+              <div class="mtile ph ph-hike"><span class="mday">15</span><span class="mpunch"></span></div>
+              <div class="mempty">16</div>
+
+              <div class="mempty">17</div><div class="mempty">18</div><div class="mempty">19</div>
+              <div class="mtile ph ph-vinyl"><span class="mday">20</span><span class="mpunch"></span></div>
+              <div class="mempty">21</div>
+              <div class="mtile ph ph-ferry"><span class="mday">22</span><span class="mpunch"></span></div>
+              <div class="mtile ph ph-sea"><span class="mday">23</span><span class="mpunch"></span></div>
+
+              <div class="mempty">24</div><div class="mempty">25</div><div class="mempty">26</div>
+              <div class="mempty">27</div><div class="mempty">28</div>
+              <div class="mtile ph ph-dawn"><span class="mday">29</span><span class="mpunch"></span></div>
+              <div class="mtile ph ph-taverna"><span class="mday">30</span><span class="mpunch"></span></div>
+
+              <div class="mempty">31</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fade"></div>
+        <div class="tabs">
+          <div class="tab"><svg class="ic"><use href="#i-ticket"/></svg><span>Today</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-compass"/></svg><span>Explore</span></div>
+          <div class="tabplus"><svg class="ic"><use href="#i-plus"/></svg></div>
+          <div class="tab"><svg class="ic"><use href="#i-chat"/></svg><span>Parea</span></div>
+          <div class="tab on"><svg class="ic"><use href="#i-user"/></svg><span>You</span></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>The wall</b>
+        <span>A month of nights, one tile each, empty days left as outlines so the gaps are part of the picture. The yellow ring in the corner is the same punch from the ticket — proof you were there, not just invited. Switch the segment and you are looking at the whole squad's month instead of your own.</span>
+        <span class="tagline">Memories calendar · per squad · streak</span>
+      </div>
+    </div>
+
+    <!-- S16 · ONE MEMORY -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr dark" style="background:#080E16">
+        <div class="ph ph-tavli" style="position:absolute;inset:0"></div>
+        <div class="statusbar" style="color:#fff;position:relative;z-index:5"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+
+        <div class="pad row" style="position:relative;z-index:5;color:#fff;padding-top:4px">
+          <div class="glassbtn" style="background:rgba(0,0,0,.32);color:#fff;box-shadow:none"><svg class="ic"><use href="#i-left"/></svg></div>
+          <div class="col" style="gap:0;margin-left:4px">
+            <b style="font-size:15px">9 August</b>
+            <span class="tiny mono" style="color:rgba(255,255,255,.6)">A YEAR OF SATURDAYS AGO</span>
+          </div>
+          <span class="sp"></span>
+          <div class="glassbtn" style="background:rgba(0,0,0,.32);color:#fff;box-shadow:none"><svg class="ic"><use href="#i-share"/></svg></div>
+        </div>
+
+        <div class="inset ph ph-taverna" style="top:112px"></div>
+
+        <div class="row" style="position:relative;z-index:5;justify-content:center;gap:5px;margin-top:auto">
+          <i class="pdot on"></i><i class="pdot"></i><i class="pdot"></i><i class="pdot"></i><i class="pdot"></i>
+        </div>
+
+        <div style="position:relative;z-index:5;padding:14px 18px 34px;color:#fff">
+          <div class="live" style="border-radius:24px;padding:15px 16px">
+            <div class="row"><span class="chip" style="height:22px;font-size:10.5px;background:rgba(255,255,255,.14);border-color:transparent;color:#fff">@atticbirds</span>
+              <span class="sp"></span><span class="code" style="color:rgba(255,255,255,.55)">№ 0388</span></div>
+            <div class="dsp" style="font-size:26px;margin-top:9px;color:#fff">Tavli, all night</div>
+            <div class="row" style="margin-top:6px;gap:14px;font-size:12.5px;color:rgba(255,255,255,.7)">
+              <span class="row" style="gap:6px"><svg class="ic sm"><use href="#i-clock"/></svg><span class="mono">21:00 — 04:20</span></span>
+              <span class="row" style="gap:6px"><svg class="ic sm"><use href="#i-pin"/></svg>Petralona</span>
+            </div>
+
+            <div style="height:1px;background:rgba(255,255,255,.16);margin:13px 0"></div>
+
+            <div class="row">
+              <div class="punch on" style="background:#101A26;box-shadow:inset 0 2px 3px #000,0 0 0 3px var(--ssun)"></div>
+              <div class="col" style="gap:0"><b style="font-size:13px">You were there</b>
+                <span class="tiny" style="color:rgba(255,255,255,.55)">with 5 others · the room left 9 photos</span></div>
+              <span class="sp"></span>
+              <div class="stack"><div class="av xs c1">Δ</div><div class="av xs c2">Ν</div><div class="av xs c3">Μ</div><div class="av xs c5">+3</div></div>
+            </div>
+
+            <div class="row" style="margin-top:13px;gap:7px">
+              <span class="chip" style="height:30px;background:rgba(255,255,255,.14);border-color:transparent;color:#fff">🔥 4</span>
+              <span class="chip" style="height:30px;background:rgba(255,255,255,.14);border-color:transparent;color:#fff">😭 2</span>
+              <span class="chip" style="height:30px;background:rgba(255,255,255,.14);border-color:transparent;color:#fff">+</span>
+              <span class="sp"></span>
+              <span class="chip" style="height:30px;background:rgba(255,255,255,.14);border-color:transparent;color:#fff"><svg class="ic sm"><use href="#i-chat"/></svg>Send to the thread</span>
+            </div>
+          </div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>One night, opened</b>
+        <span>The stub is printed over the photo, so the picture and the plan it came from are never separated. Everyone who punched in that night contributed to the same roll — nine photos, one memory, no individual posts to scroll past.</span>
+        <span class="tagline">Memory detail · shared roll · reactions</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<style>
+.shutter{width:70px;height:70px;border-radius:50%;background:#fff;
+  box-shadow:0 0 0 4px rgba(255,255,255,.32), 0 10px 26px -8px rgba(0,0,0,.7)}
+.pdot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.38)}
+.pdot.on{background:#fff;width:18px;border-radius:3px}
+</style>
+
+<!-- ══════════════ SECTION: YOU ══════════════ -->
+<section class="sec">
+  <div class="sec-head">
+    <h2>You</h2>
+    <p>What happened while you were away, what you have been part of, and the version of Parea that lives outside the app.</p>
+  </div>
+  <div class="rail">
+
+    <!-- S12 · ACTIVITY -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="statusbar"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+        <div class="body">
+          <div class="pad row" style="padding-top:6px">
+            <span class="dsp" style="font-size:27px">Activity</span><span class="sp"></span>
+            <span class="chip">Mark all read</span>
+          </div>
+
+          <div class="pad" style="margin-top:20px">
+            <span class="lbl">Needs an answer</span>
+            <div class="card shadow" style="margin-top:9px;padding:0;overflow:hidden">
+              <div class="nrow">
+                <div class="av c3">Μ</div>
+                <div class="col" style="gap:3px;min-width:0;flex:1">
+                  <span style="font-size:14px;line-height:1.4"><b>Maria</b> wants to bring someone to <b>Rooftop drinks</b>.</span>
+                  <span class="tiny mono">18:42 · @atticbirds</span>
+                  <div class="row" style="gap:7px;margin-top:6px">
+                    <div class="btn sm ink" style="padding:0 16px">Fine by me</div>
+                    <div class="btn sm ghost" style="padding:0 14px">Not this time</div>
+                  </div>
+                </div>
+                <i class="unread"></i>
+              </div>
+              <div class="divider"></div>
+              <div class="nrow">
+                <div class="av c5">AS</div>
+                <div class="col" style="gap:3px;min-width:0;flex:1">
+                  <span style="font-size:14px;line-height:1.4"><b>Athens Slow Run</b> approved you for <b>Filopappou loop</b>.</span>
+                  <span class="tiny mono">17:55 · SAT 09:00</span>
+                  <div class="row" style="gap:7px;margin-top:6px">
+                    <div class="btn sm ink" style="padding:0 16px">Punch my ticket</div>
+                  </div>
+                </div>
+                <i class="unread"></i>
+              </div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:24px">
+            <span class="lbl">Today</span>
+            <div class="card shadow" style="margin-top:9px;padding:0;overflow:hidden">
+              <div class="nrow">
+                <div class="ph ph-roof" style="width:32px;height:32px;border-radius:50%;flex:none"></div>
+                <div class="col" style="gap:2px;min-width:0;flex:1">
+                  <span style="font-size:14px;line-height:1.4">The room for <b>Rooftop drinks</b> shuts in four hours. Nine photos in it so far.</span>
+                  <span class="tiny mono">18:55</span>
+                </div>
+                <span class="clock hot">4H</span>
+              </div>
+              <div class="divider"></div>
+              <div class="nrow">
+                <div class="av c2">Ν</div>
+                <div class="col" style="gap:2px;min-width:0;flex:1">
+                  <span style="font-size:14px;line-height:1.4"><b>Nikos</b> punched in for <b>Rooftop drinks</b>. That is 6 of 8.</span>
+                  <span class="tiny mono">16:20</span>
+                </div>
+                <div class="punch on sm2"></div>
+              </div>
+              <div class="divider"></div>
+              <div class="nrow">
+                <div class="av c6">Ε</div>
+                <div class="col" style="gap:2px;min-width:0;flex:1">
+                  <span style="font-size:14px;line-height:1.4"><b>Elena</b> moved <b>Vinyl night</b> from Friday to Saturday.</span>
+                  <span class="tiny mono">14:03 · your ticket still stands</span>
+                </div>
+                <svg class="ic sm" style="color:var(--sink3)"><use href="#i-clock"/></svg>
+              </div>
+              <div class="divider"></div>
+              <div class="nrow">
+                <div class="av c4">Κ</div>
+                <div class="col" style="gap:2px;min-width:0;flex:1">
+                  <span style="font-size:14px;line-height:1.4"><b>Katerina</b> joined <b>Work lot</b> with the invite code.</span>
+                  <span class="tiny mono">11:47</span>
+                </div>
+                <svg class="ic sm" style="color:var(--sink3)"><use href="#i-users"/></svg>
+              </div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:24px;padding-bottom:150px">
+            <span class="lbl">Earlier this week</span>
+            <div class="card shadow" style="margin-top:9px;padding:0;overflow:hidden">
+              <div class="nrow">
+                <div class="av c5">Θ</div>
+                <div class="col" style="gap:2px;min-width:0;flex:1">
+                  <span style="font-size:14px;line-height:1.4"><b>Thanos</b> passed on <b>Parnitha, the long way</b>.</span>
+                  <span class="tiny mono">Monday 09:12</span>
+                </div>
+              </div>
+              <div class="divider"></div>
+              <div class="nrow">
+                <div class="av c1">AB</div>
+                <div class="col" style="gap:2px;min-width:0;flex:1">
+                  <span style="font-size:14px;line-height:1.4"><b>Attic Birds</b> rotated its invite code.</span>
+                  <span class="tiny mono">Sunday 22:30</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fade"></div>
+        <div class="tabs">
+          <div class="tab"><svg class="ic"><use href="#i-ticket"/></svg><span>Today</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-compass"/></svg><span>Explore</span></div>
+          <div class="tabplus"><svg class="ic"><use href="#i-plus"/></svg></div>
+          <div class="tab"><svg class="ic"><use href="#i-chat"/></svg><span>Parea</span></div>
+          <div class="tab on"><svg class="ic"><use href="#i-user"/></svg><span>You</span></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>Activity</b>
+        <span>Split by what it asks of you, not by time. Anything with a button sits at the top; everything else is a record. "That is 6 of 8" beats a bare name — the count is the reason you opened the screen.</span>
+        <span class="tagline">Notifications · join requests</span>
+      </div>
+    </div>
+
+    <!-- S13 · PROFILE -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="statusbar"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+        <div class="body">
+          <div class="pad row" style="padding-top:6px">
+            <span class="dsp" style="font-size:27px">You</span><span class="sp"></span>
+            <div class="glassbtn" style="box-shadow:none;background:var(--spaper);border:1px solid var(--sline)"><svg class="ic"><use href="#i-more"/></svg></div>
+          </div>
+
+          <div class="pad row" style="margin-top:16px;gap:14px">
+            <div class="av xl c1">Δ</div>
+            <div class="col" style="gap:2px;min-width:0">
+              <b class="dsp" style="font-size:23px">Dimitris</b>
+              <span class="mono tiny">@dimitris · Athens</span>
+              <span class="chip" style="height:26px;margin-top:6px;width:fit-content">Edit profile</span>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:20px">
+            <div class="card shadow row" style="padding:16px 8px;text-align:center">
+              <div class="stat"><b>34</b><span>Nights out</span></div>
+              <div class="statline"></div>
+              <div class="stat"><b>11</b><span>You proposed</span></div>
+              <div class="statline"></div>
+              <div class="stat"><b>4</b><span>Squads</span></div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:22px">
+            <div class="row"><span class="lbl">Your pareas</span><span class="sp"></span><span class="code">4</span></div>
+            <div class="card shadow row" style="margin-top:9px;padding:13px 14px;gap:10px">
+              <div class="stack"><div class="av c1">AB</div><div class="av c2">KR</div><div class="av c3">W</div><div class="av c5">PN</div></div>
+              <span class="sp"></span>
+              <span class="tiny">Attic Birds is the loud one</span>
+              <svg class="ic sm" style="color:var(--sink3)"><use href="#i-right"/></svg>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:22px">
+            <div class="row"><span class="lbl">Memories</span><span class="sp"></span><span class="code">SINCE MAR 2024</span></div>
+            <p class="tiny" style="margin:5px 0 0">Every night you punched into, with what people took.</p>
+            <div class="mgrid big" style="margin-top:10px">
+              <div class="mtile ph ph-dawn"><span class="mday">01 SEP</span><span class="mpunch"></span><span class="mcap">Morning run</span></div>
+              <div class="mtile ph ph-taverna"><span class="mday">30 AUG</span><span class="mpunch"></span><span class="mcap">Long dinner</span></div>
+              <div class="mtile ph ph-sea"><span class="mday">23 AUG</span><span class="mpunch"></span><span class="mcap">Aegina swim</span></div>
+              <div class="mtile ph ph-ferry"><span class="mday">22 AUG</span><span class="mpunch"></span><span class="mcap">07:00 ferry</span></div>
+              <div class="mtile ph ph-vinyl"><span class="mday">20 AUG</span><span class="mpunch"></span><span class="mcap">Vinyl night</span></div>
+              <div class="mtile ph ph-hike"><span class="mday">15 AUG</span><span class="mpunch"></span><span class="mcap">Parnitha</span></div>
+            </div>
+            <div class="row" style="margin-top:11px;justify-content:center">
+              <span class="chip cob" style="height:32px"><svg class="ic sm"><use href="#i-cal"/></svg>Open the calendar</span>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:24px;padding-bottom:150px">
+            <span class="lbl">Settings</span>
+            <div class="card shadow" style="margin-top:9px;padding:0;overflow:hidden">
+              <div class="srow"><svg class="ic" style="color:var(--sink2)"><use href="#i-pin"/></svg>
+                <div class="col" style="gap:1px"><b style="font-size:14.5px">Location</b><span class="tiny">Used while the app is open. Never stored.</span></div>
+                <span class="sp"></span><span class="tiny mono">ON</span></div>
+              <div class="divider"></div>
+              <div class="srow"><svg class="ic" style="color:var(--sink2)"><use href="#i-bell"/></svg>
+                <div class="col" style="gap:1px"><b style="font-size:14.5px">Notifications</b><span class="tiny">Plans, answers, and the day before.</span></div>
+                <span class="sp"></span><svg class="ic sm" style="color:var(--sink3)"><use href="#i-right"/></svg></div>
+              <div class="divider"></div>
+              <div class="srow"><svg class="ic" style="color:var(--sink2)"><use href="#i-globe"/></svg>
+                <div class="col" style="gap:1px"><b style="font-size:14.5px">Who can find me</b><span class="tiny">Squads you are in, and anyone with your handle.</span></div>
+                <span class="sp"></span><svg class="ic sm" style="color:var(--sink3)"><use href="#i-right"/></svg></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fade"></div>
+        <div class="tabs">
+          <div class="tab"><svg class="ic"><use href="#i-ticket"/></svg><span>Today</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-compass"/></svg><span>Explore</span></div>
+          <div class="tabplus"><svg class="ic"><use href="#i-plus"/></svg></div>
+          <div class="tab"><svg class="ic"><use href="#i-chat"/></svg><span>Parea</span></div>
+          <div class="tab on"><svg class="ic"><use href="#i-user"/></svg><span>You</span></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>You</b>
+        <span>A person is the smaller version of the same profile: pareas you belong to, nights you kept, three numbers. The memories preview is deliberately a teaser — six tiles and a way into the full calendar, so the profile stays a summary rather than a feed.</span>
+        <span class="tagline">Profile · squads · memories · settings</span>
+      </div>
+    </div>
+
+    <!-- S14 · LOCK SCREEN -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr dark" style="background:#0A1420">
+        <div class="lockbg"></div>
+        <div class="statusbar" style="color:#fff;position:relative;z-index:3"><span class="t">21:04</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+
+        <div style="position:relative;z-index:3;padding:0 20px;text-align:center;color:#fff">
+          <div style="font:500 15px var(--ui);opacity:.7;margin-top:12px">Thursday 3 September</div>
+          <div class="dsp" style="font-size:82px;line-height:1;margin-top:2px;letter-spacing:-.04em">21:04</div>
+        </div>
+
+        <div style="position:relative;z-index:3;padding:26px 16px 0;display:flex;flex-direction:column;gap:11px">
+          <span class="lbl" style="color:rgba(255,255,255,.5);padding-left:6px">Live Activity</span>
+          <div class="live">
+            <div class="row">
+              <div class="av xs c1">AB</div>
+              <span class="mono" style="font-size:10.5px;letter-spacing:.1em;color:rgba(255,255,255,.6)">PAREA · № 0412</span>
+              <span class="sp"></span>
+              <span class="mono" style="font-size:10.5px;color:var(--ssun)">STARTS IN 11 MIN</span>
+            </div>
+            <div class="dsp" style="font-size:24px;margin-top:9px;color:#fff">Rooftop drinks</div>
+            <div class="row" style="margin-top:5px;gap:6px;color:rgba(255,255,255,.66);font-size:12.5px">
+              <svg class="ic sm"><use href="#i-pin"/></svg>A for Athens · 3.1 km
+            </div>
+            <div class="livebar"><i style="width:78%"></i></div>
+            <div class="row" style="margin-top:10px">
+              <div class="stack"><div class="av xs c2">Ν</div><div class="av xs c3">Μ</div><div class="av xs c6">Ε</div><div class="av xs c5">+2</div></div>
+              <span class="tiny" style="color:rgba(255,255,255,.6);margin-left:4px">5 already there</span>
+              <span class="sp"></span>
+              <div class="chip" style="height:28px;background:rgba(255,255,255,.14);border-color:transparent;color:#fff">Directions</div>
+            </div>
+          </div>
+
+          <div class="notif">
+            <div class="av xs c3">Μ</div>
+            <div class="col" style="gap:1px;min-width:0;flex:1">
+              <div class="row"><b style="font-size:13px;color:#fff">Attic Birds</b><span class="sp"></span><span class="tiny" style="color:rgba(255,255,255,.5)">2m</span></div>
+              <span style="font-size:12.5px;color:rgba(255,255,255,.78);line-height:1.35">Maria: corner table, come up the back stairs</span>
+            </div>
+          </div>
+
+          <span class="lbl" style="color:rgba(255,255,255,.5);padding-left:6px;margin-top:8px">Widget</span>
+          <div class="widget">
+            <div class="row"><span class="lbl" style="color:rgba(255,255,255,.5)">This week</span><span class="sp"></span>
+              <svg class="ic sm" style="color:var(--ssun)"><use href="#i-ticket"/></svg></div>
+            <div class="wrow"><span class="mono">FRI</span><b>Vinyl night</b><i class="dotp on"></i></div>
+            <div class="wrow"><span class="mono">SAT</span><b>Morning run</b><i class="dotp"></i></div>
+            <div class="wrow"><span class="mono">SUN</span><b>Parnitha</b><i class="dotp"></i></div>
+          </div>
+        </div>
+
+        <div class="lockfoot">
+          <div class="lockbtn"><svg class="ic"><use href="#i-lock"/></svg></div>
+          <div class="lockbtn"><svg class="ic"><use href="#i-camera"/></svg></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>Before you get there</b>
+        <span>Most of the value lands in the fifteen minutes before a plan starts, when you are on a bus and need the address. A Live Activity counts the night in and a lock screen widget shows the week — two unanswered tickets included.</span>
+        <span class="tagline">Live Activity · widget · reminders</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<footer class="foot">
+  <div>
+    <p class="eyebrow">Parea &middot; 19 screens</p>
+    <p style="margin-top:10px">Most of this maps onto what the app already does: squads with handles and rotating invite codes, plans with a date, a spot and tags, an in / pass answer per person, a public feed filtered by radius, one realtime thread per squad. The rest is the direction you asked for — a squad that behaves like a profile, two squads able to throw one night together, and a stub that comes back with a picture on it.</p>
+  </div>
+  <div>
+    <p class="eyebrow">Needs building</p>
+    <p style="margin-top:10px" class="code">SQUAD PROFILES: COVER, BIO, FOLLOW, NIGHTS KEPT<br>48-HOUR EVENT ROOMS &amp; JOINT PLANS WITH SPLIT RSVP<br>ROOM EXPIRY: MESSAGES AND PHOTOS FOLD INTO THE MEMORY<br>POST-EVENT PHOTO WINDOW · MEMORIES CALENDAR · JOIN REQUESTS</p>
+  </div>
+</footer>
+
+</div>
+
+<style>
+.nrow{display:flex;gap:12px;align-items:flex-start;padding:13px 14px;position:relative}
+.unread{position:absolute;right:12px;top:16px;width:8px;height:8px;border-radius:50%;background:var(--srust)}
+.srow{display:flex;gap:12px;align-items:center;padding:13px 14px}
+.stat{flex:1;display:flex;flex-direction:column;gap:1px}
+.stat b{font-family:var(--disp);font-weight:800;font-size:26px;line-height:1}
+.stat span{font-size:11.5px;color:var(--sink2)}
+.statline{width:1px;align-self:stretch;background:var(--sline)}
+.wall{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:11px}
+.stub{position:relative;background:var(--spaper);border-radius:13px;padding:11px 12px;
+  border-left:3px solid var(--ssun);box-shadow:0 1px 2px rgba(12,25,38,.05)}
+.stub span{display:block;font-size:10px;letter-spacing:.1em;color:var(--sink3)}
+.stub b{display:block;font-size:13px;margin-top:2px;line-height:1.25}
+.stub i{position:absolute;right:9px;top:11px;width:12px;height:12px;border-radius:50%;background:var(--sbg);
+  box-shadow:inset 0 1px 2px rgba(12,25,38,.3)}
+.lockbg{position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 260px 200px at 78% 8%,rgba(255,197,61,.28),transparent 70%),
+    radial-gradient(ellipse 300px 260px at 12% 66%,rgba(33,69,230,.42),transparent 72%),
+    linear-gradient(168deg,#12233A 0%,#0A1420 52%,#060C14 100%)}
+.live{background:rgba(255,255,255,.11);border:1px solid rgba(255,255,255,.14);border-radius:22px;padding:14px 15px;
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.live .stack .av{box-shadow:0 0 0 2px #16273C}
+.livebar{height:4px;border-radius:2px;background:rgba(255,255,255,.16);margin-top:13px;overflow:hidden}
+.livebar i{display:block;height:100%;background:var(--ssun);border-radius:2px}
+.notif{display:flex;gap:10px;align-items:flex-start;background:rgba(255,255,255,.11);
+  border:1px solid rgba(255,255,255,.13);border-radius:20px;padding:12px 14px;
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.widget{background:rgba(255,255,255,.11);border:1px solid rgba(255,255,255,.13);border-radius:22px;padding:13px 15px;
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);display:flex;flex-direction:column;gap:9px}
+.wrow{display:flex;align-items:center;gap:10px;color:#fff}
+.wrow span{font-size:11px;color:rgba(255,255,255,.5);width:30px;letter-spacing:.08em}
+.wrow b{font-size:13px;font-weight:500;flex:1}
+.dotp{width:13px;height:13px;border-radius:50%;border:1.4px dashed rgba(255,255,255,.4);flex:none}
+.dotp.on{border:none;background:#0A1420;box-shadow:inset 0 1px 2px #000,0 0 0 2px var(--ssun)}
+.lockfoot{position:absolute;left:0;right:0;bottom:34px;z-index:3;display:flex;justify-content:space-between;padding:0 34px}
+.lockbtn{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;color:#fff;
+  background:rgba(255,255,255,.14);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+</style>
+
+<script>
+(function(){
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var slots = document.querySelectorAll('.slot, .sec-head');
+  slots.forEach(function(el){ el.style.opacity = '0'; el.style.transform = 'translateY(18px)'; });
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e, i){
+      if (!e.isIntersecting) return;
+      var el = e.target;
+      setTimeout(function(){
+        el.style.transition = 'opacity .6s ease, transform .6s cubic-bezier(.2,.8,.2,1)';
+        el.style.opacity = '1'; el.style.transform = 'none';
+      }, i * 70);
+      io.unobserve(el);
+    });
+  }, { rootMargin: '0px 0px -8% 0px' });
+  slots.forEach(function(el){ io.observe(el); });
+})();
+</script>
