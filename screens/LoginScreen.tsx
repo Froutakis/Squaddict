@@ -6,7 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import AuthField from '../components/general/AuthField';
 import Button from '../components/general/Button';
 import { login } from '../services/serviceAuth';
-import { colors, font, radius, space } from '../theme';
+import { colors, font, radius, space, tint } from '../theme';
 
 type LoginScreenProps = {
   onSwitchToRegister?: () => void;
@@ -53,7 +53,7 @@ export default function LoginScreen({ onSwitchToRegister }: LoginScreenProps) {
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar style="dark" />
-      <LinearGradient colors={['rgba(231,104,84,0.15)', 'rgba(255,248,244,0)']} style={styles.glow} pointerEvents="none" />
+      <LinearGradient colors={['rgba(33,69,230,0.10)', 'rgba(237,240,245,0)']} style={styles.glow} pointerEvents="none" />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   accent: { color: colors.accent, fontFamily: font.display },
   subtitle: { marginTop: space.xs, color: colors.textSoft, fontFamily: font.medium, fontSize: 16, lineHeight: 24, textAlign: 'center' },
   form: { gap: 20 },
-  error: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: radius.sm, backgroundColor: '#FFF0EE' },
+  error: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: radius.sm, backgroundColor: tint.danger },
   errorText: { flex: 1, color: colors.danger, fontFamily: font.medium, fontSize: 14 },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   footerText: { color: colors.textSoft, fontFamily: font.medium, fontSize: 14 },
