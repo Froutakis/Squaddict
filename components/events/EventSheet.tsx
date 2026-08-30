@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { ActivityIndicator, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Attendee, MyEvent, RsvpStatus } from '../../services/serviceEvents';
 import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/serviceEvents';
 import { getMemberNames } from '../../services/serviceGroup';
-import { colors, font, gradientFor, radius, space, textSize } from '../../theme';
+import { colors, font, radius, space, textSize } from '../../theme';
 import { formatDateTime } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import { mapsUrl } from '../../lib/maps';
+import { ticketCode } from '../../lib/ticket';
 import CloseButton from '../general/CloseButton';
 import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
+import Ticket from '../general/Ticket';
 import RsvpButtons from './RsvpButtons';
 
 type Person = { userId: string; name: string };
@@ -140,24 +141,24 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
         <Pressable style={styles.sheet} onPress={() => {}}>
           {event ? (
             <>
-              <LinearGradient
-                colors={gradientFor(event.groupName)}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+              <Ticket
+                tone="ink"
+                notches={false}
                 style={styles.header}
+                stub={
+                  <RsvpButtons status={myStatus} saving={saving} onChange={handleRsvp} onDark stretch />
+                }
               >
                 <View style={styles.grabber} />
 
-                <CloseButton
-                  tone="light"
-                  onPress={onClose}
-                  disabled={saving}
-                  style={styles.close}
-                />
-
-                <View style={styles.squadPill}>
-                  <View style={styles.squadDot} />
-                  <Text style={styles.squadName} numberOfLines={1}>{event.groupName}</Text>
+                <View style={styles.topRow}>
+                  <View style={styles.squadPill}>
+                    <View style={styles.squadDot} />
+                    <Text style={styles.squadName} numberOfLines={1}>{event.groupName}</Text>
+                  </View>
+                  <View style={styles.spacer} />
+                  <Text style={styles.code}>№ {ticketCode(event.id)}</Text>
+                  <CloseButton tone="light" onPress={onClose} disabled={saving} />
                 </View>
 
                 <Text style={styles.title} numberOfLines={3}>{event.title}</Text>
@@ -168,7 +169,7 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
                 {place.secondary ? (
                   <Text style={styles.whereSub} numberOfLines={2}>{place.secondary}</Text>
                 ) : null}
-              </LinearGradient>
+              </Ticket>
 
               <View style={styles.body}>
                 {event.description ? (
@@ -186,8 +187,6 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
                     <Text style={styles.mapsText}>Open in maps</Text>
                   </Pressable>
                 ) : null}
-
-                <RsvpButtons status={myStatus} saving={saving} onChange={handleRsvp} />
 
                 {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -316,38 +315,44 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    gap: space.xxs,
-    paddingHorizontal: space.lg,
-    paddingTop: space.sm,
-    paddingBottom: space.lg,
+    borderRadius: 0,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
   },
+  spacer: { flex: 1 },
   grabber: {
     width: 40,
     height: 4,
     alignSelf: 'center',
     marginBottom: space.md,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: 'rgba(255,255,255,0.4)',
   },
-  close: { position: 'absolute', top: space.sm, right: space.md, zIndex: 1 },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   squadPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
+    maxWidth: '52%',
     gap: space.xs,
-    paddingLeft: space.xs,
-    paddingRight: space.sm,
-    paddingVertical: space.xs,
-    marginBottom: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: 4,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
   },
-  squadDot: { width: 14, height: 14, borderRadius: radius.pill, backgroundColor: '#FFFFFF' },
-  squadName: { flexShrink: 1, color: '#FFFFFF', fontFamily: font.bold, fontSize: textSize.small },
-  title: { color: '#FFFFFF', fontFamily: font.display, fontSize: textSize.hero, lineHeight: 32, letterSpacing: -0.5 },
-  when: { color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.lead },
-  where: { color: 'rgba(255,255,255,0.82)', fontFamily: font.medium, fontSize: textSize.lead },
-  whereSub: { color: 'rgba(255,255,255,0.6)', fontFamily: font.medium, fontSize: textSize.small, lineHeight: 17 },
+  squadDot: { width: 8, height: 8, borderRadius: radius.pill, backgroundColor: '#FFFFFF' },
+  squadName: { flexShrink: 1, color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.caption },
+  code: { color: 'rgba(255,255,255,0.5)', fontFamily: font.mono, fontSize: 10, letterSpacing: 1 },
+  title: {
+    marginTop: space.sm,
+    color: '#FFFFFF',
+    fontFamily: font.display,
+    fontSize: textSize.display,
+    lineHeight: 34,
+    letterSpacing: -0.6,
+  },
+  when: { marginTop: space.xs, color: 'rgba(255,255,255,0.78)', fontFamily: font.mono, fontSize: textSize.base },
+  where: { marginTop: 3, color: 'rgba(255,255,255,0.78)', fontFamily: font.medium, fontSize: textSize.base },
+  whereSub: { color: 'rgba(255,255,255,0.5)', fontFamily: font.medium, fontSize: textSize.small, lineHeight: 17 },
 
   body: {
     gap: space.sm,
@@ -363,10 +368,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: space.xs,
     paddingVertical: space.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.bg,
   },
   mapsPressed: { opacity: 0.7 },
   mapsText: { color: colors.primary, fontFamily: font.semi, fontSize: textSize.base },
@@ -379,18 +384,24 @@ const styles = StyleSheet.create({
   section: { gap: space.sm },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   sectionDot: { width: 8, height: 8, borderRadius: radius.pill },
-  sectionTitle: { color: colors.text, fontFamily: font.semi, fontSize: textSize.body },
+  sectionTitle: {
+    color: colors.textSoft,
+    fontFamily: font.mono,
+    fontSize: textSize.caption,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
   empty: { color: colors.textFaint, fontFamily: font.medium, fontSize: textSize.body },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,
     paddingLeft: space.xs,
-    paddingRight: space.md,
-    paddingVertical: space.xs,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceAlt,
+    paddingRight: space.sm,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    backgroundColor: colors.bg,
   },
   chipName: { flexShrink: 1, color: colors.text, fontFamily: font.semi, fontSize: textSize.body },
 
@@ -402,7 +413,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: space.xs,
     paddingVertical: space.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     borderWidth: 1.5,
     borderColor: colors.border,
   },
@@ -415,7 +426,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: space.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     borderWidth: 1.5,
   },
   cancelBtn: { borderColor: colors.border, backgroundColor: colors.surface },

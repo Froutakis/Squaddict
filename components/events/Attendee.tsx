@@ -7,13 +7,21 @@ type AttendeeStackProps = {
   max?: number;
   size?: number;
   onDark?: boolean;
+  ringColor?: string;
 };
 
-export default function AttendeeStack({ people, max = 3, size = 30, onDark = false }: AttendeeStackProps) {
+export default function AttendeeStack({
+  people,
+  max = 3,
+  size = 30,
+  onDark = false,
+  ringColor,
+}: AttendeeStackProps) {
   if (people.length === 0) return null;
 
   const shown = people.slice(0, max);
   const extra = people.length - shown.length;
+  const ring = ringColor ?? (onDark ? colors.text : colors.surface);
 
   return (
     <View style={styles.row}>
@@ -24,6 +32,7 @@ export default function AttendeeStack({ people, max = 3, size = 30, onDark = fal
           initials={initialsFor(person.name)}
           size={size}
           ring={2}
+          ringColor={ring}
           style={i > 0 ? styles.overlap : undefined}
         />
       ))}
@@ -33,7 +42,7 @@ export default function AttendeeStack({ people, max = 3, size = 30, onDark = fal
           style={[
             styles.more,
             styles.overlap,
-            { width: size, height: size },
+            { width: size, height: size, borderColor: ring },
             onDark ? styles.moreDark : styles.moreLight,
           ]}
         >
@@ -55,8 +64,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
   },
-  moreLight: { backgroundColor: colors.surfaceAlt, borderColor: colors.surface },
-  moreDark: { backgroundColor: 'rgba(255,255,255,0.2)', borderColor: '#FFFFFF' },
+  moreLight: { backgroundColor: colors.surfaceAlt },
+  moreDark: { backgroundColor: 'rgba(255,255,255,0.2)' },
   moreText: { fontFamily: font.semi, fontSize: textSize.micro },
   moreTextLight: { color: colors.textSoft },
   moreTextDark: { color: '#FFFFFF' },

@@ -16,8 +16,10 @@ type GradientAvatarProps = {
   size?: number;
   /** Παράκαμψη των αρχικών, π.χ. 'PC' για "Paralia Crew". */
   initials?: string;
-  /** Λευκό περίγραμμα — για στοίβες avatars και pins πάνω σε χάρτη. */
+  /** Περίγραμμα — για στοίβες avatars και pins πάνω σε χάρτη. */
   ring?: number;
+  /** Χρώμα του περιγράμματος· ταιριάζει με την επιφάνεια από κάτω. */
+  ringColor?: string;
   /** Σταθερό gradient αντί για το υπολογισμένο (π.χ. brand για τον ίδιο τον χρήστη). */
   gradient?: readonly [string, string];
   style?: StyleProp<ViewStyle>;
@@ -29,6 +31,7 @@ export default function GradientAvatar({
   size = 40,
   initials,
   ring = 0,
+  ringColor = '#FFFFFF',
   gradient,
   style,
   children,
@@ -44,7 +47,7 @@ export default function GradientAvatar({
       style={[
         styles.base,
         { width: size, height: size, borderRadius: radius.pill },
-        ring > 0 && { borderWidth: ring, borderColor: '#FFFFFF' },
+        ring > 0 && { borderWidth: ring, borderColor: ringColor },
         style,
       ]}
     >

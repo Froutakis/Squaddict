@@ -1,9 +1,10 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import type { MyEvent } from '../../services/serviceEvents';
-import { colors, font, gradientFor, radius, shadow, solidFor, space, textSize, tint } from '../../theme';
+import { colors, font, radius, solidFor, space, textSize } from '../../theme';
 import { countdownLabel, dateParts, daysUntil } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
+import Ticket from '../general/Ticket';
+import Punch, { type PunchState } from '../general/Punch';
 import AttendeeStack from './Attendee';
 
 type EventCardProps = {
@@ -11,116 +12,104 @@ type EventCardProps = {
   onPress?: () => void;
 };
 
-function statusPill(myStatus: MyEvent['myStatus']) {
-  if (myStatus === 'in') {
-    return { label: "You're in", box: styles.pillIn, text: styles.pillTextIn };
-  }
-  if (myStatus === 'out') {
-    return { label: "You're out", box: styles.pillOut, text: styles.pillTextOut };
-  }
-  return { label: 'Answer', box: styles.pillOpen, text: styles.pillTextOpen };
+function statusOf(myStatus: MyEvent['myStatus']): { state: PunchState; label: string } {
+  if (myStatus === 'in') return { state: 'in', label: "You're in" };
+  if (myStatus === 'out') return { state: 'out', label: "You're out" };
+  return { state: 'open', label: 'Not answered' };
 }
 
 export default function EventCard({ event, onPress }: EventCardProps) {
   const { month, day } = dateParts(event.date);
   const squadColor = solidFor(event.groupName);
-  const pill = statusPill(event.myStatus);
+  const status = statusOf(event.myStatus);
 
-  const days = daysUntil(event.date);
-  const relative = days >= 0 ? countdownLabel(event.date).toLowerCase() : null;
   const place = placeLines(event.location, event.placeLabel);
-  const meta = [relative, event.startTime, place.primary].filter(Boolean).join(' · ');
+  const meta = [event.startTime, place.primary].filter(Boolean).join(' · ');
+  const countdown = daysUntil(event.date) >= 0 ? countdownLabel(event.date) : null;
 
   return (
-    <Pressable
+    <Ticket
       onPress={onPress}
-      accessibilityRole="button"
       accessibilityLabel={event.title}
-      style={({ pressed }) => [styles.card, { borderLeftColor: squadColor }, pressed && styles.pressed]}
+      stub={
+        <View style={styles.stub}>
+          <Punch state={status.state} size={22} />
+          <Text style={styles.status}>{status.label}</Text>
+          <View style={styles.spacer} />
+          <AttendeeStack people={event.going} size={22} max={3} />
+        </View>
+      }
     >
-      <LinearGradient
-        colors={gradientFor(event.groupName)}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.dateBlock}
-      >
-        <Text style={styles.month}>{month}</Text>
-        <Text style={styles.day}>{day}</Text>
-      </LinearGradient>
-
-      <View style={styles.body}>
-        <View style={styles.squadRow}>
-          <View style={[styles.squadDot, { backgroundColor: squadColor }]} />
-          <Text style={[styles.squadName, { color: squadColor }]} numberOfLines={1}>
-            {event.groupName}
-          </Text>
+      <View style={styles.main}>
+        <View style={styles.date}>
+          <Text style={styles.month}>{month}</Text>
+          <Text style={styles.day}>{String(day).padStart(2, '0')}</Text>
         </View>
 
-        <Text style={styles.title} numberOfLines={1}>
-          {event.title}
-        </Text>
+        <View style={styles.body}>
+          <View style={styles.squadRow}>
+            <View style={[styles.squadDot, { backgroundColor: squadColor }]} />
+            <Text style={[styles.squadName, { color: squadColor }]} numberOfLines={1}>
+              {event.groupName}
+            </Text>
+            <View style={styles.spacer} />
+            {countdown ? <Text style={styles.countdown}>{countdown}</Text> : null}
+          </View>
 
-        {meta ? (
-          <Text style={styles.meta} numberOfLines={1}>
-            {meta}
+          <Text style={styles.title} numberOfLines={1}>
+            {event.title}
           </Text>
-        ) : null}
-      </View>
 
-      <View style={styles.side}>
-        <AttendeeStack people={event.going} size={22} max={3} />
-        <View style={[styles.pill, pill.box]}>
-          <Text style={[styles.pillText, pill.text]}>{pill.label}</Text>
+          {meta ? (
+            <Text style={styles.meta} numberOfLines={1}>
+              {meta}
+            </Text>
+          ) : null}
         </View>
       </View>
-    </Pressable>
+    </Ticket>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
-    paddingVertical: space.md,
-    paddingHorizontal: space.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderLeftWidth: 3,
-    ...shadow.card,
-  },
-  pressed: { opacity: 0.75 },
-  dateBlock: {
-    width: 50,
-    height: 50,
-    borderRadius: radius.md,
+  main: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  spacer: { flex: 1 },
+
+  date: {
+    width: 46,
+    height: 48,
+    borderRadius: radius.sm,
+    backgroundColor: colors.bg,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadow.card,
   },
   month: {
-    color: colors.textOnBrand,
-    fontFamily: font.bold,
-    fontSize: textSize.micro,
-    letterSpacing: 1,
-    opacity: 0.92,
+    color: colors.textFaint,
+    fontFamily: font.mono,
+    fontSize: 9,
+    letterSpacing: 1.2,
   },
-  day: { color: colors.textOnBrand, fontFamily: font.display, fontSize: textSize.heading },
+  day: { color: colors.text, fontFamily: font.mono, fontSize: 17, letterSpacing: 0.5 },
+
   body: { flex: 1, minWidth: 0, gap: 2 },
   squadRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   squadDot: { width: 6, height: 6, borderRadius: radius.pill },
-  squadName: { fontFamily: font.bold, fontSize: textSize.caption, flexShrink: 1 },
-  title: { color: colors.text, fontFamily: font.bold, fontSize: textSize.lead, letterSpacing: -0.2 },
-  meta: { color: colors.textSoft, fontFamily: font.medium, fontSize: textSize.small },
-  side: { alignItems: 'flex-end', gap: space.xs },
-  pill: { paddingHorizontal: space.sm, paddingVertical: space.xxs, borderRadius: radius.pill },
-  pillText: { fontFamily: font.bold, fontSize: textSize.micro },
-  pillIn: { backgroundColor: tint.success },
-  pillTextIn: { color: colors.success },
-  pillOut: { backgroundColor: tint.danger },
-  pillTextOut: { color: colors.danger },
-  pillOpen: { backgroundColor: tint.neutral },
-  pillTextOpen: { color: colors.primary },
+  squadName: { flexShrink: 1, fontFamily: font.semi, fontSize: textSize.caption },
+  countdown: {
+    color: colors.textFaint,
+    fontFamily: font.mono,
+    fontSize: 9.5,
+    letterSpacing: 1,
+  },
+
+  title: {
+    color: colors.text,
+    fontFamily: font.title,
+    fontSize: textSize.lead,
+    letterSpacing: -0.2,
+  },
+  meta: { color: colors.textSoft, fontFamily: font.mono, fontSize: textSize.small },
+
+  stub: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  status: { color: colors.textSoft, fontFamily: font.semi, fontSize: textSize.small },
 });

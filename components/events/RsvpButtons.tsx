@@ -1,7 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { RsvpStatus } from '../../services/serviceEvents';
-import { colors, font, radius, space, textSize, tint } from '../../theme';
+import { colors, font, radius, space, textSize } from '../../theme';
+import Punch, { type PunchState } from '../general/Punch';
 
 type RsvpButtonsProps = {
   status?: RsvpStatus;
@@ -11,6 +11,12 @@ type RsvpButtonsProps = {
   onDark?: boolean;
   stretch?: boolean;
 };
+
+function punchState(status?: RsvpStatus): PunchState {
+  if (status === 'in') return 'in';
+  if (status === 'out') return 'out';
+  return 'open';
+}
 
 export default function RsvpButtons({
   status,
@@ -26,10 +32,10 @@ export default function RsvpButtons({
 
   return (
     <View style={[styles.row, stretch && styles.rowFill]}>
+      <Punch state={punchState(status)} size={compact ? 24 : 28} onDark={onDark} />
+
       <Option
-        label={status === 'in' ? "You're in" : "I'm going"}
-        icon="checkmark"
-        tone="success"
+        label={status === 'in' ? "You're in" : "I'm in"}
         active={status === 'in'}
         disabled={saving}
         compact={compact}
@@ -38,9 +44,7 @@ export default function RsvpButtons({
         onPress={() => pick('in')}
       />
       <Option
-        label="Can't make it"
-        icon="close"
-        tone="danger"
+        label={status === 'out' ? 'Passed' : 'Pass'}
         active={status === 'out'}
         disabled={saving}
         compact={compact}
@@ -54,8 +58,6 @@ export default function RsvpButtons({
 
 type OptionProps = {
   label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  tone: 'success' | 'danger';
   active: boolean;
   disabled: boolean;
   compact: boolean;
@@ -64,10 +66,14 @@ type OptionProps = {
   onPress: () => void;
 };
 
-function Option({ label, icon, tone, active, disabled, compact, onDark, stretch, onPress }: OptionProps) {
-  const accent = tone === 'success' ? colors.success : colors.danger;
-  const fill = tone === 'success' ? tint.success : tint.danger;
-  const idleText = onDark ? '#FFFFFF' : colors.textSoft;
+function Option({ label, active, disabled, compact, onDark, stretch, onPress }: OptionProps) {
+  let box = onDark ? styles.idleDark : styles.idleLight;
+  let text = onDark ? styles.textIdleDark : styles.textIdleLight;
+
+  if (active) {
+    box = onDark ? styles.activeDark : styles.activeLight;
+    text = onDark ? styles.textActiveDark : styles.textActiveLight;
+  }
 
   return (
     <Pressable
@@ -80,19 +86,12 @@ function Option({ label, icon, tone, active, disabled, compact, onDark, stretch,
         styles.option,
         compact && styles.optionCompact,
         stretch && styles.optionFill,
-        active
-          ? onDark
-            ? styles.activeDark
-            : { backgroundColor: fill, borderColor: accent }
-          : onDark
-            ? styles.idleDark
-            : styles.idleLight,
+        box,
         pressed && styles.pressed,
         disabled && styles.disabled,
       ]}
     >
-      {compact ? null : <Ionicons name={icon} size={17} color={active ? accent : idleText} />}
-      <Text style={[styles.label, { color: active ? accent : idleText }]} numberOfLines={1}>
+      <Text style={[styles.label, text]} numberOfLines={1}>
         {label}
       </Text>
     </Pressable>
@@ -100,24 +99,31 @@ function Option({ label, icon, tone, active, disabled, compact, onDark, stretch,
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: space.sm },
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   rowFill: { flex: 1 },
+
   option: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: space.xs,
+    height: 44,
     paddingHorizontal: space.md,
-    paddingVertical: space.sm,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
     borderWidth: 1.5,
+    borderColor: 'transparent',
   },
-  optionCompact: { paddingHorizontal: space.md, paddingVertical: space.xs },
+  optionCompact: { height: 36, paddingHorizontal: space.sm },
   optionFill: { flex: 1 },
-  idleLight: { backgroundColor: colors.surface, borderColor: colors.border },
-  idleDark: { backgroundColor: 'rgba(255,255,255,0.18)', borderColor: 'rgba(255,255,255,0.18)' },
-  activeDark: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
-  pressed: { opacity: 0.7 },
+  pressed: { opacity: 0.75 },
   disabled: { opacity: 0.5 },
-  label: { fontFamily: font.semi, fontSize: textSize.lead },
+
+  idleLight: { backgroundColor: colors.surface, borderColor: colors.border },
+  idleDark: { backgroundColor: 'transparent', borderColor: 'rgba(255,255,255,0.3)' },
+  activeLight: { backgroundColor: colors.text, borderColor: colors.text },
+  activeDark: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
+
+  label: { fontFamily: font.semi, fontSize: textSize.base },
+  textIdleLight: { color: colors.textSoft },
+  textIdleDark: { color: '#FFFFFF' },
+  textActiveLight: { color: '#FFFFFF' },
+  textActiveDark: { color: colors.text },
 });

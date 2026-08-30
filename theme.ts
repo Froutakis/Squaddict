@@ -1,50 +1,43 @@
-// ── Squaddict design system ────────────────────────────────────────────
-// "Twilight" — μοβ θέμα, από το design του Claude Design (Squaddict Home).
-// Παλέτα: παγωμένο λιλά φόντο, βαθύ δαμασκηνί κείμενο, μοβ κύρια ενέργεια,
-// κοραλί τόνος μόνο για badges και ειδοποιήσεις.
-
 export const colors = {
-  bg: '#FAF8FD',          // φόντο οθόνης (παγωμένο λιλά)
-  surface: '#FFFFFF',     // κάρτες, πεδία, φύλλα
-  surfaceAlt: '#F3EEF9',  // ήπια εναλλακτική επιφάνεια (κυκλικά κουμπιά, bubbles)
+  bg: '#EDF0F5',
+  surface: '#FFFFFF',
+  surfaceAlt: '#E4EAF0',
 
-  border: '#E1DAE9',      // περιγράμματα
-  borderStrong: '#D2C8DD',// έμφαση / διάστικτα περιγράμματα
+  border: '#DFE5EE',
+  borderStrong: '#C9D4E1',
 
-  text: '#2D1F2B',        // κύριο κείμενο (βαθύ δαμασκηνί)
-  textStrong: '#3A2936',  // ετικέτες, τίτλοι καρτών
-  textSoft: '#7A6974',    // δευτερεύον κείμενο
-  textFaint: '#9B8F96',   // placeholders, ανενεργά, μέρες εκτός μήνα
-  textOnBrand: '#FFFFFF', // κείμενο πάνω στο gradient
+  text: '#0C1926',
+  textStrong: '#0C1926',
+  textSoft: '#5A6B7D',
+  textFaint: '#7A8898',
+  textOnBrand: '#FFFFFF',
 
-  primary: '#7B4C93',     // κύρια ενέργεια (μοβ)
-  primaryDark: '#5C3570', // πατημένη κατάσταση / χρώμα σκιάς
-  accent: '#E76854',      // κοραλί — unread badges, κουκκίδα ειδοποίησης
+  primary: '#2145E6',
+  primaryDark: '#16309E',
+  accent: '#D5442F',
 
-  success: '#2E9E78',
-  danger: '#C4453B',
+  success: '#1F7A57',
+  danger: '#D5442F',
 };
 
-// Απαλά φόντα για status pills — Going / Maybe / No.
+export const sun = '#FFC53D';
+
 export const tint = {
-  success: '#E4F3EC',
-  danger: '#FBEBEA',
-  neutral: '#F3EEF9',
+  success: '#E2F1EA',
+  danger: '#FBE6E1',
+  neutral: '#E4EAF0',
+  sun: '#FFF3D6',
 };
 
-// Το κύριο gradient της μάρκας (λιλά → βαθύ μοβ).
-export const brand = ['#A96BC4', '#6E3F87'] as const;
+export const brand = ['#2145E6', '#2145E6'] as const;
 
-// Παλέτα gradients για avatars — κάθε παρέα/χρήστης παίρνει το δικό της χρώμα.
-// Όλα αρκετά κορεσμένα ώστε το λευκό γράμμα από πάνω να διαβάζεται.
 export const avatarGradients: readonly (readonly [string, string])[] = [
-  ['#A96BC4', '#6E3F87'],
-  ['#F0916A', '#E76854'],
-  ['#7A9E7E', '#4E7A63'],
-  ['#6D8FB8', '#48678F'],
-  ['#B08BBF', '#7A5C8A'],
-  ['#E0A458', '#C97B3C'],
-  ['#5FA8A0', '#3B7B76'],
+  ['#2145E6', '#2145E6'],
+  ['#1F7A57', '#1F7A57'],
+  ['#D5442F', '#D5442F'],
+  ['#0C1926', '#0C1926'],
+  ['#5A6B7D', '#5A6B7D'],
+  ['#A8601F', '#A8601F'],
 ];
 
 export function gradientFor(name: string): readonly [string, string] {
@@ -53,57 +46,53 @@ export function gradientFor(name: string): readonly [string, string] {
   return avatarGradients[h % avatarGradients.length];
 }
 
-// Συμπαγές χρώμα μιας παρέας — για τις κουκκίδες του ημερολογίου, όπου ένα
-// gradient σε 5px δεν διαβάζεται. Παίρνουμε το σκούρο άκρο του gradient.
 export function solidFor(name: string): string {
   return gradientFor(name)[1];
 }
 
-// Σκιές — ενιαίες σε όλο το app, όλες σε μοβ βάση ώστε να δένουν με το φόντο.
 export const shadow = {
   card: {
-    shadowColor: '#5C3570',
+    shadowColor: '#0C1926',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
+    shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
   },
   button: {
-    shadowColor: '#5C3570',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowColor: '#0C1926',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
     elevation: 4,
   },
-  // Απαλή ανύψωση για φυσαλίδες chat και για το header — μόλις που φαίνεται.
   bubble: {
-    shadowColor: '#5C3570',
+    shadowColor: '#0C1926',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.04,
     shadowRadius: 3,
     elevation: 1,
   },
   hero: {
-    shadowColor: '#5C3570',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 18,
+    shadowColor: '#0C1926',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 22,
     elevation: 6,
   },
 };
 
-export const radius = { sm: 10, md: 14, lg: 18, xl: 26, pill: 999 };
+export const radius = { sm: 12, md: 16, lg: 20, xl: 26, pill: 999 };
 export const space = { xxs: 4, xs: 6, sm: 10, md: 16, lg: 24, xl: 32 };
 
-// Μέγιστο πλάτος περιεχομένου. Στο κινητό δεν δεσμεύει· στο web κρατά το chat
-// σε στήλη αντί να απλώνεται σε όλη την οθόνη.
 export const layout = { column: 720 };
 
 export const font = {
   display: 'Poppins_800ExtraBold',
+  title: 'Poppins_700Bold',
   bold: 'Poppins_700Bold',
   semi: 'Poppins_600SemiBold',
   medium: 'Poppins_500Medium',
+  mono: 'Poppins_500Medium',
 };
 
 export const textSize = {
@@ -115,39 +104,31 @@ export const textSize = {
   lead: 15,
   heading: 20,
   hero: 26,
+  display: 30,
 };
 
-// ── Chat: "Paper" ──────────────────────────────────────────────────────
-// Ξεχωριστή, πιο ήσυχη παλέτα μόνο για την οθόνη των μηνυμάτων: ζεστό κρεμ
-// χαρτί, μελανί κείμενο, ένα γήινο κεραμιδί σαν μοναδικός τόνος. Χωρίς
-// gradients και χωρίς σκιές — ο διαχωρισμός γίνεται με λεπτές γραμμές.
 export const paper = {
-  bg: '#FAF9F5',          // φόντο οθόνης (κρεμ χαρτί)
-  surface: '#FFFFFF',     // φυσαλίδες των άλλων, κάρτες λίστας
-  surfaceAlt: '#F0EEE6',  // ήπια επιφάνεια (πεδίο εισόδου, chips)
+  bg: '#EDF0F5',
+  surface: '#FFFFFF',
+  surfaceAlt: '#E4EAF0',
 
-  line: '#E8E5DA',        // λεπτές γραμμές / περιγράμματα
-  lineSoft: '#F0EDE4',    // διαχωριστικά μέσα σε λίστα
+  line: '#DFE5EE',
+  lineSoft: '#EAEFF5',
 
-  ink: '#1F1E1D',         // κύριο κείμενο
-  inkSoft: '#6B6862',     // δευτερεύον κείμενο
-  inkFaint: '#9A968D',    // ώρες, placeholders
+  ink: '#0C1926',
+  inkSoft: '#5A6B7D',
+  inkFaint: '#7A8898',
 
-  // Δικά μου μηνύματα: συμπαγές μελανί κουτί με κρεμ γράμματα.
-  mine: '#262625',
-  onMine: '#FAF9F5',
+  mine: '#0C1926',
+  onMine: '#FFFFFF',
 
-  accent: '#C96442',      // κεραμιδί — κουμπί αποστολής, ενεργές ενδείξεις
-  accentSoft: '#F3E7E1',  // απαλό φόντο του τόνου
+  accent: '#2145E6',
+  accentSoft: '#E4EAFD',
 
-  // Μήνυμα που δεν στάλθηκε. Πιο βαθύ και πιο ήσυχο από το colors.danger του
-  // κύριου θέματος — σε κρεμ χαρτί ένα έντονο κόκκινο ουρλιάζει.
-  danger: '#A33A28',
-  dangerSoft: '#F7E4E0',
+  danger: '#D5442F',
+  dangerSoft: '#FBE6E1',
 };
 
-// Γραμματοσειρές του chat: Inter για το UI και τα μηνύματα, Source Serif για
-// τους τίτλους — ίδια λογική με το claude.ai (grotesque + serif κεφαλίδες).
 export const paperFont = {
   regular: 'Inter_400Regular',
   medium: 'Inter_500Medium',
