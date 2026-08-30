@@ -20,6 +20,8 @@ export default function App() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
   const [screen, setScreen] = useState<NavTab>('home');
+  const [threadOpen, setThreadOpen] = useState(false);
+  const [createNonce, setCreateNonce] = useState(0);
   const [fontsLoaded, fontError] = useFonts({
     Poppins_500Medium,
     Poppins_600SemiBold,
@@ -62,13 +64,26 @@ export default function App() {
     );
   }
 
+  function requestCreate() {
+    setScreen('home');
+    setCreateNonce((n) => n + 1);
+  }
+
+  const navHidden = screen === 'squads' && threadOpen;
+
   return (
     <View style={styles.app}>
       <View style={styles.body}>
-        {screen === 'squads' ? <GroupChatScreen user={user} /> : <HomeScreen user={user} />}
+        {screen === 'squads' ? (
+          <GroupChatScreen user={user} onThreadChange={setThreadOpen} />
+        ) : (
+          <HomeScreen user={user} createNonce={createNonce} />
+        )}
       </View>
 
-      <BottomNav active={screen} onNavigate={setScreen} />
+      {navHidden ? null : (
+        <BottomNav active={screen} onNavigate={setScreen} onCreate={requestCreate} />
+      )}
       <StatusBar style="dark" />
     </View>
   );

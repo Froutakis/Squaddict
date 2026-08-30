@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import type { Group } from '../../services/serviceGroup';
 import { createEvent, updateEvent, type MyEvent, type NewEvent } from '../../services/serviceEvents';
 import type { Place } from '../../services/servicePlaces';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../../lib/tags';
-import { colors, font, radius, space } from '../../theme';
+import { colors, font, radius, space, textSize } from '../../theme';
 import AuthField from '../general/AuthField';
 import Button from '../general/Button';
 import DateField from '../general/DateField';
 import GroupBar from '../general/GroupBar';
 import PlaceField from '../general/PlaceField';
-import SheetHeader from '../general/SheetHeader';
 
 type EventFormSheetProps = {
   visible: boolean;
@@ -26,6 +26,10 @@ function placeOf(event?: MyEvent | null): Place | null {
   if (!event?.placeLabel || event.lat === undefined || event.lng === undefined) return null;
 
   return { label: event.placeLabel, lat: event.lat, lng: event.lng };
+}
+
+function Label({ children }: { children: string }) {
+  return <Text style={styles.microLabel}>{children}</Text>;
 }
 
 export default function EventFormSheet({
@@ -80,7 +84,7 @@ export default function EventFormSheet({
   }
 
   async function handleSave() {
-    if (!title.trim()) { setFormError('Give your event a title.'); return; }
+    if (!title.trim()) { setFormError('Give your plan a title.'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) { setFormError('Use the format YYYY-MM-DD.'); return; }
     if (!editing && !targetGroup) { setFormError('Pick a squad.'); return; }
     if (placeRequired && !place) { setFormError('Pick the spot on the map so people can find it.'); return; }
@@ -109,7 +113,7 @@ export default function EventFormSheet({
       await onSaved();
       onClose();
     } catch {
-      setFormError(editing ? 'Could not save the changes. Try again.' : 'Could not create the event. Try again.');
+      setFormError(editing ? 'Could not save the changes. Try again.' : 'Could not post the plan. Try again.');
     } finally {
       setSaving(false);
     }
@@ -131,102 +135,157 @@ export default function EventFormSheet({
         }}
       >
         <Pressable style={styles.sheet} onPress={() => {}}>
-          <SheetHeader
-            title={editing ? 'Edit event' : 'Create new event'}
-            onClose={onClose}
-            closeDisabled={saving}
-          />
+          <View style={styles.head}>
+            <View style={styles.topRow}>
+              <Pressable
+                onPress={onClose}
+                disabled={saving}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
+                <Text style={styles.cancel}>Cancel</Text>
+              </Pressable>
 
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.form}>
-            <AuthField
-              label="Name"
-              icon="airplane"
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Kalamia 2 ora karta"
-              loading={saving}
-            />
+              <Text style={styles.sheetTitle}>{editing ? 'Edit plan' : 'New plan'}</Text>
 
-            <View style={styles.row}>
-              <DateField label="Date" value={eventDate} onChange={setEventDate} style={styles.dateColumn} />
-              <AuthField
-                label="Time"
-                value={startTime}
-                onChangeText={setStartTime}
-                placeholder="--:--"
-                loading={saving}
-                style={styles.timeColumn}
+              <Text style={[styles.cancel, styles.ghost]} accessibilityElementsHidden>Cancel</Text>
+            </View>
+          </View>
+
+          <ScrollView
+            style={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.form}
+          >
+            <View>
+              <Label>Calling it</Label>
+              <TextInput
+                value={title}
+                onChangeText={setTitle}
+                placeholder=""
+                placeholderTextColor={colors.textFaint}
+                editable={!saving}
+                selectionColor={colors.primary}
+                accessibilityLabel="Plan title"
+                style={styles.titleInput}
+              />
+              <View style={styles.underline} />
+            </View>
+
+            <View>
+              <Label>With which parea</Label>
+              <GroupBar
+                groups={groups}
+                activeId={targetGroup}
+                onSelect={setTargetGroup}
+                showAll={false}
               />
             </View>
 
-            <PlaceField label="Spot" place={place} onChange={setPlace} loading={saving} />
+            <View style={styles.section}>
+              <Label>When</Label>
+              <View style={styles.row}>
+                <DateField value={eventDate} onChange={setEventDate} style={styles.dateColumn}/>
+                <AuthField
+                  value={startTime}
+                  onChangeText={setStartTime}
+                  placeholder="Start"
+                  mono
+                  loading={saving}
+                  style={styles.timeColumn}
+                />
+                <AuthField
+                  value={endTime}
+                  onChangeText={setEndTime}
+                  placeholder="End"
+                  mono
+                  loading={saving}
+                  style={styles.timeColumn}
+                />
+                </View>
+            </View>
 
-            <AuthField
-              label="Call it"
-              icon="pricetag-outline"
-              value={nickname}
-              onChangeText={setNickname}
-              placeholder="Stefanos place"
-              loading={saving}
-            />
+            <View style={styles.section}>
+              <Label>Spot</Label>
+              <PlaceField place={place} onChange={setPlace} loading={saving} />
+              <AuthField
+                icon="pricetag-outline"
+                value={nickname}
+                onChangeText={setNickname}
+                placeholder="Give the spot a nickname"
+                loading={saving}
+              />
+            </View>
+
+            <View>
+              <Label>What kind of night</Label>
+              <View style={styles.tagRow}>
+                {EVENT_TAGS.map(function (tag) {
+                  const active = tags.includes(tag);
+                  return (
+                    <Pressable
+                      key={tag}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={tagLabel(tag)}
+                      onPress={() => toggleTag(tag)}
+                      style={({ pressed }) => [
+                        styles.tag,
+                        active ? styles.tagActive : styles.tagIdle,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={[styles.tagLabel, active && styles.tagLabelActive]}>
+                        {tagLabel(tag)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View>
+              <Label>Note</Label>
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Booking a table this time. Bring cash for the split."
+                placeholderTextColor={colors.textFaint}
+                editable={!saving}
+                selectionColor={colors.primary}
+                accessibilityLabel="Note"
+                multiline
+                style={styles.note}
+              />
+            </View>
 
             <View style={styles.publicRow}>
+              <Ionicons name="globe-outline" size={22} color={colors.textSoft} />
               <View style={styles.publicText}>
-                <Text style={styles.publicTitle}>Open to everyone</Text>
+                <Text style={styles.publicTitle}>Open to Squaddict</Text>
                 <Text style={styles.publicBody}>
-                  Shows up in the feed. Anyone nearby can say they are coming.
+                  Anyone nearby can find this plan and ask to come. Off means your squad only.
                 </Text>
               </View>
               <Switch
                 value={isPublic}
                 onValueChange={setIsPublic}
                 disabled={saving}
-                trackColor={{ false: colors.border, true: colors.primary }}
+                trackColor={{ false: colors.border, true: colors.success }}
                 thumbColor={colors.surface}
               />
             </View>
-
-            {isPublic ? (
-              <View style={styles.tags}>
-                <Text style={styles.label}>What kind of thing is it?</Text>
-                <View style={styles.tagRow}>
-                  {EVENT_TAGS.map(function (tag) {
-                    const active = tags.includes(tag);
-                    return (
-                      <Pressable
-                        key={tag}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
-                        accessibilityLabel={tagLabel(tag)}
-                        onPress={() => toggleTag(tag)}
-                        style={({ pressed }) => [
-                          styles.tag,
-                          active ? styles.tagActive : styles.tagIdle,
-                          pressed && styles.pressed,
-                        ]}
-                      >
-                        <Text style={[styles.tagLabel, active && styles.tagLabelActive]}>
-                          {tagLabel(tag)}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            ) : null}
-
-            <GroupBar
-              groups={groups}
-              activeId={targetGroup}
-              onSelect={setTargetGroup}
-              showAll={false}
-              compact
-            />
-
-            {formError ? <Text style={styles.formError}>{formError}</Text> : null}
-
-            <Button title={editing ? 'Save' : 'Create'} onPress={handleSave} loading={saving} />
           </ScrollView>
+
+          <View style={styles.actionBar}>
+            {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+            <Button
+              title={editing ? 'Save changes' : 'Post plan'}
+              onPress={handleSave}
+              loading={saving}
+            />
+          </View>
         </Pressable>
       </Pressable>
     </Modal>
@@ -236,36 +295,81 @@ export default function EventFormSheet({
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
-    maxHeight: '92%',
+    maxHeight: '100%',
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    padding: space.lg,
-    gap: space.md,
   },
-  form: { gap: space.md, paddingBottom: space.md },
+
+  head: { paddingHorizontal: space.lg, paddingTop: space.lg },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  cancel: { color: colors.textSoft, fontFamily: font.medium, fontSize: 15 },
+  ghost: { color: 'transparent' },
+  sheetTitle: { color: colors.text, fontFamily: font.semi, fontSize: 15 },
+
+  scroll: { flexShrink: 1 },
+  form: { gap: space.lg, padding: space.lg },
+  section: { gap: space.sm },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
-  dateColumn: { flex: 2 },
+  half: { flex: 1 },
+  dateColumn: { flex: 1.6 },
   timeColumn: { flex: 1 },
-  label: { color: colors.textStrong, fontFamily: font.semi, fontSize: 15 },
+  microLabel: {
+    color: colors.textFaint,
+    fontFamily: font.mono,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    marginBottom: space.xs,
+  },
+
+  titleInput: {
+    color: colors.text,
+    fontFamily: font.display,
+    fontSize: textSize.display,
+    letterSpacing: -0.6,
+    paddingVertical: space.xs,
+  },
+  underline: { height: 1, backgroundColor: colors.border, marginTop: space.xs },
+
+  note: {
+    minHeight: 84,
+    padding: space.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.bg,
+    color: colors.text,
+    fontFamily: font.medium,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlignVertical: 'top',
+  },
+
   publicRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
     padding: space.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.lg,
+    backgroundColor: colors.bg,
   },
   publicText: { flex: 1, gap: 3 },
   publicTitle: { color: colors.textStrong, fontFamily: font.semi, fontSize: 15 },
   publicBody: { color: colors.textSoft, fontFamily: font.medium, fontSize: 12.5, lineHeight: 17 },
-  tags: { gap: space.sm },
+
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
-  tag: { height: 32, justifyContent: 'center', paddingHorizontal: 13, borderRadius: radius.pill, borderWidth: 1 },
+  tag: { height: 30, justifyContent: 'center', paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1 },
   tagIdle: { backgroundColor: colors.surface, borderColor: colors.border },
-  tagActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tagActive: { backgroundColor: colors.text, borderColor: colors.text },
   tagLabel: { color: colors.textSoft, fontFamily: font.semi, fontSize: 12.5 },
   tagLabelActive: { color: colors.textOnBrand },
   pressed: { opacity: 0.7 },
+
+  actionBar: {
+    padding: space.lg,
+    paddingBottom: space.xl,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: space.sm,
+  },
   formError: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
 });

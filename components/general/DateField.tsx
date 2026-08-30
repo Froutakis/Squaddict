@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, font, radius, space } from '../../theme';
+import { colors, font } from '../../theme';
 import { dayMonth } from '../../lib/datetime';
+import { fieldStyles } from '../../fieldStyles';
 import DatePickerSheet from './DatePickerSheet';
 
 type DateFieldProps = {
-  label: string;
+  label?: string;
   value: string;
   onChange: (value: string) => void;
   icon?: keyof typeof Ionicons.glyphMap;
@@ -31,17 +32,23 @@ export default function DateField({
   const [open, setOpen] = useState(false);
 
   const shown = dayMonth(value) || EMPTY;
+  const name = label ?? 'Date';
 
   return (
-    <View style={[styles.field, style]}>
-      <Text style={styles.label}>{label}</Text>
+    <View style={[fieldStyles.field, style]}>
+      {label ? <Text style={fieldStyles.label}>{label}</Text> : null}
 
       <Pressable
-        style={[styles.inputBox, open && styles.focused, !!error && styles.errorBox, disabled && styles.disabled]}
+        style={[
+          fieldStyles.box,
+          open && fieldStyles.focused,
+          !!error && fieldStyles.errorBox,
+          disabled && fieldStyles.disabled,
+        ]}
         onPress={() => setOpen(true)}
         disabled={disabled}
         accessibilityRole="button"
-        accessibilityLabel={label}
+        accessibilityLabel={name}
         accessibilityValue={{ text: shown }}
       >
         <Ionicons
@@ -49,17 +56,17 @@ export default function DateField({
           size={20}
           color={error ? colors.danger : open ? colors.primary : colors.textSoft}
         />
-        <Text style={[styles.value, !value && styles.placeholder]} numberOfLines={1}>
+        <Text style={[styles.value, !value && fieldStyles.placeholder]} numberOfLines={1}>
           {shown}
         </Text>
         <Ionicons name="chevron-down" size={18} color={colors.textFaint} />
       </Pressable>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={fieldStyles.error}>{error}</Text> : null}
 
       <DatePickerSheet
         visible={open}
-        title={label}
+        title={name}
         value={value}
         minDate={minDate}
         onCancel={() => setOpen(false)}
@@ -73,30 +80,11 @@ export default function DateField({
 }
 
 const styles = StyleSheet.create({
-  field: { gap: 8 },
-  label: { color: colors.textStrong, fontFamily: font.semi, fontSize: 15 },
-  inputBox: {
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: space.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
+  value: {
+    flex: 1,
+    color: colors.text,
+    fontFamily: font.mono,
+    fontSize: 15,
+    letterSpacing: 0.4,
   },
-  value: { flex: 1, color: colors.text, fontFamily: font.medium, fontSize: 16 },
-  placeholder: { color: colors.textFaint },
-  focused: {
-    borderColor: colors.primary,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  errorBox: { borderColor: colors.danger },
-  disabled: { opacity: 0.6 },
-  error: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
 });

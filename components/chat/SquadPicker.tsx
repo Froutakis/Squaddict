@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
     maxWidth: layout.column,
     alignSelf: 'center',
     paddingHorizontal: space.md,
-    paddingBottom: space.xl,
+    paddingBottom: 110,
   },
   // Ανθρωπάκι και όνομα στην ίδια γραμμή, κεντραρισμένα μαζί.
   head: {
