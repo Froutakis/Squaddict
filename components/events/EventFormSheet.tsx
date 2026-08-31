@@ -8,6 +8,7 @@ import { EVENT_TAGS, tagLabel, type EventTag } from '../../lib/tags';
 import { colors, font, radius, space, textSize } from '../../theme';
 import AuthField from '../general/AuthField';
 import Button from '../general/Button';
+import Chip from '../general/Chip';
 import DateField from '../general/DateField';
 import GroupBar from '../general/GroupBar';
 import PlaceField from '../general/PlaceField';
@@ -222,24 +223,13 @@ export default function EventFormSheet({
               <Label>What kind of night</Label>
               <View style={styles.tagRow}>
                 {EVENT_TAGS.map(function (tag) {
-                  const active = tags.includes(tag);
                   return (
-                    <Pressable
+                    <Chip
                       key={tag}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                      accessibilityLabel={tagLabel(tag)}
+                      label={tagLabel(tag)}
+                      active={tags.includes(tag)}
                       onPress={() => toggleTag(tag)}
-                      style={({ pressed }) => [
-                        styles.tag,
-                        active ? styles.tagActive : styles.tagIdle,
-                        pressed && styles.pressed,
-                      ]}
-                    >
-                      <Text style={[styles.tagLabel, active && styles.tagLabelActive]}>
-                        {tagLabel(tag)}
-                      </Text>
-                    </Pressable>
+                    />
                   );
                 })}
               </View>
@@ -357,11 +347,6 @@ const styles = StyleSheet.create({
   publicBody: { color: colors.textSoft, fontFamily: font.medium, fontSize: 12.5, lineHeight: 17 },
 
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
-  tag: { height: 30, justifyContent: 'center', paddingHorizontal: 12, borderRadius: radius.pill, borderWidth: 1 },
-  tagIdle: { backgroundColor: colors.surface, borderColor: colors.border },
-  tagActive: { backgroundColor: colors.text, borderColor: colors.text },
-  tagLabel: { color: colors.textSoft, fontFamily: font.semi, fontSize: 12.5 },
-  tagLabelActive: { color: colors.textOnBrand },
   pressed: { opacity: 0.7 },
 
   actionBar: {
