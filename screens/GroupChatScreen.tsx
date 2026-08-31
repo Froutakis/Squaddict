@@ -9,8 +9,10 @@ import {
   Platform,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   type StyleProp,
   type ViewStyle,
@@ -26,6 +28,19 @@ import {
   mergeNewMessages,
   type Connection,
 } from '../components/chat/connection';
+import {
+  activeTypists,
+  noteTyping,
+  presenceLabel,
+  typingLabel,
+  TYPING_THROTTLE_MS,
+  type Typist,
+} from '../components/chat/typing';
+import {
+  highlightParts,
+  isSearchable,
+  snippet,
+} from '../components/chat/search';
 import { newMessageId } from '../lib/ids';
 import type { Group } from '../services/serviceGroup';
 import {
@@ -38,12 +53,14 @@ import {
   getMessagesAfter,
   getUnreadCounts,
   markGroupRead,
+  searchMessages,
   sendMessage,
   toChatMessage,
+  type SearchHit,
   type ChatMessage,
   type GroupPreview,
 } from '../services/serviceGroup';
-import { closeGroupChat, startChat } from '../services/serviceRealtime';
+import { closeGroupChat, sendTyping, startChat } from '../services/serviceRealtime';
 import { getUserById } from '../services/serviceUser';
 import { layout, paper, paperFont, radius, space } from '../theme';
 
@@ -91,6 +108,15 @@ export default function GroupChatScreen({
   const [menuFor, setMenuFor] = useState<ChatMessage | null>(null);
   // Το μήνυμα που διορθώνεται αυτή τη στιγμή στον composer.
   const [editing, setEditing] = useState<ChatMessage | null>(null);
+  // Ποιοι γράφουν αυτή τη στιγμή, και πόσοι είναι συνδεδεμένοι.
+  const [typists, setTypists] = useState<Typist[]>([]);
+  const [online, setOnline] = useState(0);
+  // Αναζήτηση: null = κλειστή. Το κείμενο ζει χωριστά από τα αποτελέσματα,
+  // επειδή τα δεύτερα έρχονται με καθυστέρηση.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchHits, setSearchHits] = useState<SearchHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   // Τα ονόματα των μελών ζουν και σε ref: ο realtime handler φτιάχνεται μία φορά
   // ανά παρέα και πρέπει να βλέπει πάντα τον τρέχοντα χάρτη.
@@ -112,6 +138,14 @@ export default function GroupChatScreen({
   // ρωτήσει τη βάση: αλλιώς, βγαίνοντας από ένα chat, το unread_counts μπορεί να
   // προλάβει το mark και να ξαναανάψει το badge που μόλις σβήσαμε.
   const markingRef = useRef<Promise<unknown>>(Promise.resolve());
+  // Ποιοι είμαστε, για presence και broadcast. Σε ref επειδή το κανάλι στήνεται
+  // μία φορά ανά παρέα, ενώ το όνομα φτάνει αργότερα από το προφίλ.
+  const meRef = useRef({ id: user.id, name: '' });
+  meRef.current = { id: user.id, name: displayName };
+  // Το ανοιχτό κανάλι, ώστε ο composer να μπορεί να στείλει «γράφω».
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  // Πότε στείλαμε τελευταία φορά — το throttle του typing.
+  const typingSentRef = useRef(0);
 
   // Φέρνει τα τελευταία μηνύματα για την προεπισκόπηση της λίστας.
   // Αν αποτύχει το αφήνουμε να περάσει: η λίστα δουλεύει και χωρίς previews.
@@ -228,6 +262,8 @@ export default function GroupChatScreen({
       setMemberCount(0);
       setHasMore(false);
       setConnection('connecting');
+      setTypists([]);
+      setOnline(0);
       return;
     }
 
@@ -255,6 +291,9 @@ export default function GroupChatScreen({
     setLoadingOlder(false);
     loadingOlderRef.current = false;
     setError(null);
+    setTypists([]);
+    setOnline(0);
+    typingSentRef.current = 0;
 
     // Καλείται όταν ο server στείλει νέα γραμμή μηνύματος.
     // Το `row` ΔΕΝ το δίνουμε εμείς — το δίνει η startChat όταν φτάσει το μήνυμα.
@@ -280,6 +319,15 @@ export default function GroupChatScreen({
         // Νέος πίνακας με το μήνυμα στο τέλος.
         // Ποτέ prev.push() — το state του React δεν το πειράζουμε επί τόπου.
         return [...prev, incoming];
+      });
+    }
+
+    // «Γράφει…» από άλλον. Το broadcast δεν ξέρει τα profiles, οπότε αν το
+    // όνομα δεν ήρθε, το συμπληρώνουμε από τον χάρτη μελών.
+    function handleTyping(who: { id: string; name: string }) {
+      const name = who.name || namesRef.current[who.id] || '';
+      setTypists(function (prev) {
+        return noteTyping(prev, { id: who.id, name, at: Date.now() });
       });
     }
 
@@ -398,13 +446,14 @@ export default function GroupChatScreen({
         const memberIds = Object.keys(names);
         setMemberCount(memberIds.length);
 
-        const chat = await startChat(
-          groupId,
-          handleIncomingRow,
-          undefined,
-          handleStatus,
-          handleUpdatedRow,
-        );
+        const chat = await startChat(groupId, meRef.current, {
+          onNewMessage: handleIncomingRow,
+          onMessageUpdate: handleUpdatedRow,
+          onStatus: handleStatus,
+          onTyping: handleTyping,
+          onPresence: setOnline,
+        });
+        channelRef.current = chat.channel;
 
         // Αν άλλαξε παρέα όσο άνοιγε το κανάλι, το cleanup έχει ήδη τρέξει και δεν
         // ξέρει γι' αυτό το κανάλι. Κλείσ' το εδώ, αλλιώς μένει ανοιχτό socket.
@@ -437,11 +486,37 @@ export default function GroupChatScreen({
       // τα είδες κι αυτά. Χωρίς αυτό, βγαίνοντας από ένα ανοιχτό chat θα έβρισκες
       // badge για μηνύματα που μόλις διάβασες.
       markRead(chatGroupId);
+      channelRef.current = null;
       if (channel) {
         closeGroupChat(channel);
       }
     };
   }, [activeId, markRead]);
+
+  /**
+   * Οι ενδείξεις «γράφει…» λήγουν μόνες τους.
+   *
+   * Το broadcast δεν έχει «σταμάτησε να γράφει» — μόνο σιωπή. Χωρίς αυτόν τον
+   * καθαρισμό, ένα tab που έκλεισε στη μέση μιας λέξης θα άφηνε το «γράφει…»
+   * αναμμένο για πάντα. Ο timer τρέχει μόνο όσο υπάρχει κάποιος στη λίστα.
+   */
+  useEffect(() => {
+    if (typists.length === 0) {
+      return;
+    }
+
+    const timer = setInterval(function prune() {
+      setTypists(function (prev) {
+        const alive = activeTypists(prev, Date.now());
+        // Ίδιο μήκος -> κανείς δεν έληξε -> ίδια αναφορά, κανένα render.
+        return alive.length === prev.length ? prev : alive;
+      });
+    }, 1000);
+
+    return function cleanup() {
+      clearInterval(timer);
+    };
+  }, [typists.length]);
 
   /**
    * Η αποστολή, από τη στιγμή που το μήνυμα είναι ήδη στην οθόνη.
@@ -555,6 +630,85 @@ export default function GroupChatScreen({
     },
     [],
   );
+
+  /**
+   * Η αναζήτηση, με καθυστέρηση.
+   *
+   * Χωρίς αυτήν θα έφευγε ένα ερώτημα ανά πλήκτρο, και οι απαντήσεις θα
+   * επέστρεφαν με άλλη σειρά από αυτή που στάλθηκαν — «παρα» θα μπορούσε να
+   * απαντηθεί μετά το «παραλ» και να δείξει λάθος αποτελέσματα. Η σημαία
+   * `cancelled` κόβει κάθε απάντηση που δεν αφορά πια τον τρέχοντα όρο.
+   */
+  useEffect(() => {
+    if (!searchOpen || !activeId) {
+      return;
+    }
+
+    if (!isSearchable(searchTerm)) {
+      setSearchHits(null);
+      setSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSearching(true);
+
+    const timer = setTimeout(async function run() {
+      try {
+        const hits = await searchMessages(activeId, searchTerm);
+        if (!cancelled) {
+          setSearchHits(hits);
+        }
+      } catch {
+        if (!cancelled) {
+          setSearchHits([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setSearching(false);
+        }
+      }
+    }, 250);
+
+    return function cleanup() {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchOpen, searchTerm, activeId]);
+
+  function openSearch() {
+    setSearchTerm('');
+    setSearchHits(null);
+    setSearchOpen(true);
+  }
+
+  function closeSearch() {
+    setSearchOpen(false);
+    setSearchTerm('');
+    setSearchHits(null);
+    setSearching(false);
+  }
+
+  /**
+   * Λέει στους άλλους ότι γράφουμε — με throttle.
+   *
+   * Χωρίς αυτό θα έφευγε ένα broadcast ανά πλήκτρο. Το κατώφλι είναι αισθητά
+   * μικρότερο από τον χρόνο ζωής της ένδειξης, ώστε το «γράφει…» του άλλου να
+   * μη σβήνει ανάμεσα σε δύο αποστολές.
+   */
+  const handleTypingActivity = useCallback(function activity() {
+    const channel = channelRef.current;
+    if (!channel) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - typingSentRef.current < TYPING_THROTTLE_MS) {
+      return;
+    }
+    typingSentRef.current = now;
+    sendTyping(channel, meRef.current);
+  }, []);
 
   // Ο composer έχει δύο δουλειές πλέον. Ποια από τις δύο, το λέει το `editing`.
   const handleComposerSend = useCallback(
@@ -678,10 +832,13 @@ export default function GroupChatScreen({
 
   // ---- Τιμές που θα μπουν στο JSX, υπολογισμένες εκ των προτέρων ----
 
-  let memberLabel = 'members';
-  if (memberCount === 1) {
-    memberLabel = 'member';
-  }
+  // Ο ενικός/πληθυντικός των μελών μετακόμισε στην presenceLabel, μαζί με το
+  // «· N online» — τα δύο μπαίνουν στην ίδια γραμμή και κρίνονται μαζί.
+  const typing = typingLabel(
+    activeTypists(typists, Date.now()).map(function (entry) {
+      return entry.name;
+    }),
+  );
 
   // Το KeyboardAvoidingView θέλει 'padding' μόνο στο iOS.
   let keyboardBehavior: 'padding' | undefined = undefined;
@@ -844,6 +1001,82 @@ export default function GroupChatScreen({
     return styles.menuItem;
   }
 
+  /** Το αποτέλεσμα μιας αναζήτησης — ο όρος τονισμένος μέσα στο απόσπασμα. */
+  function renderHit(hit: SearchHit) {
+    const text = snippet(hit.content, searchTerm);
+    const who = hit.senderName || 'Someone';
+
+    return (
+      <View key={hit.id} style={styles.hit}>
+        <Text style={styles.hitWho}>
+          {who} · {new Date(hit.createdAt).toLocaleDateString('en-GB', {
+            day: 'numeric',
+            month: 'short',
+          })}
+        </Text>
+        <Text style={styles.hitText}>
+          {highlightParts(text, searchTerm).map(function (part, index) {
+            // Το key είναι ο δείκτης επίτηδες: τα κομμάτια δεν αναδιατάσσονται
+            // ποτέ — ξαναφτιάχνονται από την αρχή σε κάθε αλλαγή του όρου.
+            return (
+              <Text key={index} style={part.match ? styles.hitMatch : undefined}>
+                {part.text}
+              </Text>
+            );
+          })}
+        </Text>
+      </View>
+    );
+  }
+
+  function renderSearch() {
+    if (!searchOpen) {
+      return null;
+    }
+
+    let body;
+    if (!isSearchable(searchTerm)) {
+      body = <Text style={styles.searchNote}>Type at least two characters.</Text>;
+    } else if (searching && searchHits === null) {
+      body = <ActivityIndicator style={styles.searchSpinner} color={paper.accent} />;
+    } else if (searchHits && searchHits.length === 0) {
+      body = <Text style={styles.searchNote}>Nothing found for "{searchTerm.trim()}".</Text>;
+    } else if (searchHits) {
+      body = searchHits.map(renderHit);
+    }
+
+    return (
+      <Modal transparent visible animationType="fade" onRequestClose={closeSearch}>
+        <View style={styles.searchScreen}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={16} color={paper.inkFaint} />
+            <TextInput
+              style={styles.searchInput}
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              placeholder="Search this squad"
+              placeholderTextColor={paper.inkFaint}
+              autoCorrect={false}
+              autoFocus
+              accessibilityLabel="Search messages"
+            />
+            <Pressable onPress={closeSearch} accessibilityRole="button" accessibilityLabel="Close search" hitSlop={8}>
+              <Ionicons name="close" size={18} color={paper.inkSoft} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            style={styles.searchResults}
+            contentContainerStyle={styles.searchResultsInner}
+            keyboardShouldPersistTaps="handled"
+          >
+            {body}
+          </ScrollView>
+        </View>
+      </Modal>
+    );
+  }
+
   function renderEmptyList() {
     return (
       <View style={styles.empty}>
@@ -900,10 +1133,17 @@ export default function GroupChatScreen({
             <Text style={styles.title} numberOfLines={1}>
               {activeGroup.name}
             </Text>
-            <Text style={styles.subtitle}>
-              {memberCount} {memberLabel}
-            </Text>
+            <Text style={styles.subtitle}>{presenceLabel(memberCount, online)}</Text>
           </View>
+
+          <Pressable
+            onPress={openSearch}
+            accessibilityRole="button"
+            accessibilityLabel="Search messages"
+            style={backButtonStyle}
+          >
+            <Ionicons name="search" size={19} color={paper.ink} />
+          </Pressable>
         </View>
 
         <KeyboardAvoidingView
@@ -939,6 +1179,11 @@ export default function GroupChatScreen({
             />
           )}
 
+          {/* Πάνω από τον composer και όχι μέσα στη λίστα: η λίστα είναι
+              ανεστραμμένη, και μια γραμμή που μπαίνει και βγαίνει εκεί θα
+              κουνούσε το σκρολ. */}
+          {typing ? <Text style={styles.typing}>{typing}</Text> : null}
+
           {/* Το key ξαναστήνει τον composer όταν αλλάζει το μήνυμα που
               διορθώνουμε — έτσι το initialText διαβάζεται ξανά χωρίς effect. */}
           <ChatComposer
@@ -949,10 +1194,12 @@ export default function GroupChatScreen({
               setEditing(null);
             }}
             onSend={handleComposerSend}
+            onTyping={handleTypingActivity}
             disabled={!activeId}
           />
 
           {renderMessageMenu()}
+          {renderSearch()}
         </KeyboardAvoidingView>
       </View>
     </SafeAreaView>
@@ -998,6 +1245,75 @@ const styles = StyleSheet.create({
   },
   menuItemPressed: { backgroundColor: paper.surfaceAlt },
   menuDivider: { height: 1, marginLeft: space.md, backgroundColor: paper.lineSoft },
+  // Ίδια θέση και μέγεθος με την ένδειξη σύνδεσης — οι δύο δεν εμφανίζονται
+  // ποτέ μαζί για πολύ, και όταν εναλλάσσονται δεν πρέπει να πηδάει η οθόνη.
+  typing: {
+    paddingHorizontal: space.md,
+    paddingBottom: space.xxs,
+    color: paper.inkFaint,
+    fontFamily: paperFont.regular,
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  // Αναζήτηση: πλήρης οθόνη, όχι φύλλο. Τα αποτελέσματα θέλουν ύψος, και το
+  // πληκτρολόγιο στο κινητό τρώει το μισό.
+  searchScreen: { flex: 1, backgroundColor: paper.bg },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    width: '100%',
+    maxWidth: layout.column,
+    alignSelf: 'center',
+    marginTop: space.xl,
+    marginHorizontal: space.md,
+    paddingHorizontal: 14,
+    height: 42,
+    backgroundColor: paper.surface,
+    borderWidth: 1,
+    borderColor: paper.line,
+    borderRadius: radius.pill,
+  },
+  searchInput: {
+    flex: 1,
+    color: paper.ink,
+    fontFamily: paperFont.regular,
+    fontSize: 14,
+    outlineStyle: 'none',
+  } as any,
+  searchResults: { flex: 1 },
+  searchResultsInner: {
+    width: '100%',
+    maxWidth: layout.column,
+    alignSelf: 'center',
+    paddingHorizontal: space.md,
+    paddingTop: space.md,
+    paddingBottom: space.xl,
+  },
+  searchNote: {
+    paddingTop: space.lg,
+    color: paper.inkSoft,
+    fontFamily: paperFont.regular,
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  searchSpinner: { paddingTop: space.lg },
+  hit: {
+    paddingVertical: space.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: paper.lineSoft,
+  },
+  hitWho: {
+    marginBottom: 3,
+    color: paper.inkFaint,
+    fontFamily: paperFont.medium,
+    fontSize: 11,
+  },
+  hitText: { color: paper.ink, fontFamily: paperFont.regular, fontSize: 14, lineHeight: 20 },
+  // Τονισμός με φόντο και όχι με χρώμα γράμματος: διαβάζεται και όταν ο όρος
+  // πέφτει πάνω σε σημεία στίξης.
+  hitMatch: { backgroundColor: paper.accentSoft, color: paper.accent, fontFamily: paperFont.semi },
+
   menuText: { color: paper.ink, fontFamily: paperFont.medium, fontSize: 15 },
   menuTextDanger: { color: paper.danger },
 

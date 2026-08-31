@@ -22,6 +22,11 @@ type ChatComposerProps = {
   editing?: boolean;
   /** Ακύρωση της διόρθωσης. */
   onCancel?: () => void;
+  /**
+   * Ο χρήστης πληκτρολογεί. Καλείται σε ΚΑΘΕ αλλαγή — το throttle είναι ευθύνη
+   * του γονιού, που ξέρει και το κανάλι.
+   */
+  onTyping?: () => void;
 };
 
 export default function ChatComposer({
@@ -31,6 +36,7 @@ export default function ChatComposer({
   initialText = '',
   editing = false,
   onCancel,
+  onTyping,
 }: ChatComposerProps) {
   const [text, setText] = useState(initialText);
   const [focused, setFocused] = useState(false);
@@ -99,7 +105,14 @@ export default function ChatComposer({
         <TextInput
           style={styles.input}
           value={text}
-          onChangeText={setText}
+          onChangeText={function (next) {
+            setText(next);
+            // Το σβήσιμο δεν είναι γράψιμο: αλλιώς κρατώντας το Backspace θα
+            // έστελνες «γράφει…» ενώ αδειάζεις το πεδίο.
+            if (next.length > text.length) {
+              onTyping?.();
+            }
+          }}
           onKeyPress={handleKeyPress}
           onFocus={function () {
             setFocused(true);
