@@ -5,21 +5,19 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
-  type StyleProp,
-  type ViewStyle,
 } from 'react-native';
 import ChatComposer from '../components/chat/ChatComposer';
+import ChatHeader from '../components/chat/ChatHeader';
 import MessageBubble, { DateSeparator } from '../components/chat/MessageBubble';
-import SquadPicker, { SquadMonogram } from '../components/chat/SquadPicker';
+import MessageMenu from '../components/chat/MessageMenu';
+import SearchOverlay from '../components/chat/SearchOverlay';
+import SquadPicker from '../components/chat/SquadPicker';
 import { buildRows, type OutgoingMessage, type Row } from '../components/chat/messageRows';
 import {
   applyMessageUpdate,
@@ -31,16 +29,10 @@ import {
 import {
   activeTypists,
   noteTyping,
-  presenceLabel,
   typingLabel,
   TYPING_THROTTLE_MS,
   type Typist,
 } from '../components/chat/typing';
-import {
-  highlightParts,
-  isSearchable,
-  snippet,
-} from '../components/chat/search';
 import { newMessageId } from '../lib/ids';
 import type { Group } from '../services/serviceGroup';
 import {
@@ -53,16 +45,14 @@ import {
   getMessagesAfter,
   getUnreadCounts,
   markGroupRead,
-  searchMessages,
   sendMessage,
   toChatMessage,
-  type SearchHit,
   type ChatMessage,
   type GroupPreview,
 } from '../services/serviceGroup';
 import { closeGroupChat, sendTyping, startChat } from '../services/serviceRealtime';
 import { getUserById } from '../services/serviceUser';
-import { layout, paper, paperFont, radius, space } from '../theme';
+import { layout, paper, paperFont, space } from '../theme';
 
 /**
  * Πόσα χαμένα μηνύματα γεφυρώνουμε σελίδα-σελίδα πριν τα παρατήσουμε και
@@ -111,12 +101,9 @@ export default function GroupChatScreen({
   // Ποιοι γράφουν αυτή τη στιγμή, και πόσοι είναι συνδεδεμένοι.
   const [typists, setTypists] = useState<Typist[]>([]);
   const [online, setOnline] = useState(0);
-  // Αναζήτηση: null = κλειστή. Το κείμενο ζει χωριστά από τα αποτελέσματα,
-  // επειδή τα δεύτερα έρχονται με καθυστέρηση.
+  // Το μόνο που ξέρει ο γονιός για την αναζήτηση: αν είναι ανοιχτή. Τον όρο
+  // και τα αποτελέσματα τα κρατά το SearchOverlay.
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [searchHits, setSearchHits] = useState<SearchHit[] | null>(null);
-  const [searching, setSearching] = useState(false);
 
   // Τα ονόματα των μελών ζουν και σε ref: ο realtime handler φτιάχνεται μία φορά
   // ανά παρέα και πρέπει να βλέπει πάντα τον τρέχοντα χάρτη.
@@ -632,64 +619,6 @@ export default function GroupChatScreen({
   );
 
   /**
-   * Η αναζήτηση, με καθυστέρηση.
-   *
-   * Χωρίς αυτήν θα έφευγε ένα ερώτημα ανά πλήκτρο, και οι απαντήσεις θα
-   * επέστρεφαν με άλλη σειρά από αυτή που στάλθηκαν — «παρα» θα μπορούσε να
-   * απαντηθεί μετά το «παραλ» και να δείξει λάθος αποτελέσματα. Η σημαία
-   * `cancelled` κόβει κάθε απάντηση που δεν αφορά πια τον τρέχοντα όρο.
-   */
-  useEffect(() => {
-    if (!searchOpen || !activeId) {
-      return;
-    }
-
-    if (!isSearchable(searchTerm)) {
-      setSearchHits(null);
-      setSearching(false);
-      return;
-    }
-
-    let cancelled = false;
-    setSearching(true);
-
-    const timer = setTimeout(async function run() {
-      try {
-        const hits = await searchMessages(activeId, searchTerm);
-        if (!cancelled) {
-          setSearchHits(hits);
-        }
-      } catch {
-        if (!cancelled) {
-          setSearchHits([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setSearching(false);
-        }
-      }
-    }, 250);
-
-    return function cleanup() {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [searchOpen, searchTerm, activeId]);
-
-  function openSearch() {
-    setSearchTerm('');
-    setSearchHits(null);
-    setSearchOpen(true);
-  }
-
-  function closeSearch() {
-    setSearchOpen(false);
-    setSearchTerm('');
-    setSearchHits(null);
-    setSearching(false);
-  }
-
-  /**
    * Λέει στους άλλους ότι γράφουμε — με throttle.
    *
    * Χωρίς αυτό θα έφευγε ένα broadcast ανά πλήκτρο. Το κατώφλι είναι αισθητά
@@ -832,8 +761,6 @@ export default function GroupChatScreen({
 
   // ---- Τιμές που θα μπουν στο JSX, υπολογισμένες εκ των προτέρων ----
 
-  // Ο ενικός/πληθυντικός των μελών μετακόμισε στην presenceLabel, μαζί με το
-  // «· N online» — τα δύο μπαίνουν στην ίδια γραμμή και κρίνονται μαζί.
   const typing = typingLabel(
     activeTypists(typists, Date.now()).map(function (entry) {
       return entry.name;
@@ -868,16 +795,6 @@ export default function GroupChatScreen({
 
   // ---- Βοηθητικές συναρτήσεις εμφάνισης ----
 
-  // Το Pressable καλεί αυτή τη συνάρτηση και της δίνει { pressed: true/false }.
-  function backButtonStyle({ pressed }: { pressed: boolean }): StyleProp<ViewStyle> {
-    if (pressed) {
-      return [styles.back, styles.pressed];
-    }
-    return styles.back;
-  }
-
-  // Σε inverted λίστα το footer ζωγραφίζεται στην ΚΟΡΥΦΗ — ακριβώς εκεί που
-  // περιμένει ο χρήστης την ένδειξη ότι κατεβαίνει κι άλλο ιστορικό.
   function renderOlderSpinner() {
     if (!loadingOlder) {
       return null;
@@ -927,156 +844,6 @@ export default function GroupChatScreen({
     );
   }
 
-  /**
-   * Το μενού ενός μηνύματος. Modal και όχι φύλλο μέσα στη λίστα: πρέπει να
-   * σκεπάσει και τον composer, και να κλείνει με το πίσω κουμπί στο Android.
-   */
-  function renderMessageMenu() {
-    const target = menuFor;
-    if (!target) {
-      return null;
-    }
-
-    function close() {
-      setMenuFor(null);
-    }
-
-    return (
-      <Modal
-        transparent
-        visible
-        animationType="fade"
-        onRequestClose={close}
-        accessibilityViewIsModal
-      >
-        {/* Το πάτημα εκτός του φύλλου κλείνει — το αναμενόμενο σε action sheet. */}
-        <Pressable style={styles.menuBackdrop} onPress={close} accessibilityLabel="Close menu">
-          {/* Δεύτερο Pressable χωρίς onPress: σταματά το πάτημα ώστε να μην
-              κλείνει το μενού όταν πατάς μέσα του. */}
-          <Pressable style={styles.menuSheet}>
-            <Text style={styles.menuPreview} numberOfLines={2}>
-              {target.content}
-            </Text>
-
-            <Pressable
-              onPress={function () {
-                setMenuFor(null);
-                setEditing(target);
-              }}
-              accessibilityRole="button"
-              style={menuItemStyle}
-            >
-              <Ionicons name="pencil" size={17} color={paper.ink} />
-              <Text style={styles.menuText}>Edit</Text>
-            </Pressable>
-
-            <View style={styles.menuDivider} />
-
-            <Pressable
-              onPress={function () {
-                setMenuFor(null);
-                // Αν το μήνυμα που σβήνουμε είναι αυτό που διορθώναμε, η
-                // διόρθωση δεν έχει πλέον αντικείμενο.
-                setEditing(function (current) {
-                  return current && current.id === target.id ? null : current;
-                });
-                applyDelete(target);
-              }}
-              accessibilityRole="button"
-              style={menuItemStyle}
-            >
-              <Ionicons name="trash-outline" size={17} color={paper.danger} />
-              <Text style={[styles.menuText, styles.menuTextDanger]}>Delete</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    );
-  }
-
-  function menuItemStyle({ pressed }: { pressed: boolean }): StyleProp<ViewStyle> {
-    if (pressed) {
-      return [styles.menuItem, styles.menuItemPressed];
-    }
-    return styles.menuItem;
-  }
-
-  /** Το αποτέλεσμα μιας αναζήτησης — ο όρος τονισμένος μέσα στο απόσπασμα. */
-  function renderHit(hit: SearchHit) {
-    const text = snippet(hit.content, searchTerm);
-    const who = hit.senderName || 'Someone';
-
-    return (
-      <View key={hit.id} style={styles.hit}>
-        <Text style={styles.hitWho}>
-          {who} · {new Date(hit.createdAt).toLocaleDateString('en-GB', {
-            day: 'numeric',
-            month: 'short',
-          })}
-        </Text>
-        <Text style={styles.hitText}>
-          {highlightParts(text, searchTerm).map(function (part, index) {
-            // Το key είναι ο δείκτης επίτηδες: τα κομμάτια δεν αναδιατάσσονται
-            // ποτέ — ξαναφτιάχνονται από την αρχή σε κάθε αλλαγή του όρου.
-            return (
-              <Text key={index} style={part.match ? styles.hitMatch : undefined}>
-                {part.text}
-              </Text>
-            );
-          })}
-        </Text>
-      </View>
-    );
-  }
-
-  function renderSearch() {
-    if (!searchOpen) {
-      return null;
-    }
-
-    let body;
-    if (!isSearchable(searchTerm)) {
-      body = <Text style={styles.searchNote}>Type at least two characters.</Text>;
-    } else if (searching && searchHits === null) {
-      body = <ActivityIndicator style={styles.searchSpinner} color={paper.accent} />;
-    } else if (searchHits && searchHits.length === 0) {
-      body = <Text style={styles.searchNote}>Nothing found for "{searchTerm.trim()}".</Text>;
-    } else if (searchHits) {
-      body = searchHits.map(renderHit);
-    }
-
-    return (
-      <Modal transparent visible animationType="fade" onRequestClose={closeSearch}>
-        <View style={styles.searchScreen}>
-          <View style={styles.searchBar}>
-            <Ionicons name="search" size={16} color={paper.inkFaint} />
-            <TextInput
-              style={styles.searchInput}
-              value={searchTerm}
-              onChangeText={setSearchTerm}
-              placeholder="Search this squad"
-              placeholderTextColor={paper.inkFaint}
-              autoCorrect={false}
-              autoFocus
-              accessibilityLabel="Search messages"
-            />
-            <Pressable onPress={closeSearch} accessibilityRole="button" accessibilityLabel="Close search" hitSlop={8}>
-              <Ionicons name="close" size={18} color={paper.inkSoft} />
-            </Pressable>
-          </View>
-
-          <ScrollView
-            style={styles.searchResults}
-            contentContainerStyle={styles.searchResultsInner}
-            keyboardShouldPersistTaps="handled"
-          >
-            {body}
-          </ScrollView>
-        </View>
-      </Modal>
-    );
-  }
-
   function renderEmptyList() {
     return (
       <View style={styles.empty}>
@@ -1117,34 +884,15 @@ export default function GroupChatScreen({
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.column}>
-        <View style={styles.topBar}>
-          <Pressable
-            onPress={closeGroup}
-            accessibilityRole="button"
-            accessibilityLabel="Back to squads"
-            style={backButtonStyle}
-          >
-            <Ionicons name="chevron-back" size={20} color={paper.ink} />
-          </Pressable>
-
-          <SquadMonogram name={activeGroup.name} size={32} />
-
-          <View style={styles.headerText}>
-            <Text style={styles.title} numberOfLines={1}>
-              {activeGroup.name}
-            </Text>
-            <Text style={styles.subtitle}>{presenceLabel(memberCount, online)}</Text>
-          </View>
-
-          <Pressable
-            onPress={openSearch}
-            accessibilityRole="button"
-            accessibilityLabel="Search messages"
-            style={backButtonStyle}
-          >
-            <Ionicons name="search" size={19} color={paper.ink} />
-          </Pressable>
-        </View>
+        <ChatHeader
+          name={activeGroup.name}
+          memberCount={memberCount}
+          online={online}
+          onBack={closeGroup}
+          onSearch={function () {
+            setSearchOpen(true);
+          }}
+        />
 
         <KeyboardAvoidingView
           style={styles.chat}
@@ -1198,8 +946,32 @@ export default function GroupChatScreen({
             disabled={!activeId}
           />
 
-          {renderMessageMenu()}
-          {renderSearch()}
+          <MessageMenu
+            message={menuFor}
+            onClose={function () {
+              setMenuFor(null);
+            }}
+            onEdit={function (target) {
+              setMenuFor(null);
+              setEditing(target);
+            }}
+            onDelete={function (target) {
+              setMenuFor(null);
+              // Αν το μήνυμα που σβήνουμε είναι αυτό που διορθώναμε, η
+              // διόρθωση δεν έχει πλέον αντικείμενο.
+              setEditing(function (current) {
+                return current && current.id === target.id ? null : current;
+              });
+              applyDelete(target);
+            }}
+          />
+          <SearchOverlay
+            groupId={activeGroup.id}
+            visible={searchOpen}
+            onClose={function () {
+              setSearchOpen(false);
+            }}
+          />
         </KeyboardAvoidingView>
       </View>
     </SafeAreaView>
@@ -1210,41 +982,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: paper.bg, alignItems: 'center', justifyContent: 'center' },
   screen: { flex: 1, backgroundColor: paper.bg },
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
-
-  // Μενού μηνύματος: φύλλο στο κάτω μέρος, όπως τα action sheets του συστήματος.
-  menuBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(31, 30, 29, 0.35)',
-  },
-  menuSheet: {
-    width: '100%',
-    maxWidth: layout.column,
-    alignSelf: 'center',
-    paddingVertical: space.xs,
-    paddingBottom: space.md,
-    backgroundColor: paper.bg,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-  },
-  // Το κείμενο του μηνύματος στην κορυφή, ώστε να ξέρεις σε ποιο ενεργείς.
-  menuPreview: {
-    paddingHorizontal: space.md,
-    paddingTop: space.sm,
-    paddingBottom: space.sm,
-    color: paper.inkFaint,
-    fontFamily: paperFont.regular,
-    fontSize: 13,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    paddingHorizontal: space.md,
-    paddingVertical: 14,
-  },
-  menuItemPressed: { backgroundColor: paper.surfaceAlt },
-  menuDivider: { height: 1, marginLeft: space.md, backgroundColor: paper.lineSoft },
   // Ίδια θέση και μέγεθος με την ένδειξη σύνδεσης — οι δύο δεν εμφανίζονται
   // ποτέ μαζί για πολύ, και όταν εναλλάσσονται δεν πρέπει να πηδάει η οθόνη.
   typing: {
@@ -1255,92 +992,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontStyle: 'italic',
   },
-  // Αναζήτηση: πλήρης οθόνη, όχι φύλλο. Τα αποτελέσματα θέλουν ύψος, και το
-  // πληκτρολόγιο στο κινητό τρώει το μισό.
-  searchScreen: { flex: 1, backgroundColor: paper.bg },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    width: '100%',
-    maxWidth: layout.column,
-    alignSelf: 'center',
-    marginTop: space.xl,
-    marginHorizontal: space.md,
-    paddingHorizontal: 14,
-    height: 42,
-    backgroundColor: paper.surface,
-    borderWidth: 1,
-    borderColor: paper.line,
-    borderRadius: radius.pill,
-  },
-  searchInput: {
-    flex: 1,
-    color: paper.ink,
-    fontFamily: paperFont.regular,
-    fontSize: 14,
-    outlineStyle: 'none',
-  } as any,
-  searchResults: { flex: 1 },
-  searchResultsInner: {
-    width: '100%',
-    maxWidth: layout.column,
-    alignSelf: 'center',
-    paddingHorizontal: space.md,
-    paddingTop: space.md,
-    paddingBottom: space.xl,
-  },
-  searchNote: {
-    paddingTop: space.lg,
-    color: paper.inkSoft,
-    fontFamily: paperFont.regular,
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  searchSpinner: { paddingTop: space.lg },
-  hit: {
-    paddingVertical: space.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: paper.lineSoft,
-  },
-  hitWho: {
-    marginBottom: 3,
-    color: paper.inkFaint,
-    fontFamily: paperFont.medium,
-    fontSize: 11,
-  },
-  hitText: { color: paper.ink, fontFamily: paperFont.regular, fontSize: 14, lineHeight: 20 },
-  // Τονισμός με φόντο και όχι με χρώμα γράμματος: διαβάζεται και όταν ο όρος
-  // πέφτει πάνω σε σημεία στίξης.
-  hitMatch: { backgroundColor: paper.accentSoft, color: paper.accent, fontFamily: paperFont.semi },
-
-  menuText: { color: paper.ink, fontFamily: paperFont.medium, fontSize: 15 },
-  menuTextDanger: { color: paper.danger },
-
-  // Header της συνομιλίας: μία λεπτή γραμμή τον χωρίζει από τα μηνύματα — καμία σκιά.
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    paddingHorizontal: space.md,
-    paddingTop: space.sm,
-    paddingBottom: space.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: paper.line,
-    backgroundColor: paper.bg,
-  },
-  back: {
-    width: 32,
-    height: 32,
-    marginLeft: -4,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pressed: { backgroundColor: paper.surfaceAlt },
-  headerText: { flex: 1 },
-  title: { color: paper.ink, fontFamily: paperFont.semi, fontSize: 16 },
-  subtitle: { marginTop: 1, color: paper.inkFaint, fontFamily: paperFont.regular, fontSize: 12 },
 
   chat: { flex: 1 },
   // Η λίστα είναι inverted, άρα ο content container είναι αναποδογυρισμένος:
