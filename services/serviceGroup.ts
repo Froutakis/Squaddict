@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
+import { isSearchable } from "../components/chat/search";
 
 /**
  * Το δημόσιο προφίλ μιας Παρέας — ό,τι βλέπει ΚΑΙ ένας μη-μέλος.
@@ -540,4 +541,45 @@ export async function getUnreadCounts(): Promise<Record<string, number>> {
     counts[row.squad] = row.unread;
   }
   return counts;
+}
+
+/** Ένα αποτέλεσμα αναζήτησης — αρκετά για να το δείξεις σε μια γραμμή. */
+export type SearchHit = {
+  id: string;
+  content: string;
+  senderId: string;
+  senderName: string;
+  createdAt: string;
+};
+
+/**
+ * Ψάχνει μέσα σε μια Παρέα. Ο όρος καθαρίζεται στη βάση, όχι εδώ — δες το
+ * 202608300003. Η συνάρτηση ΔΕΝ είναι security definer, οπότε το RLS επιβάλλει
+ * μόνο του ότι ψάχνεις εκεί που ανήκεις.
+ *
+ * Όρος κάτω από δύο χαρακτήρες γυρίζει άδειο χωρίς να χτυπήσει τη βάση.
+ */
+export async function searchMessages(
+  groupId: string,
+  term: string,
+  limit: number = 30,
+): Promise<SearchHit[]> {
+  if (!isSearchable(term)) return [];
+
+  const { data, error } = await supabase.rpc("search_messages", {
+    target_group: groupId,
+    term: term.trim(),
+    max_rows: limit,
+  });
+  if (error) throw error;
+
+  return ((data ?? []) as any[]).map(function (row) {
+    return {
+      id: row.msg_id,
+      content: row.msg_content,
+      senderId: row.msg_sender_id,
+      senderName: row.msg_sender_name ?? "",
+      createdAt: row.msg_created_at,
+    };
+  });
 }
