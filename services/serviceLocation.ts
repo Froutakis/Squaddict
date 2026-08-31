@@ -1,4 +1,3 @@
-import { Platform } from "react-native";
 import * as Location from "expo-location";
 
 export type Coords = {
@@ -18,13 +17,7 @@ function toCoords(position: Location.LocationObject): Coords {
 
 export async function getCurrentCoords(): Promise<LocationResult> {
   try {
-    const enabled = await Location.hasServicesEnabledAsync();
-    const before = await Location.getForegroundPermissionsAsync();
     const asked = await Location.requestForegroundPermissionsAsync();
-
-    console.log("DIAG platform:", Platform.OS, "| services enabled:", enabled);
-    console.log("DIAG permission before:", JSON.stringify(before));
-    console.log("DIAG permission after ask:", JSON.stringify(asked));
 
     const { status } = asked;
     if (status !== "granted") return { ok: false, reason: "denied" };
