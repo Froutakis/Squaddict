@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ReplyQuote } from '../../services/serviceGroup';
 import type { ReactionCount } from './reactions';
 import { paper, paperFont, space } from '../../theme';
 import { SquadMonogram } from './SquadPicker';
@@ -40,6 +41,10 @@ type MessageBubbleProps = {
   reactions?: ReactionCount[];
   /** Πάτημα σε chip: βάζει τη δική μου, ή την παίρνει πίσω αν είναι ήδη αυτή. */
   onToggleReaction?: (emoji: string) => void;
+  /** Το μήνυμα που παρατίθεται· null αν δεν είναι απάντηση. */
+  reply?: ReplyQuote | null;
+  /** Είναι απάντηση, αλλά το πρωτότυπο δεν είναι φορτωμένο. */
+  replyUnknown?: boolean;
 };
 
 export default function MessageBubble({
@@ -56,6 +61,8 @@ export default function MessageBubble({
   onLongPress,
   reactions,
   onToggleReaction,
+  reply,
+  replyUnknown,
 }: MessageBubbleProps) {
   // Πατητή γίνεται η φυσαλίδα σε δύο περιπτώσεις: για επανάληψη αποστολής, ή
   // για το μενού επεξεργασίας. Ένα σβησμένο μήνυμα δεν πατιέται καθόλου.
@@ -86,6 +93,35 @@ export default function MessageBubble({
           <Text style={styles.sender} numberOfLines={1}>
             {senderName}
           </Text>
+        ) : null}
+
+        {/* Η παράθεση κάθεται πάνω από τη φυσαλίδα, με κάθετη γραμμή αριστερά —
+            το ίδιο σχήμα που χρησιμοποιεί κάθε πρόγραμμα αλληλογραφίας. */}
+        {reply || replyUnknown ? (
+          <View style={styles.quote}>
+            <View style={styles.quoteBar} />
+            <View style={styles.quoteText}>
+              {reply ? (
+                <>
+                  <Text style={styles.quoteWho} numberOfLines={1}>
+                    {reply.senderName || 'Someone'}
+                  </Text>
+                  <Text
+                    style={reply.deleted ? [styles.quoteBody, styles.quoteGone] : styles.quoteBody}
+                    numberOfLines={2}
+                  >
+                    {reply.deleted ? 'Message deleted' : reply.content}
+                  </Text>
+                </>
+              ) : (
+                // Απάντηση σε μήνυμα εκτός φορτωμένου ιστορικού. Δεν εφευρίσκουμε
+                // περιεχόμενο — λέμε ότι υπάρχει και ότι δεν το έχουμε.
+                <Text style={[styles.quoteBody, styles.quoteGone]} numberOfLines={1}>
+                  Replying to an earlier message
+                </Text>
+              )}
+            </View>
+          </View>
         ) : null}
 
         {/* Σβησμένο μήνυμα: δεν δείχνουμε ποτέ το content — έχει ήδη μηδενιστεί
@@ -234,6 +270,19 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   pressed: { opacity: 0.85 },
+
+  quote: {
+    flexDirection: 'row',
+    gap: 6,
+    maxWidth: '100%',
+    marginBottom: 3,
+    paddingLeft: 2,
+  },
+  quoteBar: { width: 2, borderRadius: 1, backgroundColor: paper.accent },
+  quoteText: { flexShrink: 1, paddingVertical: 1 },
+  quoteWho: { color: paper.accent, fontFamily: paperFont.semi, fontSize: 11 },
+  quoteBody: { color: paper.inkSoft, fontFamily: paperFont.regular, fontSize: 12, lineHeight: 16 },
+  quoteGone: { fontStyle: 'italic', color: paper.inkFaint },
 
   reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
   chip: {

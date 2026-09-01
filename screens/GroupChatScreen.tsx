@@ -25,6 +25,12 @@ import {
   summarise,
   type ReactionMap,
 } from '../components/chat/reactions';
+import {
+  quoteOf,
+  refreshQuotes,
+  resolveQuote,
+  resolveQuotes,
+} from '../components/chat/replies';
 import SearchOverlay from '../components/chat/SearchOverlay';
 import SquadPicker from '../components/chat/SquadPicker';
 import { buildRows, type OutgoingMessage, type Row } from '../components/chat/messageRows';
@@ -111,6 +117,8 @@ export default function GroupChatScreen({
   const [menuFor, setMenuFor] = useState<ChatMessage | null>(null);
   // Το μήνυμα που διορθώνεται αυτή τη στιγμή στον composer.
   const [editing, setEditing] = useState<ChatMessage | null>(null);
+  // Το μήνυμα στο οποίο απαντάμε. Αποκλείεται με το editing.
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   // Ποιοι γράφουν αυτή τη στιγμή, και πόσοι είναι συνδεδεμένοι.
   const [typists, setTypists] = useState<Typist[]>([]);
   const [online, setOnline] = useState(0);
@@ -317,13 +325,18 @@ export default function GroupChatScreen({
     setTypists([]);
     setOnline(0);
     setReactions({});
+    setEditing(null);
+    setReplyingTo(null);
+    replyOfOutgoingRef.current = {};
     typingSentRef.current = 0;
 
     // Καλείται όταν ο server στείλει νέα γραμμή μηνύματος.
     // Το `row` ΔΕΝ το δίνουμε εμείς — το δίνει η startChat όταν φτάσει το μήνυμα.
     function handleIncomingRow(row: any) {
       const senderName = namesRef.current[row.sender_id];
-      const incoming = toChatMessage(row, senderName);
+      // Το payload του realtime δεν περνάει από joins: αν είναι απάντηση, η
+      // παράθεση λείπει και τη συμπληρώνουμε από όσα μηνύματα έχουμε ήδη.
+      const incoming = resolveQuote(toChatMessage(row, senderName), messagesRef.current);
 
       setMessages(function (prev) {
         // Το ίδιο μήνυμα μπορεί να ξαναέρθει σε reconnect — κράτα ένα.
@@ -375,7 +388,10 @@ export default function GroupChatScreen({
       const updated = toChatMessage(row, senderName);
 
       setMessages(function (prev) {
-        return applyMessageUpdate(prev, updated);
+        // Δύο δουλειές: το ίδιο το μήνυμα, και κάθε απάντηση που το παραθέτει.
+        // Αυτό είναι το τίμημα της ζωντανής παράθεσης — και ο λόγος που την
+        // επιλέξαμε: σβήνοντας ένα μήνυμα φεύγει το κείμενό του παντού.
+        return refreshQuotes(applyMessageUpdate(prev, updated), updated);
       });
     }
 
@@ -417,7 +433,7 @@ export default function GroupChatScreen({
           if (cancelled) {
             return;
           }
-          setMessages(fresh.messages);
+          setMessages(resolveQuotes(fresh.messages));
           setHasMore(fresh.hasMore);
           return;
         }
@@ -443,7 +459,7 @@ export default function GroupChatScreen({
 
       if (!cancelled) {
         setMessages(function (prev) {
-          return mergeNewMessages(prev, collected);
+          return resolveQuotes(mergeNewMessages(prev, collected));
         });
       }
     }
@@ -503,7 +519,7 @@ export default function GroupChatScreen({
         }
 
         channel = chat.channel;
-        setMessages(chat.messages);
+        setMessages(resolveQuotes(chat.messages));
         setHasMore(chat.hasMore);
       } catch (problem) {
         console.error('[squaddict] το άνοιγμα της συνομιλίας απέτυχε:', problem);
@@ -568,13 +584,16 @@ export default function GroupChatScreen({
    * το κόβει ο έλεγχος διπλών.
    */
   const deliver = useCallback(
-    async function deliver(groupId: string, id: string, text: string) {
+    async function deliver(groupId: string, id: string, text: string, replyTo?: string | null) {
       try {
-        const saved = await sendMessage(groupId, user.id, text, id);
+        const saved = await sendMessage(groupId, user.id, text, id, replyTo);
 
         setMessages(function (prev) {
           if (prev.some((m) => m.id === saved.id)) return prev;
-          return [...prev, saved];
+          // Το ερώτημα δεν φέρνει αξιοποιήσιμη παράθεση (γυρίζει πίνακα σε
+          // αυτο-αναφορική σχέση), οπότε τη συμπληρώνουμε από τη λίστα — όπως
+          // κάνουμε και για ό,τι φτάνει από το κανάλι.
+          return [...prev, resolveQuote(saved, prev)];
         });
         setOutbox(function (prev) {
           return prev.filter((item) => item.id !== id);
@@ -601,14 +620,22 @@ export default function GroupChatScreen({
       }
 
       const id = newMessageId();
+      const answering = replyingTo;
+
       setOutbox(function (prev) {
         return [...prev, { id, content: text, createdAt: new Date().toISOString(), status: 'pending' }];
       });
       setError(null);
+      if (answering) {
+        replyOfOutgoingRef.current[id] = answering.id;
+      }
+      // Η μπάρα φεύγει αμέσως: το μήνυμα έχει ήδη φύγει με τον δείκτη μέσα του,
+      // και μια μπάρα που μένει ανοιχτή μοιάζει σαν να μη στάλθηκε.
+      setReplyingTo(null);
 
-      deliver(activeId, id, text);
+      deliver(activeId, id, text, answering ? answering.id : null);
     },
-    [activeId, deliver],
+    [activeId, deliver, replyingTo],
   );
 
   /**
@@ -703,6 +730,10 @@ export default function GroupChatScreen({
    * βάση την απορρίψει, ο χάρτης γυρίζει σε αυτό που ήταν. Κρατάμε ολόκληρο τον
    * προηγούμενο χάρτη για την επαναφορά — είναι φθηνός, μόνο αναφορές.
    */
+  // Σε ποιο μήνυμα απαντούσε ένα ανεπιβεβαίωτο. Χωρίς αυτό, το retry θα
+  // ξανάστελνε το μήνυμα χωρίς την απάντηση — και θα εμφανιζόταν ξεκρέμαστο.
+  const replyOfOutgoingRef = useRef<Record<string, string>>({});
+
   const toggleReaction = useCallback(
     function toggle(messageId: string, emoji: string) {
       const mine = myReaction(reactions[messageId], user.id);
@@ -760,7 +791,7 @@ export default function GroupChatScreen({
         );
       });
 
-      deliver(activeId, id, item.content);
+      deliver(activeId, id, item.content, replyOfOutgoingRef.current[id] ?? null);
     },
     [activeId, deliver],
   );
@@ -806,7 +837,9 @@ export default function GroupChatScreen({
           if (fresh.length === 0) {
             return prev;
           }
-          return [...fresh, ...prev];
+          // Οι παλιότερες μπορεί να παραθέτουν η μία την άλλη, και μπορεί να
+          // είναι το πρωτότυπο για απαντήσεις που ήδη δείχνουμε.
+          return resolveQuotes([...fresh, ...prev]);
         });
 
         setHasMore(page.hasMore);
@@ -933,6 +966,9 @@ export default function GroupChatScreen({
                 setMenuFor(message);
               }
         }
+        reply={message.reply}
+        // Είναι απάντηση, αλλά το πρωτότυπο δεν είναι στη φορτωμένη σελίδα.
+        replyUnknown={message.replyTo !== null && message.reply === null}
         reactions={summarise(reactions[message.id], user.id)}
         onToggleReaction={
           item.status
@@ -1039,8 +1075,10 @@ export default function GroupChatScreen({
             key={editing ? 'edit-' + editing.id : 'new'}
             initialText={editing ? editing.content : ''}
             editing={editing !== null}
+            replyTo={replyingTo ? quoteOf(replyingTo) : null}
             onCancel={function () {
               setEditing(null);
+              setReplyingTo(null);
             }}
             onSend={handleComposerSend}
             onTyping={handleTypingActivity}
@@ -1054,6 +1092,12 @@ export default function GroupChatScreen({
             onReact={function (target, emoji) {
               setMenuFor(null);
               toggleReaction(target.id, emoji);
+            }}
+            onReply={function (target) {
+              setMenuFor(null);
+              // Διορθώνεις ή απαντάς, όχι και τα δύο.
+              setEditing(null);
+              setReplyingTo(target);
             }}
             onClose={function () {
               setMenuFor(null);

@@ -31,6 +31,7 @@ type MessageMenuProps = {
   onEdit: (message: ChatMessage) => void;
   onDelete: (message: ChatMessage) => void;
   onReact: (message: ChatMessage, emoji: string) => void;
+  onReply: (message: ChatMessage) => void;
 };
 
 /**
@@ -51,6 +52,7 @@ export default function MessageMenu({
   onEdit,
   onDelete,
   onReact,
+  onReply,
 }: MessageMenuProps) {
   // Το πεδίο για «οτιδήποτε άλλο» ξεκινά κλειστό: είναι η σπάνια περίπτωση, και
   // ανοιχτό θα τραβούσε αμέσως το πληκτρολόγιο πάνω από το μενού.
@@ -155,6 +157,20 @@ export default function MessageMenu({
               </Pressable>
             </View>
           ) : null}
+
+          <View style={styles.divider} />
+
+          {/* Η απάντηση επιτρέπεται σε κάθε μήνυμα, δικό μου ή ξένο. */}
+          <Pressable
+            onPress={function () {
+              onReply(target);
+            }}
+            accessibilityRole="button"
+            style={itemStyle}
+          >
+            <Ionicons name="arrow-undo" size={17} color={paper.ink} />
+            <Text style={styles.text}>Reply</Text>
+          </Pressable>
 
           {/* Edit και Delete μόνο στα δικά μου. Σε ξένο μήνυμα το μενού
               υπάρχει μόνο για τις αντιδράσεις. */}

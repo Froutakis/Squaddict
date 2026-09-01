@@ -25,23 +25,44 @@ export type Group = {
 const GROUP_FIELDS = "id, handle, name, bio, avatar_url, member_count";
 
 /**
+ * Ο αποστολέας ενός μηνύματος — με ΡΗΤΗ υπόδειξη σχέσης, που δεν είναι
+ * καλλωπισμός αλλά προϋπόθεση για να δουλέψει το ερώτημα.
+ *
+ * Χωρίς υπόδειξη: PGRST201. Ο message_reactions έχει foreign key και προς
+ * messages και προς profiles, οπότε το PostgREST τον βλέπει ως γέφυρα και
+ * βρίσκει δύο διαδρομές — την κατευθείαν μέσω sender_id και την έμμεση μέσω
+ * των αντιδράσεων. Τα mentions θα φέρουν ακριβώς το ίδιο σχήμα.
+ *
+ * Υπόδειξη με όνομα ΣΤΗΛΗΣ και όχι constraint: το PostgREST δέχεται και τα δύο,
+ * αλλά το όνομα του constraint είναι σύμβαση της βάσης. Αν ένα migration το
+ * φτιάξει αλλιώς — που ήδη μας συνέβη — το ερώτημα σκάει με PGRST200 και το
+ * σφάλμα δείχνει σαν να λείπει η σχέση, ενώ απλώς λέγεται αλλιώς. Το όνομα της
+ * στήλης το γράφουμε εμείς και δεν αλλάζει από κάτω μας.
+ */
+const SENDER = "profiles!sender_id(display_name)";
+
+/**
+ * Το μήνυμα στο οποίο απαντάμε, φερμένο ζωντανά και όχι σε στιγμιότυπο.
+ *
+ * Ζωντανά σημαίνει ότι η διόρθωση του πρωτότυπου φαίνεται και στην παράθεση, και
+ * — το σημαντικό — ότι η διαγραφή του το σβήνει παντού. Αν κρατούσαμε αντίγραφο
+ * του κειμένου, αυτό θα επιβίωνε μέσα σε κάθε παράθεση αφού ο συντάκτης το είχε
+ * σβήσει, ακυρώνοντας ολόκληρο το soft delete.
+ *
+ * Το `messages!reply_to` είναι υποχρεωτικό: ο πίνακας δείχνει πλέον στον εαυτό
+ * του, και χωρίς ρητή υπόδειξη το PostgREST δεν ξέρει ποια σχέση εννοούμε.
+ */
+const REPLIED =
+  "replied:messages!reply_to(id, content, sender_id, deleted_at, " + SENDER + ")";
+
+/**
  * Τα πεδία ενός μηνύματος. Ένα σημείο και όχι τέσσερα αντίγραφα: μια στήλη που
  * ξεχνιέται σε ένα μόνο από τα ερωτήματα βγάζει μήνυμα που φαίνεται σωστό
  * παντού εκτός από ένα σημείο της οθόνης — το χειρότερο είδος σφάλματος.
- *
- * ΤΟ `!messages_sender_id_fkey` ΕΙΝΑΙ ΑΠΑΡΑΙΤΗΤΟ, δεν είναι καλλωπισμός.
- *
- * Ο message_reactions έχει foreign key και προς messages και προς profiles.
- * Το PostgREST τον βλέπει ως γέφυρα ανάμεσα στους δύο, οπότε από τα messages
- * υπάρχουν πλέον ΔΥΟ διαδρομές προς τα profiles: η κατευθείαν μέσω sender_id,
- * και η έμμεση μέσω των αντιδράσεων. Χωρίς ρητό όνομα σχέσης κάθε ερώτημα
- * μηνυμάτων απορρίπτεται με PGRST201 — και επειδή το ιστορικό φορτώνεται πριν
- * ανοίξει το κανάλι, μαζί του πέφτει και το realtime.
  */
-const SENDER = "profiles!messages_sender_id_fkey(display_name)";
-
 const MESSAGE_FIELDS =
-  "id, content, sender_id, created_at, edited_at, deleted_at, " + SENDER;
+  "id, content, sender_id, created_at, edited_at, deleted_at, reply_to, " +
+  SENDER + ", " + REPLIED;
 
 /** Ο κωδικός σφάλματος της Postgres για παραβίαση unique constraint. */
 const UNIQUE_VIOLATION = "23505";
@@ -284,16 +305,26 @@ export async function sendMessage(
   senderId: string,
   content: string,
   id?: string,
+  replyTo?: string | null,
 ): Promise<ChatMessage> {
-  // Ένα αντικείμενο με προαιρετικό id, όχι ένωση δύο σχημάτων: η ένωση κάνει τον
+  // Ένα αντικείμενο με προαιρετικά πεδία, όχι ένωση σχημάτων: η ένωση κάνει τον
   // τύπο του insert να απαιτήσει το id και από τον κλάδο που δεν το έχει.
-  const row: { group_id: string; sender_id: string; content: string; id?: string } = {
+  const row: {
+    group_id: string;
+    sender_id: string;
+    content: string;
+    id?: string;
+    reply_to?: string;
+  } = {
     group_id: groupId,
     sender_id: senderId,
     content,
   };
   if (id) {
     row.id = id;
+  }
+  if (replyTo) {
+    row.reply_to = replyTo;
   }
 
   const { data, error } = await supabase
@@ -361,6 +392,14 @@ export async function getMessageById(id: string): Promise<ChatMessage | null> {
   return data ? toChatMessage(data) : null;
 }
 
+/** Το μήνυμα που παρατίθεται, όσο χρειάζεται για να ζωγραφιστεί η παράθεση. */
+export type ReplyQuote = {
+  id: string;
+  senderName: string;
+  content: string;
+  deleted: boolean;
+};
+
 export type ChatMessage = {
   id: string;
   content: string;
@@ -371,6 +410,15 @@ export type ChatMessage = {
   editedAt: string | null;
   /** Πότε σβήστηκε. Όταν δεν είναι null, το content είναι ήδη άδειο. */
   deletedAt: string | null;
+  /** Σε ποιο μήνυμα απαντά· null αν δεν είναι απάντηση. */
+  replyTo: string | null;
+  /**
+   * Η παράθεση. Είναι null όταν το μήνυμα δεν είναι απάντηση, ΑΛΛΑ και όταν
+   * ήρθε από το realtime — τα payload του postgres_changes είναι σκέτες γραμμές
+   * χωρίς joins. Σε αυτή την περίπτωση το replyTo υπάρχει και η οθόνη
+   * συμπληρώνει την παράθεση από όσα μηνύματα έχει ήδη.
+   */
+  reply: ReplyQuote | null;
 };
 
 /** Μετατρέπει μια γραμμή του πίνακα messages σε ChatMessage. */
@@ -385,6 +433,27 @@ export function toChatMessage(row: any, senderName?: string): ChatMessage {
     // όταν στήθηκε η συνδρομή — γι' αυτό ?? και όχι σκέτη ανάθεση.
     editedAt: row.edited_at ?? null,
     deletedAt: row.deleted_at ?? null,
+    replyTo: row.reply_to ?? null,
+    // ΠΡΟΣΟΧΗ: σε αυτο-αναφορική σχέση το PostgREST μπορεί να γυρίσει ΠΙΝΑΚΑ
+    // αντί για αντικείμενο — δηλαδή την ανάποδη κατεύθυνση, «ποιοι απαντούν σε
+    // εμένα». Άδειος πίνακας είναι truthy, και χωρίς αυτόν τον έλεγχο κάθε
+    // μήνυμα αποκτούσε κενή παράθεση. Δεχόμαστε μόνο σκέτο αντικείμενο· ό,τι
+    // δεν είναι, το συμπληρώνει η οθόνη από τα μηνύματα που ήδη έχει.
+    reply:
+      row.replied && !Array.isArray(row.replied) ? toQuote(row.replied) : null,
+  };
+}
+
+/** Μετατρέπει το ενσωματωμένο πρωτότυπο σε παράθεση. */
+export function toQuote(row: any): ReplyQuote {
+  const deleted = row.deleted_at !== null && row.deleted_at !== undefined;
+  return {
+    id: row.id,
+    senderName: row.profiles?.display_name ?? "",
+    // Σβησμένο μήνυμα δεν παραθέτει κείμενο. Το content έρχεται ήδη άδειο από
+    // τη βάση, αλλά δεν το εμπιστευόμαστε — το μηδενίζουμε και εδώ.
+    content: deleted ? "" : row.content,
+    deleted,
   };
 }
 

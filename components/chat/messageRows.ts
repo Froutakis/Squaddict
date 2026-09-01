@@ -74,6 +74,8 @@ export function buildRows(
       // σβηστεί — και δεν μπορεί: το μενού ανοίγει μόνο σε επιβεβαιωμένα.
       editedAt: null,
       deletedAt: null,
+      replyTo: null,
+      reply: null,
     };
   });
 
