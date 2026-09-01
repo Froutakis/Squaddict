@@ -8,7 +8,6 @@ type GroupBarProps = {
   activeId: string | null;
   onSelect: (id: string | null) => void;
   unread?: Record<string, number>;
-  /** Το chip "All" — κρύψε το εκεί που δεν έχει νόημα. */
   showAll?: boolean;
 };
 

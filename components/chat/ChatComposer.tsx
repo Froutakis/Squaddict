@@ -4,10 +4,6 @@ import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { paper, paperFont, radius, space } from '../../theme';
 
 type ChatComposerProps = {
-  /**
-   * Βάζει το μήνυμα στην οθόνη και αναλαμβάνει την αποστολή από εκεί και πέρα.
-   * Δεν περιμένουμε δίκτυο: ό,τι πάει στραβά φαίνεται πάνω στη φυσαλίδα.
-   */
   onSend: (text: string) => void;
   placeholder?: string;
   disabled?: boolean;
@@ -27,19 +23,10 @@ export default function ChatComposer({
   function handleSend() {
     if (!canSend) return;
 
-    // Καθαρίζει αμέσως: το μήνυμα ζει πλέον στη λίστα, όχι στο πεδίο.
     onSend(trimmed);
     setText('');
   }
 
-  /**
-   * Πληκτρολόγιο: Enter στέλνει, Shift+Enter αλλάζει γραμμή. Μόνο στο web —
-   * στο κινητό το Enter του εικονικού πληκτρολογίου πρέπει να κάνει νέα γραμμή.
-   *
-   * Το react-native-web δίνει εδώ το κανονικό keydown event του browser, οπότε
-   * έχουμε και `shiftKey` και `preventDefault()`. Το preventDefault εμποδίζει
-   * τον browser να προσθέσει το newline πριν προλάβουμε να στείλουμε.
-   */
   function handleKeyPress(event: any) {
     if (Platform.OS !== 'web') {
       return;
@@ -47,7 +34,6 @@ export default function ChatComposer({
 
     const key = event.key ?? event.nativeEvent?.key;
     const withShift = event.shiftKey ?? event.nativeEvent?.shiftKey;
-    // Όσο ένα IME συνθέτει χαρακτήρα, το Enter επιβεβαιώνει τη σύνθεση — όχι αποστολή.
     const composing = event.nativeEvent?.isComposing === true;
 
     if (key === 'Enter' && !withShift && !composing) {
@@ -58,7 +44,6 @@ export default function ChatComposer({
 
   return (
     <View style={styles.bar}>
-      {/* Ένα ενιαίο κουτί: πεδίο και κουμπί ζουν μέσα στο ίδιο περίγραμμα. */}
       <View style={[styles.box, focused && styles.boxFocused]}>
         <TextInput
           style={styles.input}
@@ -118,7 +103,6 @@ const styles = StyleSheet.create({
     borderColor: paper.line,
     borderRadius: radius.xl,
   },
-  // Στο focus σκουραίνει μόνο το περίγραμμα — καμία σκιά, κανένα glow.
   boxFocused: { borderColor: paper.inkFaint },
   input: {
     flex: 1,

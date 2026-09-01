@@ -2,7 +2,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import { font, gradientFor, radius } from '../../theme';
 
-/** Αρχικά για avatar: "Nikos Papas" → "NP", "Beach" → "B". Ίδιο όνομα, ίδια αρχικά παντού. */
 export function initialsFor(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';
@@ -11,16 +10,11 @@ export function initialsFor(name: string) {
 }
 
 type GradientAvatarProps = {
-  /** Το όνομα ορίζει το gradient (μέσω gradientFor) — ίδιο όνομα, ίδιο χρώμα πάντα. */
   label: string;
   size?: number;
-  /** Παράκαμψη των αρχικών, π.χ. 'PC' για "Paralia Crew". */
   initials?: string;
-  /** Περίγραμμα — για στοίβες avatars και pins πάνω σε χάρτη. */
   ring?: number;
-  /** Χρώμα του περιγράμματος· ταιριάζει με την επιφάνεια από κάτω. */
   ringColor?: string;
-  /** Σταθερό gradient αντί για το υπολογισμένο (π.χ. brand για τον ίδιο τον χρήστη). */
   gradient?: readonly [string, string];
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
