@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ReactionCount } from './reactions';
 import { paper, paperFont, space } from '../../theme';
 import { SquadMonogram } from './SquadPicker';
 
@@ -33,8 +34,12 @@ type MessageBubbleProps = {
   editedAt?: string | null;
   /** Σβησμένο μήνυμα: η φυσαλίδα μένει, το κείμενο έχει ήδη φύγει από τη βάση. */
   deleted?: boolean;
-  /** Παρατεταμένο πάτημα — ανοίγει το μενού Edit / Delete. Μόνο στα δικά μου. */
+  /** Παρατεταμένο πάτημα — ανοίγει το μενού. */
   onLongPress?: () => void;
+  /** Αντιδράσεις, ήδη ομαδοποιημένες. Άδειο = δεν δείχνουμε τίποτα. */
+  reactions?: ReactionCount[];
+  /** Πάτημα σε chip: βάζει τη δική μου, ή την παίρνει πίσω αν είναι ήδη αυτή. */
+  onToggleReaction?: (emoji: string) => void;
 };
 
 export default function MessageBubble({
@@ -49,6 +54,8 @@ export default function MessageBubble({
   editedAt,
   deleted,
   onLongPress,
+  reactions,
+  onToggleReaction,
 }: MessageBubbleProps) {
   // Πατητή γίνεται η φυσαλίδα σε δύο περιπτώσεις: για επανάληψη αποστολής, ή
   // για το μενού επεξεργασίας. Ένα σβησμένο μήνυμα δεν πατιέται καθόλου.
@@ -128,6 +135,40 @@ export default function MessageBubble({
           </View>
         )}
 
+        {/* Τα chips κάθονται κάτω από τη φυσαλίδα, στην ίδια πλευρά με αυτήν —
+            γι' αυτό η στοίχιση έρχεται από το columnMine/columnOther. */}
+        {reactions && reactions.length > 0 ? (
+          <View style={styles.reactions}>
+            {reactions.map(function (item) {
+              return (
+                <Pressable
+                  key={item.emoji}
+                  onPress={function () {
+                    onToggleReaction?.(item.emoji);
+                  }}
+                  disabled={!onToggleReaction}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    item.mine
+                      ? `Remove your ${item.emoji} reaction`
+                      : `React with ${item.emoji}`
+                  }
+                  style={item.mine ? [styles.chip, styles.chipMine] : styles.chip}
+                >
+                  <Text style={styles.chipEmoji}>{item.emoji}</Text>
+                  {/* Το πλήθος μπαίνει μόνο από δύο και πάνω: με έναν, ο
+                      αριθμός δεν λέει τίποτα που δεν λέει το ίδιο το emoji. */}
+                  {item.count > 1 ? (
+                    <Text style={item.mine ? [styles.chipCount, styles.chipCountMine] : styles.chipCount}>
+                      {item.count}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
         {/* Όσο εκκρεμεί ή έχει αποτύχει, η κατάσταση παίρνει τη θέση της ώρας:
             η ώρα ενός μηνύματος που δεν έφτασε ποτέ δεν σημαίνει τίποτα. */}
         {status === 'failed' ? (
@@ -193,6 +234,25 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   pressed: { opacity: 0.85 },
+
+  reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    backgroundColor: paper.surface,
+    borderWidth: 1,
+    borderColor: paper.line,
+    borderRadius: 999,
+  },
+  // Η δική μου ξεχωρίζει με περίγραμμα και όχι με γέμισμα: το emoji πρέπει να
+  // παραμείνει το πιο έντονο πράγμα στο chip.
+  chipMine: { borderColor: paper.accent, backgroundColor: paper.accentSoft },
+  chipEmoji: { fontSize: 12, lineHeight: 16 },
+  chipCount: { color: paper.inkSoft, fontFamily: paperFont.medium, fontSize: 11 },
+  chipCountMine: { color: paper.accent },
 
   sender: {
     marginBottom: 4,

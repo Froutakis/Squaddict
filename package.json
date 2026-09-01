@@ -18,6 +18,7 @@
     "test-message-update": "tsx debug/test-message-update.ts",
     "test-typing": "tsx debug/test-typing.ts",
     "test-search": "tsx debug/test-search.ts",
+    "test-reactions": "tsx debug/test-reactions.ts",
     "test-unread": "tsx debug/test-unread.ts",
     "test-pagination": "tsx --env-file=.env debug/test-pagination.ts",
     "test-location": "tsx debug/test-location.ts",
