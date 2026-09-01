@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
 import { isSearchable } from "../components/chat/search";
+import type { Reaction } from "../components/chat/reactions";
 
 /**
  * Το δημόσιο προφίλ μιας Παρέας — ό,τι βλέπει ΚΑΙ ένας μη-μέλος.
@@ -27,9 +28,20 @@ const GROUP_FIELDS = "id, handle, name, bio, avatar_url, member_count";
  * Τα πεδία ενός μηνύματος. Ένα σημείο και όχι τέσσερα αντίγραφα: μια στήλη που
  * ξεχνιέται σε ένα μόνο από τα ερωτήματα βγάζει μήνυμα που φαίνεται σωστό
  * παντού εκτός από ένα σημείο της οθόνης — το χειρότερο είδος σφάλματος.
+ *
+ * ΤΟ `!messages_sender_id_fkey` ΕΙΝΑΙ ΑΠΑΡΑΙΤΗΤΟ, δεν είναι καλλωπισμός.
+ *
+ * Ο message_reactions έχει foreign key και προς messages και προς profiles.
+ * Το PostgREST τον βλέπει ως γέφυρα ανάμεσα στους δύο, οπότε από τα messages
+ * υπάρχουν πλέον ΔΥΟ διαδρομές προς τα profiles: η κατευθείαν μέσω sender_id,
+ * και η έμμεση μέσω των αντιδράσεων. Χωρίς ρητό όνομα σχέσης κάθε ερώτημα
+ * μηνυμάτων απορρίπτεται με PGRST201 — και επειδή το ιστορικό φορτώνεται πριν
+ * ανοίξει το κανάλι, μαζί του πέφτει και το realtime.
  */
+const SENDER = "profiles!messages_sender_id_fkey(display_name)";
+
 const MESSAGE_FIELDS =
-  "id, content, sender_id, created_at, edited_at, deleted_at, profiles(display_name)";
+  "id, content, sender_id, created_at, edited_at, deleted_at, " + SENDER;
 
 /** Ο κωδικός σφάλματος της Postgres για παραβίαση unique constraint. */
 const UNIQUE_VIOLATION = "23505";
@@ -494,7 +506,7 @@ export async function getGroupPreviews(
 
   const { data, error } = await supabase
     .from("messages")
-    .select("group_id, content, created_at, profiles(display_name)")
+    .select("group_id, content, created_at, " + SENDER)
     .in("group_id", groupIds)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -582,4 +594,63 @@ export async function searchMessages(
       createdAt: row.msg_created_at,
     };
   });
+}
+
+/** Μια γραμμή του message_reactions, όπως τη θέλει η οθόνη. */
+export function toReaction(row: any): Reaction {
+  return {
+    messageId: row.message_id,
+    userId: row.user_id,
+    emoji: row.emoji,
+  };
+}
+
+/**
+ * Οι αντιδράσεις ενός συνόλου μηνυμάτων, σε ένα ερώτημα.
+ *
+ * Καλείται με τα ids μιας σελίδας ιστορικού — και όταν φορτώνεται παλιότερη
+ * σελίδα, μόνο με τα καινούργια ids.
+ */
+export async function getReactions(messageIds: string[]): Promise<Reaction[]> {
+  if (messageIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("message_reactions")
+    .select("message_id, user_id, emoji")
+    .in("message_id", messageIds);
+  if (error) throw error;
+
+  return (data ?? []).map(toReaction);
+}
+
+/**
+ * Βάζει ή αλλάζει τη δική μου αντίδραση.
+ *
+ * Upsert στο (message_id, user_id): ένα άτομο έχει το πολύ μία, οπότε το
+ * πάτημα άλλου emoji είναι ενημέρωση της ίδιας γραμμής και όχι δεύτερη.
+ *
+ * Το group_id ΔΕΝ στέλνεται — το γράφει trigger από το ίδιο το μήνυμα.
+ */
+export async function setReaction(messageId: string, emoji: string): Promise<void> {
+  const user = await requireUser();
+
+  const { error } = await supabase
+    .from("message_reactions")
+    .upsert(
+      { message_id: messageId, user_id: user.id, emoji },
+      { onConflict: "message_id,user_id" },
+    );
+  if (error) throw error;
+}
+
+/** Παίρνει πίσω τη δική μου αντίδραση. */
+export async function clearReaction(messageId: string): Promise<void> {
+  const user = await requireUser();
+
+  const { error } = await supabase
+    .from("message_reactions")
+    .delete()
+    .eq("message_id", messageId)
+    .eq("user_id", user.id);
+  if (error) throw error;
 }

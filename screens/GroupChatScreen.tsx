@@ -16,6 +16,15 @@ import ChatComposer from '../components/chat/ChatComposer';
 import ChatHeader from '../components/chat/ChatHeader';
 import MessageBubble, { DateSeparator } from '../components/chat/MessageBubble';
 import MessageMenu from '../components/chat/MessageMenu';
+import {
+  actionFor,
+  dropReaction,
+  mergeReactions,
+  myReaction,
+  putReaction,
+  summarise,
+  type ReactionMap,
+} from '../components/chat/reactions';
 import SearchOverlay from '../components/chat/SearchOverlay';
 import SquadPicker from '../components/chat/SquadPicker';
 import { buildRows, type OutgoingMessage, type Row } from '../components/chat/messageRows';
@@ -45,6 +54,10 @@ import {
   getMessagesAfter,
   getUnreadCounts,
   markGroupRead,
+  clearReaction,
+  getReactions,
+  setReaction,
+  toReaction,
   sendMessage,
   toChatMessage,
   type ChatMessage,
@@ -101,6 +114,8 @@ export default function GroupChatScreen({
   // Ποιοι γράφουν αυτή τη στιγμή, και πόσοι είναι συνδεδεμένοι.
   const [typists, setTypists] = useState<Typist[]>([]);
   const [online, setOnline] = useState(0);
+  // Αντιδράσεις των φορτωμένων μηνυμάτων, ανά message id.
+  const [reactions, setReactions] = useState<ReactionMap>({});
   // Το μόνο που ξέρει ο γονιός για την αναζήτηση: αν είναι ανοιχτή. Τον όρο
   // και τα αποτελέσματα τα κρατά το SearchOverlay.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -156,6 +171,26 @@ export default function GroupChatScreen({
       setUnread(await getUnreadCounts());
     } catch {
       // σιωπηλά
+    }
+  }, []);
+
+  /**
+   * Οι αντιδράσεις μιας σελίδας μηνυμάτων.
+   *
+   * Ξεχωριστό ερώτημα και όχι join στα μηνύματα: ένα μήνυμα με δέκα αντιδράσεις
+   * θα επαναλάμβανε δέκα φορές το κείμενό του στην απάντηση.
+   */
+  const loadReactionsFor = useCallback(async function load(ids: string[]) {
+    if (ids.length === 0) {
+      return;
+    }
+    try {
+      const rows = await getReactions(ids);
+      setReactions(function (prev) {
+        return mergeReactions(prev, rows);
+      });
+    } catch {
+      // σιωπηλά — οι αντιδράσεις είναι επιπλέον, όχι περιεχόμενο.
     }
   }, []);
 
@@ -251,6 +286,7 @@ export default function GroupChatScreen({
       setConnection('connecting');
       setTypists([]);
       setOnline(0);
+      setReactions({});
       return;
     }
 
@@ -280,6 +316,7 @@ export default function GroupChatScreen({
     setError(null);
     setTypists([]);
     setOnline(0);
+    setReactions({});
     typingSentRef.current = 0;
 
     // Καλείται όταν ο server στείλει νέα γραμμή μηνύματος.
@@ -306,6 +343,19 @@ export default function GroupChatScreen({
         // Νέος πίνακας με το μήνυμα στο τέλος.
         // Ποτέ prev.push() — το state του React δεν το πειράζουμε επί τόπου.
         return [...prev, incoming];
+      });
+    }
+
+    function handleReaction(row: any) {
+      setReactions(function (prev) {
+        return putReaction(prev, toReaction(row));
+      });
+    }
+
+    // Στο DELETE έρχεται η ΠΑΛΙΑ γραμμή — από αυτήν χρειαζόμαστε ποιος ήταν.
+    function handleReactionGone(row: any) {
+      setReactions(function (prev) {
+        return dropReaction(prev, row.message_id, row.user_id);
       });
     }
 
@@ -439,8 +489,11 @@ export default function GroupChatScreen({
           onStatus: handleStatus,
           onTyping: handleTyping,
           onPresence: setOnline,
+          onReaction: handleReaction,
+          onReactionGone: handleReactionGone,
         });
         channelRef.current = chat.channel;
+        loadReactionsFor(chat.messages.map(function (m) { return m.id; }));
 
         // Αν άλλαξε παρέα όσο άνοιγε το κανάλι, το cleanup έχει ήδη τρέξει και δεν
         // ξέρει γι' αυτό το κανάλι. Κλείσ' το εδώ, αλλιώς μένει ανοιχτό socket.
@@ -452,7 +505,8 @@ export default function GroupChatScreen({
         channel = chat.channel;
         setMessages(chat.messages);
         setHasMore(chat.hasMore);
-      } catch {
+      } catch (problem) {
+        console.error('[squaddict] το άνοιγμα της συνομιλίας απέτυχε:', problem);
         if (!cancelled) {
           setError("Couldn't load this conversation.");
         }
@@ -478,7 +532,7 @@ export default function GroupChatScreen({
         closeGroupChat(channel);
       }
     };
-  }, [activeId, markRead]);
+  }, [activeId, markRead, loadReactionsFor]);
 
   /**
    * Οι ενδείξεις «γράφει…» λήγουν μόνες τους.
@@ -525,7 +579,10 @@ export default function GroupChatScreen({
         setOutbox(function (prev) {
           return prev.filter((item) => item.id !== id);
         });
-      } catch {
+      } catch (problem) {
+        // Ο χρήστης βλέπει «Not sent» — εμείς χρειαζόμαστε το ΓΙΑΤΙ. Χωρίς αυτό
+        // το σφάλμα της Postgres χάνεται και μένει μόνο ένα κόκκινο κουτάκι.
+        console.error('[squaddict] η αποστολή απέτυχε:', problem);
         setOutbox(function (prev) {
           return prev.map((item) =>
             item.id === id ? { ...item, status: 'failed' as const } : item,
@@ -639,6 +696,37 @@ export default function GroupChatScreen({
     sendTyping(channel, meRef.current);
   }, []);
 
+  /**
+   * Βάζει, αλλάζει ή παίρνει πίσω τη δική μου αντίδραση.
+   *
+   * Αισιόδοξη, όπως το edit και το delete: η αλλαγή φαίνεται αμέσως και, αν η
+   * βάση την απορρίψει, ο χάρτης γυρίζει σε αυτό που ήταν. Κρατάμε ολόκληρο τον
+   * προηγούμενο χάρτη για την επαναφορά — είναι φθηνός, μόνο αναφορές.
+   */
+  const toggleReaction = useCallback(
+    function toggle(messageId: string, emoji: string) {
+      const mine = myReaction(reactions[messageId], user.id);
+      const action = actionFor(mine, emoji);
+      const before = reactions;
+
+      if (action === 'clear') {
+        setReactions(dropReaction(before, messageId, user.id));
+        clearReaction(messageId).catch(function () {
+          setReactions(before);
+          setError("Couldn't remove that reaction.");
+        });
+        return;
+      }
+
+      setReactions(putReaction(before, { messageId, userId: user.id, emoji }));
+      setReaction(messageId, emoji).catch(function () {
+        setReactions(before);
+        setError("Couldn't add that reaction.");
+      });
+    },
+    [reactions, user.id],
+  );
+
   // Ο composer έχει δύο δουλειές πλέον. Ποια από τις δύο, το λέει το `editing`.
   const handleComposerSend = useCallback(
     function submit(text: string) {
@@ -699,6 +787,10 @@ export default function GroupChatScreen({
       try {
         const page = await getMessages(activeId, { before: oldest.createdAt });
 
+        // Έξω από τον state updater: ο updater μπορεί να ξανατρέξει και δεν
+        // στέλνουμε αιτήματα μέσα του.
+        loadReactionsFor(page.messages.map(function (m) { return m.id; }));
+
         setMessages(function (prev) {
           // Ό,τι ήρθε και το έχουμε ήδη πέφτει έξω. Δεν το περιμένουμε με
           // δείκτη χρόνου, αλλά ένα διπλό id στη λίστα σπάει το keyExtractor.
@@ -727,7 +819,7 @@ export default function GroupChatScreen({
         setLoadingOlder(false);
       }
     },
-    [activeId, hasMore, messages],
+    [activeId, hasMore, messages, loadReactionsFor],
   );
 
   // Τα μηνύματα -> γραμμές λίστας (με διαχωριστικά ημέρας).
@@ -831,14 +923,23 @@ export default function GroupChatScreen({
         }}
         editedAt={message.editedAt}
         deleted={message.deletedAt !== null}
-        // Το μενού ανοίγει μόνο στα δικά μου και μόνο σε όσα έχει επιβεβαιώσει
-        // η βάση: ένα μήνυμα που ταξιδεύει ακόμα δεν έχει τι να διορθώσει.
+        // Το μενού ανοίγει πλέον και σε ξένα μηνύματα — εκεί έχει μόνο
+        // αντιδράσεις. Ο περιορισμός που μένει είναι η επιβεβαίωση από τη βάση:
+        // σε μήνυμα που ταξιδεύει ακόμα δεν υπάρχει id για να αντιδράσεις.
         onLongPress={
-          isMine && !item.status
-            ? function () {
+          item.status
+            ? undefined
+            : function () {
                 setMenuFor(message);
               }
-            : undefined
+        }
+        reactions={summarise(reactions[message.id], user.id)}
+        onToggleReaction={
+          item.status
+            ? undefined
+            : function (emoji) {
+                toggleReaction(message.id, emoji);
+              }
         }
       />
     );
@@ -948,6 +1049,12 @@ export default function GroupChatScreen({
 
           <MessageMenu
             message={menuFor}
+            myEmoji={menuFor ? myReaction(reactions[menuFor.id], user.id) : null}
+            canEdit={menuFor ? menuFor.senderId === user.id : false}
+            onReact={function (target, emoji) {
+              setMenuFor(null);
+              toggleReaction(target.id, emoji);
+            }}
             onClose={function () {
               setMenuFor(null);
             }}

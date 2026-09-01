@@ -16,6 +16,10 @@ export type ChatHandlers = {
   onTyping?: (who: { id: string; name: string }) => void;
   /** Πόσοι είναι συνδεδεμένοι στη συνομιλία αυτή τη στιγμή. */
   onPresence?: (online: number) => void;
+  /** Μπήκε ή άλλαξε αντίδραση. Η γραμμή, όπως έρχεται από τη βάση. */
+  onReaction?: (row: any) => void;
+  /** Αφαιρέθηκε αντίδραση. Εδώ έρχεται η ΠΑΛΙΑ γραμμή. */
+  onReactionGone?: (row: any) => void;
 };
 
 /** Ποιοι είμαστε — το presence θέλει ταυτότητα, το broadcast θέλει όνομα. */
@@ -58,6 +62,26 @@ export function openGroupChat(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'messages', filter },
       (payload) => handlers.onMessageUpdate?.(payload.new),
+    )
+    // Αντιδράσεις. Το insert και το update είναι το ίδιο πράγμα για την οθόνη —
+    // ένα άτομο έχει το πολύ μία, οπότε η αλλαγή emoji είναι update της ίδιας
+    // γραμμής και όχι δεύτερη.
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'message_reactions', filter },
+      (payload) => handlers.onReaction?.(payload.new),
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'message_reactions', filter },
+      (payload) => handlers.onReaction?.(payload.new),
+    )
+    // Το φίλτρο εδώ δουλεύει μόνο επειδή ο πίνακας έχει replica identity full:
+    // αλλιώς η παλιά γραμμή θα είχε μόνο το primary key, χωρίς group_id.
+    .on(
+      'postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'message_reactions', filter },
+      (payload) => handlers.onReactionGone?.(payload.old),
     )
     .on('broadcast', { event: TYPING_EVENT }, function (message) {
       const payload = message.payload as { id?: string; name?: string } | undefined;
