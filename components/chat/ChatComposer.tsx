@@ -1,20 +1,50 @@
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { paper, paperFont, radius, space } from '../../theme';
 
 type ChatComposerProps = {
+  /**
+   * Βάζει το μήνυμα στην οθόνη και αναλαμβάνει την αποστολή από εκεί και πέρα.
+   * Δεν περιμένουμε δίκτυο: ό,τι πάει στραβά φαίνεται πάνω στη φυσαλίδα.
+   */
   onSend: (text: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  /**
+   * Αρχικό περιεχόμενο. Διαβάζεται ΜΟΝΟ στο πρώτο render — η αλλαγή του δεν
+   * κάνει τίποτα. Ο γονιός αλλάζει το `key` για να ξαναστήσει τον composer με
+   * νέο κείμενο· έτσι δεν χρειάζεται effect που θα πάλευε με ό,τι πληκτρολογεί
+   * ο χρήστης εκείνη τη στιγμή.
+   */
+  initialText?: string;
+  /** Σε λειτουργία διόρθωσης αλλάζει η μπάρα και το εικονίδιο του κουμπιού. */
+  editing?: boolean;
+  /**
+   * Σε ποιον απαντάμε. Αποκλείεται με το `editing` — διορθώνεις ή απαντάς, όχι
+   * και τα δύο· ο γονιός φροντίζει να μην είναι ταυτόχρονα ενεργά.
+   */
+  replyTo?: { senderName: string; content: string; deleted: boolean } | null;
+  /** Ακύρωση της διόρθωσης. */
+  onCancel?: () => void;
+  /**
+   * Ο χρήστης πληκτρολογεί. Καλείται σε ΚΑΘΕ αλλαγή — το throttle είναι ευθύνη
+   * του γονιού, που ξέρει και το κανάλι.
+   */
+  onTyping?: () => void;
 };
 
 export default function ChatComposer({
   onSend,
   placeholder = 'Message the squad',
   disabled = false,
+  initialText = '',
+  editing = false,
+  replyTo = null,
+  onCancel,
+  onTyping,
 }: ChatComposerProps) {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText);
   const [focused, setFocused] = useState(false);
 
   const trimmed = text.trim();
@@ -23,10 +53,19 @@ export default function ChatComposer({
   function handleSend() {
     if (!canSend) return;
 
+    // Καθαρίζει αμέσως: το μήνυμα ζει πλέον στη λίστα, όχι στο πεδίο.
     onSend(trimmed);
     setText('');
   }
 
+  /**
+   * Πληκτρολόγιο: Enter στέλνει, Shift+Enter αλλάζει γραμμή. Μόνο στο web —
+   * στο κινητό το Enter του εικονικού πληκτρολογίου πρέπει να κάνει νέα γραμμή.
+   *
+   * Το react-native-web δίνει εδώ το κανονικό keydown event του browser, οπότε
+   * έχουμε και `shiftKey` και `preventDefault()`. Το preventDefault εμποδίζει
+   * τον browser να προσθέσει το newline πριν προλάβουμε να στείλουμε.
+   */
   function handleKeyPress(event: any) {
     if (Platform.OS !== 'web') {
       return;
@@ -34,21 +73,72 @@ export default function ChatComposer({
 
     const key = event.key ?? event.nativeEvent?.key;
     const withShift = event.shiftKey ?? event.nativeEvent?.shiftKey;
+    // Όσο ένα IME συνθέτει χαρακτήρα, το Enter επιβεβαιώνει τη σύνθεση — όχι αποστολή.
     const composing = event.nativeEvent?.isComposing === true;
 
     if (key === 'Enter' && !withShift && !composing) {
       event.preventDefault();
       handleSend();
     }
+
+    // Escape ακυρώνει τη διόρθωση — το αναμενόμενο σε κάθε πεδίο που «άνοιξε»
+    // πάνω από κάτι άλλο.
+    if (key === 'Escape' && (editing || replyTo) && onCancel) {
+      event.preventDefault();
+      onCancel();
+    }
   }
 
   return (
     <View style={styles.bar}>
+      {editing ? (
+        <View style={styles.editBanner}>
+          <Ionicons name="pencil" size={13} color={paper.accent} />
+          <Text style={styles.editLabel}>Editing message</Text>
+          <Pressable
+            onPress={onCancel}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel edit"
+            hitSlop={8}
+          >
+            <Ionicons name="close" size={16} color={paper.inkSoft} />
+          </Pressable>
+        </View>
+      ) : replyTo ? (
+        <View style={styles.editBanner}>
+          <Ionicons name="arrow-undo" size={13} color={paper.accent} />
+          <View style={styles.replyText}>
+            <Text style={styles.editLabel} numberOfLines={1}>
+              Replying to {replyTo.senderName || 'someone'}
+            </Text>
+            <Text style={styles.replyBody} numberOfLines={1}>
+              {replyTo.deleted ? 'Message deleted' : replyTo.content}
+            </Text>
+          </View>
+          <Pressable
+            onPress={onCancel}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel reply"
+            hitSlop={8}
+          >
+            <Ionicons name="close" size={16} color={paper.inkSoft} />
+          </Pressable>
+        </View>
+      ) : null}
+
+      {/* Ένα ενιαίο κουτί: πεδίο και κουμπί ζουν μέσα στο ίδιο περίγραμμα. */}
       <View style={[styles.box, focused && styles.boxFocused]}>
         <TextInput
           style={styles.input}
           value={text}
-          onChangeText={setText}
+          onChangeText={function (next) {
+            setText(next);
+            // Το σβήσιμο δεν είναι γράψιμο: αλλιώς κρατώντας το Backspace θα
+            // έστελνες «γράφει…» ενώ αδειάζεις το πεδίο.
+            if (next.length > text.length) {
+              onTyping?.();
+            }
+          }}
           onKeyPress={handleKeyPress}
           onFocus={function () {
             setFocused(true);
@@ -66,13 +156,13 @@ export default function ChatComposer({
           onPress={handleSend}
           disabled={!canSend}
           accessibilityRole="button"
-          accessibilityLabel="Send"
+          accessibilityLabel={editing ? "Save edit" : "Send"}
           style={function ({ pressed }) {
             return [styles.send, canSend ? styles.sendReady : styles.sendIdle, pressed && canSend && styles.pressed];
           }}
         >
           <Ionicons
-            name="arrow-up"
+            name={editing ? "checkmark" : "arrow-up"}
             size={17}
             color={canSend ? paper.onMine : paper.inkFaint}
           />
@@ -103,7 +193,26 @@ const styles = StyleSheet.create({
     borderColor: paper.line,
     borderRadius: radius.xl,
   },
+  // Στο focus σκουραίνει μόνο το περίγραμμα — καμία σκιά, κανένα glow.
   boxFocused: { borderColor: paper.inkFaint },
+  editBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    marginBottom: space.xs,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: paper.accentSoft,
+    borderRadius: radius.md,
+  },
+  editLabel: {
+    flex: 1,
+    color: paper.accent,
+    fontFamily: paperFont.medium,
+    fontSize: 12,
+  },
+  replyText: { flex: 1 },
+  replyBody: { color: paper.inkSoft, fontFamily: paperFont.regular, fontSize: 11 },
   input: {
     flex: 1,
     maxHeight: 120,

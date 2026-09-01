@@ -1,9 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ReplyQuote } from '../../services/serviceGroup';
+import type { ReactionCount } from './reactions';
 import { paper, paperFont, space } from '../../theme';
 import { SquadMonogram } from './SquadPicker';
 
 const AVATAR = 26;
+/** Στρογγυλή εξωτερική γωνία φυσαλίδας. */
 const ROUND = 16;
+/** Οι "εσωτερικές" γωνίες μέσα σε μια σερί μηνυμάτων. */
 const TIGHT = 6;
 
 function timeLabel(iso: string) {
@@ -15,12 +19,32 @@ function timeLabel(iso: string) {
 type MessageBubbleProps = {
   content: string;
   senderName: string;
+  /** ISO timestamp από τη βάση. */
   createdAt: string;
+  /** Δικό μου μήνυμα — πάει δεξιά, σε μελανί κουτί. */
   mine: boolean;
+  /** Πρώτο μιας σερί του ίδιου αποστολέα — μόνο εκεί δείχνουμε όνομα. */
   isFirst: boolean;
+  /** Τελευταίο της σερί — μόνο εκεί δείχνουμε avatar και ώρα. */
   isLast: boolean;
+  /** Λείπει για όσα έχουν επιβεβαιωθεί από τη βάση. */
   status?: 'pending' | 'failed';
+  /** Καλείται όταν πατηθεί μήνυμα που απέτυχε. */
   onRetry?: () => void;
+  /** Πότε διορθώθηκε· null αν δεν πειράχτηκε ποτέ. */
+  editedAt?: string | null;
+  /** Σβησμένο μήνυμα: η φυσαλίδα μένει, το κείμενο έχει ήδη φύγει από τη βάση. */
+  deleted?: boolean;
+  /** Παρατεταμένο πάτημα — ανοίγει το μενού. */
+  onLongPress?: () => void;
+  /** Αντιδράσεις, ήδη ομαδοποιημένες. Άδειο = δεν δείχνουμε τίποτα. */
+  reactions?: ReactionCount[];
+  /** Πάτημα σε chip: βάζει τη δική μου, ή την παίρνει πίσω αν είναι ήδη αυτή. */
+  onToggleReaction?: (emoji: string) => void;
+  /** Το μήνυμα που παρατίθεται· null αν δεν είναι απάντηση. */
+  reply?: ReplyQuote | null;
+  /** Είναι απάντηση, αλλά το πρωτότυπο δεν είναι φορτωμένο. */
+  replyUnknown?: boolean;
 };
 
 export default function MessageBubble({
@@ -32,7 +56,19 @@ export default function MessageBubble({
   isLast,
   status,
   onRetry,
+  editedAt,
+  deleted,
+  onLongPress,
+  reactions,
+  onToggleReaction,
+  reply,
+  replyUnknown,
 }: MessageBubbleProps) {
+  // Πατητή γίνεται η φυσαλίδα σε δύο περιπτώσεις: για επανάληψη αποστολής, ή
+  // για το μενού επεξεργασίας. Ένα σβησμένο μήνυμα δεν πατιέται καθόλου.
+  const bubblePress = !deleted && ((status === 'failed' && onRetry) || onLongPress);
+
+  // Στρογγυλή γωνία μόνο στις εξωτερικές άκρες, ώστε η σερί να διαβάζεται σαν μία στήλη.
   const shape = mine
     ? {
         borderTopRightRadius: isFirst ? ROUND : TIGHT,
@@ -45,6 +81,7 @@ export default function MessageBubble({
 
   return (
     <View style={[styles.row, mine ? styles.rowMine : styles.rowOther, isFirst && styles.rowFirst]}>
+      {/* Το avatar μπαίνει μόνο στο τελευταίο μήνυμα της σερί· αλλιώς κρατάμε τη θέση του κενή. */}
       {mine ? null : isLast ? (
         <SquadMonogram name={senderName || '?'} size={AVATAR} />
       ) : (
@@ -58,16 +95,60 @@ export default function MessageBubble({
           </Text>
         ) : null}
 
-        {status === 'failed' && onRetry ? (
+        {/* Η παράθεση κάθεται πάνω από τη φυσαλίδα, με κάθετη γραμμή αριστερά —
+            το ίδιο σχήμα που χρησιμοποιεί κάθε πρόγραμμα αλληλογραφίας. */}
+        {reply || replyUnknown ? (
+          <View style={styles.quote}>
+            <View style={styles.quoteBar} />
+            <View style={styles.quoteText}>
+              {reply ? (
+                <>
+                  <Text style={styles.quoteWho} numberOfLines={1}>
+                    {reply.senderName || 'Someone'}
+                  </Text>
+                  <Text
+                    style={reply.deleted ? [styles.quoteBody, styles.quoteGone] : styles.quoteBody}
+                    numberOfLines={2}
+                  >
+                    {reply.deleted ? 'Message deleted' : reply.content}
+                  </Text>
+                </>
+              ) : (
+                // Απάντηση σε μήνυμα εκτός φορτωμένου ιστορικού. Δεν εφευρίσκουμε
+                // περιεχόμενο — λέμε ότι υπάρχει και ότι δεν το έχουμε.
+                <Text style={[styles.quoteBody, styles.quoteGone]} numberOfLines={1}>
+                  Replying to an earlier message
+                </Text>
+              )}
+            </View>
+          </View>
+        ) : null}
+
+        {/* Σβησμένο μήνυμα: δεν δείχνουμε ποτέ το content — έχει ήδη μηδενιστεί
+            στη βάση, αλλά ούτε καν το ρωτάμε. Ό,τι κι αν έρθει, γράφουμε το ίδιο. */}
+        {deleted ? (
+          <View
+            style={[styles.bubble, styles.bubbleDeleted, shape]}
+            accessibilityLabel="Message deleted"
+          >
+            <Text style={styles.deletedText}>Message deleted</Text>
+          </View>
+        ) : bubblePress ? (
           <Pressable
-            onPress={onRetry}
+            onPress={status === 'failed' ? onRetry : undefined}
+            onLongPress={status === 'failed' ? undefined : onLongPress}
             accessibilityRole="button"
-            accessibilityLabel="Message not sent. Tap to try again."
+            accessibilityLabel={
+              status === 'failed'
+                ? 'Message not sent. Tap to try again.'
+                : 'Message options'
+            }
             style={function ({ pressed }) {
               return [
                 styles.bubble,
                 mine ? styles.bubbleMine : styles.bubbleOther,
-                styles.bubbleFailed,
+                status === 'failed' && styles.bubbleFailed,
+                status === 'pending' && styles.bubblePending,
                 shape,
                 pressed && styles.pressed,
               ];
@@ -76,6 +157,8 @@ export default function MessageBubble({
             <Text style={[styles.text, mine && styles.textMine]}>{content}</Text>
           </Pressable>
         ) : (
+          /* Χωρίς χειριστή αφής όπου δεν χρειάζεται: η λίστα δεν πρέπει να
+             μαζεύει χιλιάδες άχρηστους Pressable. */
           <View
             style={[
               styles.bubble,
@@ -88,18 +171,60 @@ export default function MessageBubble({
           </View>
         )}
 
+        {/* Τα chips κάθονται κάτω από τη φυσαλίδα, στην ίδια πλευρά με αυτήν —
+            γι' αυτό η στοίχιση έρχεται από το columnMine/columnOther. */}
+        {reactions && reactions.length > 0 ? (
+          <View style={styles.reactions}>
+            {reactions.map(function (item) {
+              return (
+                <Pressable
+                  key={item.emoji}
+                  onPress={function () {
+                    onToggleReaction?.(item.emoji);
+                  }}
+                  disabled={!onToggleReaction}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    item.mine
+                      ? `Remove your ${item.emoji} reaction`
+                      : `React with ${item.emoji}`
+                  }
+                  style={item.mine ? [styles.chip, styles.chipMine] : styles.chip}
+                >
+                  <Text style={styles.chipEmoji}>{item.emoji}</Text>
+                  {/* Το πλήθος μπαίνει μόνο από δύο και πάνω: με έναν, ο
+                      αριθμός δεν λέει τίποτα που δεν λέει το ίδιο το emoji. */}
+                  {item.count > 1 ? (
+                    <Text style={item.mine ? [styles.chipCount, styles.chipCountMine] : styles.chipCount}>
+                      {item.count}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
+        {/* Όσο εκκρεμεί ή έχει αποτύχει, η κατάσταση παίρνει τη θέση της ώρας:
+            η ώρα ενός μηνύματος που δεν έφτασε ποτέ δεν σημαίνει τίποτα. */}
         {status === 'failed' ? (
           <Text style={styles.failedNote}>Not sent · Tap to try again</Text>
         ) : status === 'pending' ? (
           <Text style={styles.pendingNote}>Sending…</Text>
         ) : isLast ? (
-          <Text style={styles.time}>{timeLabel(createdAt)}</Text>
+          <Text style={styles.time}>
+            {timeLabel(createdAt)}
+            {/* Η σήμανση μένει για πάντα: αυτό είναι το αντάλλαγμα για το ότι
+                δεν βάλαμε χρονικό όριο στην επεξεργασία. */}
+            {editedAt && !deleted ? ' · edited' : ''}
+          </Text>
         ) : null}
       </View>
     </View>
   );
 }
 
+/** Διαχωριστικό ημέρας — μια λεπτή γραμμή με την ημερομηνία στη μέση. */
 export function DateSeparator({ label }: { label: string }) {
   return (
     <View style={styles.separator}>
@@ -127,9 +252,56 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: paper.line,
   },
+  // Ξεθωριασμένο όσο ταξιδεύει — αρκετά για να φανεί, όχι τόσο ώστε να μη διαβάζεται.
   bubblePending: { opacity: 0.55 },
   bubbleFailed: { backgroundColor: paper.danger },
+  // Το σβησμένο δεν παίρνει ούτε το μελανί των δικών μου ούτε το λευκό των
+  // άλλων: διάστικτο περίγραμμα χωρίς γέμισμα, ώστε να διαβάζεται σαν κενό.
+  bubbleDeleted: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: paper.line,
+  },
+  deletedText: {
+    color: paper.inkFaint,
+    fontFamily: paperFont.regular,
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
   pressed: { opacity: 0.85 },
+
+  quote: {
+    flexDirection: 'row',
+    gap: 6,
+    maxWidth: '100%',
+    marginBottom: 3,
+    paddingLeft: 2,
+  },
+  quoteBar: { width: 2, borderRadius: 1, backgroundColor: paper.accent },
+  quoteText: { flexShrink: 1, paddingVertical: 1 },
+  quoteWho: { color: paper.accent, fontFamily: paperFont.semi, fontSize: 11 },
+  quoteBody: { color: paper.inkSoft, fontFamily: paperFont.regular, fontSize: 12, lineHeight: 16 },
+  quoteGone: { fontStyle: 'italic', color: paper.inkFaint },
+
+  reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    backgroundColor: paper.surface,
+    borderWidth: 1,
+    borderColor: paper.line,
+    borderRadius: 999,
+  },
+  // Η δική μου ξεχωρίζει με περίγραμμα και όχι με γέμισμα: το emoji πρέπει να
+  // παραμείνει το πιο έντονο πράγμα στο chip.
+  chipMine: { borderColor: paper.accent, backgroundColor: paper.accentSoft },
+  chipEmoji: { fontSize: 12, lineHeight: 16 },
+  chipCount: { color: paper.inkSoft, fontFamily: paperFont.medium, fontSize: 11 },
+  chipCountMine: { color: paper.accent },
 
   sender: {
     marginBottom: 4,
