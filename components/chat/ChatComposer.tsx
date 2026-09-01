@@ -20,6 +20,11 @@ type ChatComposerProps = {
   initialText?: string;
   /** Σε λειτουργία διόρθωσης αλλάζει η μπάρα και το εικονίδιο του κουμπιού. */
   editing?: boolean;
+  /**
+   * Σε ποιον απαντάμε. Αποκλείεται με το `editing` — διορθώνεις ή απαντάς, όχι
+   * και τα δύο· ο γονιός φροντίζει να μην είναι ταυτόχρονα ενεργά.
+   */
+  replyTo?: { senderName: string; content: string; deleted: boolean } | null;
   /** Ακύρωση της διόρθωσης. */
   onCancel?: () => void;
   /**
@@ -35,6 +40,7 @@ export default function ChatComposer({
   disabled = false,
   initialText = '',
   editing = false,
+  replyTo = null,
   onCancel,
   onTyping,
 }: ChatComposerProps) {
@@ -77,7 +83,7 @@ export default function ChatComposer({
 
     // Escape ακυρώνει τη διόρθωση — το αναμενόμενο σε κάθε πεδίο που «άνοιξε»
     // πάνω από κάτι άλλο.
-    if (key === 'Escape' && editing && onCancel) {
+    if (key === 'Escape' && (editing || replyTo) && onCancel) {
       event.preventDefault();
       onCancel();
     }
@@ -93,6 +99,26 @@ export default function ChatComposer({
             onPress={onCancel}
             accessibilityRole="button"
             accessibilityLabel="Cancel edit"
+            hitSlop={8}
+          >
+            <Ionicons name="close" size={16} color={paper.inkSoft} />
+          </Pressable>
+        </View>
+      ) : replyTo ? (
+        <View style={styles.editBanner}>
+          <Ionicons name="arrow-undo" size={13} color={paper.accent} />
+          <View style={styles.replyText}>
+            <Text style={styles.editLabel} numberOfLines={1}>
+              Replying to {replyTo.senderName || 'someone'}
+            </Text>
+            <Text style={styles.replyBody} numberOfLines={1}>
+              {replyTo.deleted ? 'Message deleted' : replyTo.content}
+            </Text>
+          </View>
+          <Pressable
+            onPress={onCancel}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel reply"
             hitSlop={8}
           >
             <Ionicons name="close" size={16} color={paper.inkSoft} />
@@ -185,6 +211,8 @@ const styles = StyleSheet.create({
     fontFamily: paperFont.medium,
     fontSize: 12,
   },
+  replyText: { flex: 1 },
+  replyBody: { color: paper.inkSoft, fontFamily: paperFont.regular, fontSize: 11 },
   input: {
     flex: 1,
     maxHeight: 120,
