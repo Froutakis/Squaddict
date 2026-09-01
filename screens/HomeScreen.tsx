@@ -14,17 +14,32 @@ import ListEmpty from '../components/home/ListEmpty';
 import SectionLabel from '../components/general/SectionLabel';
 import Button from '../components/general/Button';
 import CalendarCard from '../components/events/CalendarCard';
-import EventCard from '../components/events/EventCard';
+import EventCard, { type EventCardData } from '../components/events/EventCard';
 import UpNext from '../components/events/UpNext';
+import EventOfTheWeek, { bestOfWeek } from '../components/events/EventOfTheWeek';
 import EventSheet from '../components/events/EventSheet';
 import EventFormSheet from '../components/events/EventFormSheet';
 import GroupFormSheet from '../components/group/GroupFormSheet';
 
 type HomeScreenProps = {
   user: AuthUser;
-  /** Αυξάνεται κάθε φορά που πατιέται το + του BottomNav. */
   createNonce?: number;
 };
+
+function toCardData(event: MyEvent): EventCardData {
+  return {
+    id: event.id,
+    title: event.title,
+    date: event.date,
+    startTime: event.startTime,
+    location: event.location,
+    placeLabel: event.placeLabel,
+    squadName: event.groupName,
+    myStatus: event.myStatus,
+    going: event.going,
+    goingCount: event.going.length,
+  };
+}
 
 function unansweredFirst(list: MyEvent[]): MyEvent[] {
   return [...list].sort(
@@ -126,6 +141,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const listEvents = unansweredFirst(
     dayMode ? visible.filter((e) => e.date === selectedDate) : upcoming.slice(1),
   );
+  const weekBest = dayMode ? null : bestOfWeek(visible, new Date());
 
   function renderBody() {
     if (loading) {
@@ -227,10 +243,23 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
             />
           ) : (
             listEvents.map((event) => (
-              <EventCard key={event.id} event={event} onPress={() => setOpenEvent(event)} />
+              <EventCard
+                key={event.id}
+                event={toCardData(event)}
+                onPress={() => setOpenEvent(event)}
+              />
             ))
           )}
         </View>
+
+        {weekBest ? (
+          <View style={styles.body}>
+            <EventOfTheWeek
+              event={toCardData(weekBest)}
+              onPress={() => setOpenEvent(weekBest)}
+            />
+          </View>
+        ) : null}
       </>
     );
   }
