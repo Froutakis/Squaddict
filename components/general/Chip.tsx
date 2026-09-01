@@ -7,7 +7,6 @@ type ChipProps = {
   active?: boolean;
   onPress?: () => void;
   icon?: keyof typeof Ionicons.glyphMap;
-  /** Δεδομένο και όχι ετικέτα — αποστάσεις, ώρες, μετρητές. */
   mono?: boolean;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;

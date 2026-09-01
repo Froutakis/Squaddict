@@ -3,9 +3,7 @@ import { paper, paperFont, space } from '../../theme';
 import { SquadMonogram } from './SquadPicker';
 
 const AVATAR = 26;
-/** Στρογγυλή εξωτερική γωνία φυσαλίδας. */
 const ROUND = 16;
-/** Οι "εσωτερικές" γωνίες μέσα σε μια σερί μηνυμάτων. */
 const TIGHT = 6;
 
 function timeLabel(iso: string) {
@@ -17,17 +15,11 @@ function timeLabel(iso: string) {
 type MessageBubbleProps = {
   content: string;
   senderName: string;
-  /** ISO timestamp από τη βάση. */
   createdAt: string;
-  /** Δικό μου μήνυμα — πάει δεξιά, σε μελανί κουτί. */
   mine: boolean;
-  /** Πρώτο μιας σερί του ίδιου αποστολέα — μόνο εκεί δείχνουμε όνομα. */
   isFirst: boolean;
-  /** Τελευταίο της σερί — μόνο εκεί δείχνουμε avatar και ώρα. */
   isLast: boolean;
-  /** Λείπει για όσα έχουν επιβεβαιωθεί από τη βάση. */
   status?: 'pending' | 'failed';
-  /** Καλείται όταν πατηθεί μήνυμα που απέτυχε. */
   onRetry?: () => void;
 };
 
@@ -41,7 +33,6 @@ export default function MessageBubble({
   status,
   onRetry,
 }: MessageBubbleProps) {
-  // Στρογγυλή γωνία μόνο στις εξωτερικές άκρες, ώστε η σερί να διαβάζεται σαν μία στήλη.
   const shape = mine
     ? {
         borderTopRightRadius: isFirst ? ROUND : TIGHT,
@@ -54,7 +45,6 @@ export default function MessageBubble({
 
   return (
     <View style={[styles.row, mine ? styles.rowMine : styles.rowOther, isFirst && styles.rowFirst]}>
-      {/* Το avatar μπαίνει μόνο στο τελευταίο μήνυμα της σερί· αλλιώς κρατάμε τη θέση του κενή. */}
       {mine ? null : isLast ? (
         <SquadMonogram name={senderName || '?'} size={AVATAR} />
       ) : (
@@ -68,8 +58,6 @@ export default function MessageBubble({
           </Text>
         ) : null}
 
-        {/* Το failed γίνεται πατητό· τα υπόλοιπα μένουν απλό View ώστε να μη
-            μαζεύει η λίστα χιλιάδες άχρηστους χειριστές αφής. */}
         {status === 'failed' && onRetry ? (
           <Pressable
             onPress={onRetry}
@@ -100,8 +88,6 @@ export default function MessageBubble({
           </View>
         )}
 
-        {/* Όσο εκκρεμεί ή έχει αποτύχει, η κατάσταση παίρνει τη θέση της ώρας:
-            η ώρα ενός μηνύματος που δεν έφτασε ποτέ δεν σημαίνει τίποτα. */}
         {status === 'failed' ? (
           <Text style={styles.failedNote}>Not sent · Tap to try again</Text>
         ) : status === 'pending' ? (
@@ -114,7 +100,6 @@ export default function MessageBubble({
   );
 }
 
-/** Διαχωριστικό ημέρας — μια λεπτή γραμμή με την ημερομηνία στη μέση. */
 export function DateSeparator({ label }: { label: string }) {
   return (
     <View style={styles.separator}>
@@ -142,7 +127,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: paper.line,
   },
-  // Ξεθωριασμένο όσο ταξιδεύει — αρκετά για να φανεί, όχι τόσο ώστε να μη διαβάζεται.
   bubblePending: { opacity: 0.55 },
   bubbleFailed: { backgroundColor: paper.danger },
   pressed: { opacity: 0.85 },
