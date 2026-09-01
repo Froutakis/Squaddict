@@ -11,9 +11,8 @@ import { colors } from './theme';
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
 import GroupChatScreen from './screens/GroupChatScreen';
+import ExploreScreen from './screens/ExploreScreen';
 import BottomNav, { type NavTab } from './components/general/BottomNav';
-
-
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -76,6 +75,8 @@ export default function App() {
       <View style={styles.body}>
         {screen === 'squads' ? (
           <GroupChatScreen user={user} onThreadChange={setThreadOpen} />
+        ) : screen === 'explore' ? (
+          <ExploreScreen />
         ) : (
           <HomeScreen user={user} createNonce={createNonce} />
         )}
