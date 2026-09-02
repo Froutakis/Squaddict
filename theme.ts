@@ -124,6 +124,7 @@ export const paper = {
 
   accent: '#2145E6',
   accentSoft: '#E4EAFD',
+  accentOnMine: '#9DB4FF',
 
   danger: '#D5442F',
   dangerSoft: '#FBE6E1',

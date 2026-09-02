@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
 import { isSearchable } from "../components/chat/search";
+import { previewText, type Attachment } from "../components/chat/media";
 import type { Reaction } from "../components/chat/reactions";
 
 /**
@@ -60,9 +61,12 @@ const REPLIED =
  * ξεχνιέται σε ένα μόνο από τα ερωτήματα βγάζει μήνυμα που φαίνεται σωστό
  * παντού εκτός από ένα σημείο της οθόνης — το χειρότερο είδος σφάλματος.
  */
+const ATTACHMENT =
+  "attachment_path, attachment_type, attachment_width, attachment_height";
+
 const MESSAGE_FIELDS =
   "id, content, sender_id, created_at, edited_at, deleted_at, reply_to, " +
-  SENDER + ", " + REPLIED;
+  ATTACHMENT + ", " + SENDER + ", " + REPLIED;
 
 /** Ο κωδικός σφάλματος της Postgres για παραβίαση unique constraint. */
 const UNIQUE_VIOLATION = "23505";
@@ -306,6 +310,7 @@ export async function sendMessage(
   content: string,
   id?: string,
   replyTo?: string | null,
+  attachment?: Attachment | null,
 ): Promise<ChatMessage> {
   // Ένα αντικείμενο με προαιρετικά πεδία, όχι ένωση σχημάτων: η ένωση κάνει τον
   // τύπο του insert να απαιτήσει το id και από τον κλάδο που δεν το έχει.
@@ -315,6 +320,10 @@ export async function sendMessage(
     content: string;
     id?: string;
     reply_to?: string;
+    attachment_path?: string;
+    attachment_type?: string;
+    attachment_width?: number;
+    attachment_height?: number;
   } = {
     group_id: groupId,
     sender_id: senderId,
@@ -325,6 +334,12 @@ export async function sendMessage(
   }
   if (replyTo) {
     row.reply_to = replyTo;
+  }
+  if (attachment) {
+    row.attachment_path   = attachment.path;
+    row.attachment_type   = attachment.type;
+    row.attachment_width  = attachment.width;
+    row.attachment_height = attachment.height;
   }
 
   const { data, error } = await supabase
@@ -419,6 +434,8 @@ export type ChatMessage = {
    * συμπληρώνει την παράθεση από όσα μηνύματα έχει ήδη.
    */
   reply: ReplyQuote | null;
+  /** Η φωτογραφία του μηνύματος· null όταν είναι σκέτο κείμενο. */
+  attachment: Attachment | null;
 };
 
 /** Μετατρέπει μια γραμμή του πίνακα messages σε ChatMessage. */
@@ -441,6 +458,20 @@ export function toChatMessage(row: any, senderName?: string): ChatMessage {
     // δεν είναι, το συμπληρώνει η οθόνη από τα μηνύματα που ήδη έχει.
     reply:
       row.replied && !Array.isArray(row.replied) ? toQuote(row.replied) : null,
+    attachment: toAttachment(row),
+  };
+}
+
+/** Το συνημμένο μιας γραμμής, ή null όταν δεν υπάρχει διαδρομή. */
+function toAttachment(row: any): Attachment | null {
+  if (!row.attachment_path) {
+    return null;
+  }
+  return {
+    path: row.attachment_path,
+    type: row.attachment_type ?? "image/jpeg",
+    width: row.attachment_width ?? 0,
+    height: row.attachment_height ?? 0,
   };
 }
 
@@ -575,7 +606,7 @@ export async function getGroupPreviews(
 
   const { data, error } = await supabase
     .from("messages")
-    .select("group_id, content, created_at, " + SENDER)
+    .select("group_id, content, created_at, attachment_path, " + SENDER)
     .in("group_id", groupIds)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -585,7 +616,9 @@ export async function getGroupPreviews(
   for (const row of (data ?? []) as any[]) {
     if (previews[row.group_id]) continue;
     previews[row.group_id] = {
-      content: row.content,
+      // Μήνυμα που είναι μόνο φωτογραφία δεν έχει κείμενο· χωρίς αυτό η γραμμή
+      // της λίστας έμενε κενή.
+      content: previewText(row.content, !!row.attachment_path),
       senderName: row.profiles?.display_name ?? "",
       createdAt: row.created_at,
     };
@@ -722,4 +755,48 @@ export async function clearReaction(messageId: string): Promise<void> {
     .eq("message_id", messageId)
     .eq("user_id", user.id);
   if (error) throw error;
+}
+
+/** Καταγράφει το πλήρες σύνολο όσων αναφέρει ένα μήνυμα. Δεν πετάει ποτέ. */
+export async function setMentions(
+  messageId: string,
+  userIds: string[],
+): Promise<void> {
+  try {
+    let remove = supabase.from("message_mentions").delete().eq("message_id", messageId);
+    if (userIds.length > 0) {
+      // Οι υπάρχουσες μένουν: το created_at τους δείχνει πότε έγινε η αναφορά,
+      // και μια διόρθωση σε άλλο σημείο του μηνύματος δεν την κάνει καινούργια.
+      remove = remove.not("user_id", "in", '("' + userIds.join('","') + '")');
+    }
+
+    const { error: gone } = await remove;
+    if (gone) throw gone;
+
+    if (userIds.length === 0) {
+      return;
+    }
+
+    const { error } = await supabase.from("message_mentions").upsert(
+      userIds.map(function (id) {
+        return { message_id: messageId, user_id: id };
+      }),
+      { onConflict: "message_id,user_id", ignoreDuplicates: true },
+    );
+    if (error) throw error;
+  } catch (problem) {
+    console.error("[squaddict] οι αναφορές δεν καταγράφηκαν:", problem);
+  }
+}
+
+/** Σε πόσες αδιάβαστες αναφορές με φώναξαν, ανά Παρέα. Όποια λείπει έχει μηδέν. */
+export async function getMentionCounts(): Promise<Record<string, number>> {
+  const { data, error } = await supabase.rpc("mention_counts");
+  if (error) throw error;
+
+  const counts: Record<string, number> = {};
+  for (const row of (data ?? []) as any[]) {
+    counts[row.squad] = row.mentions;
+  }
+  return counts;
 }

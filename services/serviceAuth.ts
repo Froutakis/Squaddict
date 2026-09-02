@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { clearCache } from "./serviceCache";
 
 export type User = {
   id: string;
@@ -42,6 +43,13 @@ export async function requireUser() {
 }
 
 export async function logout() {
+  // Πριν από το signOut, όσο ξέρουμε ακόμα ποιανού είναι τα δεδομένα: το τοπικό
+  // αντίγραφο δεν πρέπει να περιμένει τον επόμενο που θα ανοίξει τη συσκευή.
+  const { data } = await supabase.auth.getUser();
+  if (data.user) {
+    await clearCache(data.user.id);
+  }
+
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }

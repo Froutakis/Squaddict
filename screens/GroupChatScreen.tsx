@@ -4,7 +4,9 @@ import type { RealtimeChannel, User as AuthUser } from '@supabase/supabase-js';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -33,7 +35,10 @@ import {
 } from '../components/chat/replies';
 import SearchOverlay from '../components/chat/SearchOverlay';
 import SquadPicker from '../components/chat/SquadPicker';
-import { buildRows, type OutgoingMessage, type Row } from '../components/chat/messageRows';
+import { mentionIds, toMembers, type Member } from '../components/chat/mentions';
+import { dropMissingImages, restoreOutbox } from '../components/chat/cache';
+import { mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
+import { buildRows, type LocalImage, type OutgoingMessage, type Row } from '../components/chat/messageRows';
 import {
   applyMessageUpdate,
   connectionFrom,
@@ -49,6 +54,15 @@ import {
   type Typist,
 } from '../components/chat/typing';
 import { newMessageId } from '../lib/ids';
+import {
+  referencedImages,
+  readMessages as readCachedMessages,
+  readOutbox as readCachedOutbox,
+  readSquads as readCachedSquads,
+  writeMessages as writeCachedMessages,
+  writeOutbox as writeCachedOutbox,
+  writeSquads as writeCachedSquads,
+} from '../services/serviceCache';
 import type { Group } from '../services/serviceGroup';
 import {
   deleteMessage,
@@ -56,6 +70,8 @@ import {
   getGroupPreviews,
   getGroupsForUser,
   getMemberNames,
+  getMentionCounts,
+  setMentions,
   getMessages,
   getMessagesAfter,
   getUnreadCounts,
@@ -69,6 +85,17 @@ import {
   type ChatMessage,
   type GroupPreview,
 } from '../services/serviceGroup';
+import {
+  discardImage,
+  imageExists,
+  persistImage,
+  pickImage,
+  prepareImage,
+  removeImage,
+  signImages,
+  sweepOutboxImages,
+  uploadImage,
+} from '../services/serviceMedia';
 import { closeGroupChat, sendTyping, startChat } from '../services/serviceRealtime';
 import { getUserById } from '../services/serviceUser';
 import { layout, paper, paperFont, space } from '../theme';
@@ -102,11 +129,21 @@ export default function GroupChatScreen({
   const [previews, setPreviews] = useState<Record<string, GroupPreview>>({});
   // Αδιάβαστα ανά παρέα. Μόνο όσες έχουν αδιάβαστα υπάρχουν στον χάρτη.
   const [unread, setUnread] = useState<Record<string, number>>({});
+  const [mentionCounts, setMentionCounts] = useState<Record<string, number>>({});
   const [displayName, setDisplayName] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Δικά μου μηνύματα που δεν έχουν επιβεβαιωθεί ακόμα από τη βάση.
   const [outbox, setOutbox] = useState<OutgoingMessage[]>([]);
   const [memberCount, setMemberCount] = useState(0);
+  const [members, setMembers] = useState<Member[]>([]);
+  /** Σε ποια Παρέα ανήκουν τα `messages`. Φυλάει το αντίγραφο από λάθος κλειδί. */
+  const [messagesFor, setMessagesFor] = useState<string | null>(null);
+  /** Η φωτογραφία που διάλεξε ο χρήστης και δεν έχει σταλεί ακόμα. */
+  const [pendingImage, setPendingImage] = useState<LocalImage | null>(null);
+  /** Υπογεγραμμένοι σύνδεσμοι ανά διαδρομή. Λήγουν, γι' αυτό κρατάμε και ώρα. */
+  const [signed, setSigned] = useState<SignedMap>({});
+  /** Η φωτογραφία που κοιτάμε σε πλήρη οθόνη. */
+  const [viewing, setViewing] = useState<string | null>(null);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [loadingChat, setLoadingChat] = useState(false);
   // Η δική μας σύνδεση με το κανάλι της συνομιλίας.
@@ -133,6 +170,7 @@ export default function GroupChatScreen({
   // Τα ονόματα των μελών ζουν και σε ref: ο realtime handler φτιάχνεται μία φορά
   // ανά παρέα και πρέπει να βλέπει πάντα τον τρέχοντα χάρτη.
   const namesRef = useRef<Record<string, string>>({});
+  const membersRef = useRef<Member[]>([]);
   // Φρουρά για το onEndReached, που πυροδοτείται και δύο φορές στο ίδιο σκρολ.
   // Δεν είναι state: το χρειαζόμαστε ΤΩΡΑ μέσα στην loadOlder, όχι στο επόμενο
   // render — μέχρι τότε θα έχει ήδη φύγει δεύτερο αίτημα για την ίδια σελίδα.
@@ -144,6 +182,8 @@ export default function GroupChatScreen({
   // Ίδιος λόγος: το catch-up ζει μέσα στο effect του καναλιού, που στήνεται μία
   // φορά ανά παρέα. Χωρίς ref θα έβλεπε για πάντα την άδεια αρχική λίστα.
   const messagesRef = useRef<ChatMessage[]>([]);
+  const groupsRef = useRef<Group[]>([]);
+  groupsRef.current = groups;
   messagesRef.current = messages;
   const connectionRef = useRef<Connection>('connecting');
   // Το τελευταίο mark_group_read που ταξιδεύει. Το loadUnread το περιμένει πριν
@@ -182,7 +222,9 @@ export default function GroupChatScreen({
   const loadUnread = useCallback(async function load() {
     try {
       await markingRef.current;
-      setUnread(await getUnreadCounts());
+      const [counts, mine] = await Promise.all([getUnreadCounts(), getMentionCounts()]);
+      setUnread(counts);
+      setMentionCounts(mine);
     } catch {
       // σιωπηλά
     }
@@ -214,14 +256,18 @@ export default function GroupChatScreen({
   // απλώς επανέρχεται στο επόμενο loadUnread.
   const markRead = useCallback(
     function mark(groupId: string) {
-      setUnread(function (current) {
+      /** Βγάζει αυτή την Παρέα από έναν χάρτη μετρητών. */
+      function forget(current: Record<string, number>) {
         if (!(groupId in current)) {
           return current;
         }
         const next = { ...current };
         delete next[groupId];
         return next;
-      });
+      }
+
+      setUnread(forget);
+      setMentionCounts(forget);
 
       markingRef.current = markGroupRead(groupId).catch(function () {
         // σιωπηλά — ο μετρητής θα διορθωθεί στο επόμενο loadUnread.
@@ -258,6 +304,23 @@ export default function GroupChatScreen({
     // Σημαία ακύρωσης: αν φύγει η οθόνη όσο τρέχει το await, δεν κάνουμε setState.
     let cancelled = false;
 
+    // Το τοπικό αντίγραφο ζωγραφίζει τη λίστα αμέσως· το δίκτυο το διορθώνει
+    // από πάνω. Χωρίς αυτό, κάθε άνοιγμα της εφαρμογής ξεκινά με spinner.
+    async function loadCached() {
+      const cached = await readCachedSquads(user.id);
+      if (cancelled || !cached || cached.groups.length === 0) {
+        return;
+      }
+
+      setGroups(function (current) {
+        return current.length === 0 ? cached.groups : current;
+      });
+      setPreviews(function (current) {
+        return Object.keys(current).length === 0 ? cached.previews : current;
+      });
+      setLoadingGroups(false);
+    }
+
     async function loadGroups() {
       try {
         const myGroups = await getGroupsForUser(user.id);
@@ -270,7 +333,7 @@ export default function GroupChatScreen({
         loadUnread();
       } catch {
         // Δεν μας ενδιαφέρει ΤΙ έσκασε, μόνο ότι απέτυχε.
-        if (!cancelled) {
+        if (!cancelled && groupsRef.current.length === 0) {
           setError("Couldn't load your squads.");
         }
       } finally {
@@ -281,7 +344,11 @@ export default function GroupChatScreen({
       }
     }
 
+    loadCached();
     loadGroups();
+    // Φωτογραφίες που διαλέχτηκαν και δεν στάλθηκαν ποτέ: κανένα outbox δεν τις
+    // διεκδικεί, και ο φάκελος θα μεγάλωνε για πάντα.
+    referencedImages(user.id).then(sweepOutboxImages);
 
     // Cleanup: τρέχει στο unmount ή πριν ξανατρέξει το effect.
     return function cleanup() {
@@ -289,12 +356,78 @@ export default function GroupChatScreen({
     };
   }, [user.id, loadPreviews, loadUnread]);
 
+  // 2β. Το αντίγραφο της λίστας, όποτε αλλάξει κάτι ορατό σε αυτήν.
+  useEffect(() => {
+    if (groups.length === 0) {
+      return;
+    }
+    writeCachedSquads(user.id, { groups, previews });
+  }, [user.id, groups, previews]);
+
+  // 2γ. Το αντίγραφο της συνομιλίας. Το `messagesFor` είναι ο φύλακας: όταν
+  // αλλάζει Παρέα, τα messages είναι για μια στιγμή ακόμα της προηγούμενης.
+  useEffect(() => {
+    if (messagesFor === null || messagesFor !== activeId || messages.length === 0) {
+      return;
+    }
+    writeCachedMessages(user.id, messagesFor, messages);
+  }, [user.id, activeId, messagesFor, messages]);
+
+  // 2δ. Το outbox. Γράφεται και άδειο — έτσι φεύγει ό,τι τελικά στάλθηκε.
+  useEffect(() => {
+    if (messagesFor === null || messagesFor !== activeId) {
+      return;
+    }
+    writeCachedOutbox(user.id, messagesFor, outbox);
+  }, [user.id, activeId, messagesFor, outbox]);
+
+  // 2ε. Υπογεγραμμένοι σύνδεσμοι για τις φωτογραφίες που φορτώθηκαν.
+  //
+  // Το bucket είναι κλειστό: χωρίς υπογραφή δεν εμφανίζεται εικόνα. Οι σύνδεσμοι
+  // λήγουν, γι' αυτό ο έλεγχος δεν είναι «λείπει;» αλλά «λείπει ή κοντεύει;».
+  useEffect(() => {
+    let cancelled = false;
+
+    const paths = messages
+      .map(function (message) {
+        return message.attachment?.path;
+      })
+      .filter(function (path): path is string {
+        return typeof path === 'string';
+      });
+
+    const missing = pathsToSign(paths, signed, Date.now());
+    if (missing.length === 0) {
+      return;
+    }
+
+    signImages(missing)
+      .then(function (fresh) {
+        if (!cancelled) {
+          setSigned(function (prev) {
+            return mergeSigned(prev, fresh);
+          });
+        }
+      })
+      .catch(function (problem) {
+        console.error('[squaddict] η υπογραφή συνδέσμων απέτυχε:', problem);
+      });
+
+    return function cleanup() {
+      cancelled = true;
+    };
+  }, [messages, signed]);
+
   // 3. Ιστορικό + realtime κανάλι της ενεργής παρέας.
   useEffect(() => {
     // Καμία ενεργή παρέα -> είμαστε στη λίστα, δεν ανοίγουμε κανάλι.
     if (!activeId) {
       setMessages([]);
+      setMessagesFor(null);
       setOutbox([]);
+      setPendingImage(null);
+      setSigned({});
+      setViewing(null);
       setMemberCount(0);
       setHasMore(false);
       setConnection('connecting');
@@ -319,9 +452,11 @@ export default function GroupChatScreen({
 
     setLoadingChat(true);
     setMessages([]);
-    // Ό,τι δεν πρόλαβε να φύγει χάνεται όταν αλλάξεις Παρέα: για να επιβιώνει
-    // θέλει αποθήκευση στη συσκευή, που είναι επόμενη φάση.
+    setMessagesFor(null);
     setOutbox([]);
+    setPendingImage(null);
+    setSigned({});
+    setViewing(null);
     setHasMore(false);
     setConnection('connecting');
     connectionRef.current = 'connecting';
@@ -457,6 +592,8 @@ export default function GroupChatScreen({
         const names = await getMemberNames(groupId);
         if (!cancelled) {
           namesRef.current = names;
+          membersRef.current = toMembers(names);
+          setMembers(membersRef.current);
           setMemberCount(Object.keys(names).length);
         }
       } catch {
@@ -493,6 +630,27 @@ export default function GroupChatScreen({
       }
     }
 
+    // Τρέχει παράλληλα με το openChat και χάνει τη μάχη αν το δίκτυο προλάβει:
+    // ο έλεγχος `prev.length === 0` δεν αφήνει το αντίγραφο να σκεπάσει φρέσκα.
+    async function showCached(groupId: string) {
+      const cached = await readCachedMessages(user.id, groupId);
+      if (cancelled || !cached || cached.length === 0) {
+        return;
+      }
+
+      let used = false;
+      setMessages(function (prev) {
+        if (prev.length > 0) return prev;
+        used = true;
+        return resolveQuotes(cached);
+      });
+
+      if (used) {
+        setMessagesFor(groupId);
+        setLoadingChat(false);
+      }
+    }
+
     async function openChat(groupId: string) {
       try {
         const names = await getMemberNames(groupId);
@@ -501,6 +659,8 @@ export default function GroupChatScreen({
         }
 
         namesRef.current = names;
+        membersRef.current = toMembers(names);
+        setMembers(membersRef.current);
         // Object.keys(names) = πίνακας με τα user ids -> το μήκος του = πλήθος μελών.
         const memberIds = Object.keys(names);
         setMemberCount(memberIds.length);
@@ -526,10 +686,24 @@ export default function GroupChatScreen({
 
         channel = chat.channel;
         setMessages(resolveQuotes(chat.messages));
+        setMessagesFor(groupId);
         setHasMore(chat.hasMore);
+
+        const saved = await readCachedOutbox(user.id, groupId);
+        if (!cancelled && saved && saved.length > 0) {
+          const left = dropMissingImages(restoreOutbox(saved, chat.messages), imageExists);
+          for (const item of left) {
+            if (item.replyTo) {
+              replyOfOutgoingRef.current[item.id] = item.replyTo;
+            }
+          }
+          setOutbox(left);
+        }
       } catch (problem) {
         console.error('[squaddict] το άνοιγμα της συνομιλίας απέτυχε:', problem);
-        if (!cancelled) {
+        // Με το αντίγραφο στην οθόνη δεν υπάρχει σφάλμα να δείξουμε: διαβάζεις
+        // κανονικά, και η ένδειξη σύνδεσης λέει ήδη ότι δεν είμαστε online.
+        if (!cancelled && messagesRef.current.length === 0) {
           setError("Couldn't load this conversation.");
         }
       } finally {
@@ -541,6 +715,7 @@ export default function GroupChatScreen({
 
     // Εδώ η TypeScript ξέρει ότι το activeId είναι `string` (όχι null),
     // επειδή το `if (!activeId) return;` παραπάνω απέκλεισε το null.
+    showCached(activeId);
     openChat(activeId);
 
     return function cleanup() {
@@ -590,9 +765,20 @@ export default function GroupChatScreen({
    * το κόβει ο έλεγχος διπλών.
    */
   const deliver = useCallback(
-    async function deliver(groupId: string, id: string, text: string, replyTo?: string | null) {
+    async function deliver(
+      groupId: string,
+      id: string,
+      text: string,
+      replyTo?: string | null,
+      image?: LocalImage | null,
+    ) {
       try {
-        const saved = await sendMessage(groupId, user.id, text, id, replyTo);
+        // Η εικόνα πρώτη: αν το ανέβασμα αποτύχει, δεν θέλουμε μήνυμα που να
+        // δείχνει σε αρχείο που δεν υπάρχει. Το ίδιο id δίνει το ίδιο όνομα
+        // αρχείου, οπότε η επανάληψη γράφει από πάνω αντί να αφήσει δεύτερο.
+        const attachment = image ? await uploadImage(groupId, id, image) : null;
+        const saved = await sendMessage(groupId, user.id, text, id, replyTo, attachment);
+        setMentions(saved.id, mentionIds(text, membersRef.current));
 
         setMessages(function (prev) {
           if (prev.some((m) => m.id === saved.id)) return prev;
@@ -604,6 +790,9 @@ export default function GroupChatScreen({
         setOutbox(function (prev) {
           return prev.filter((item) => item.id !== id);
         });
+        if (image) {
+          discardImage(image.uri);
+        }
       } catch (problem) {
         // Ο χρήστης βλέπει «Not sent» — εμείς χρειαζόμαστε το ΓΙΑΤΙ. Χωρίς αυτό
         // το σφάλμα της Postgres χάνεται και μένει μόνο ένα κόκκινο κουτάκι.
@@ -627,9 +816,20 @@ export default function GroupChatScreen({
 
       const id = newMessageId();
       const answering = replyingTo;
+      const image = pendingImage;
 
       setOutbox(function (prev) {
-        return [...prev, { id, content: text, createdAt: new Date().toISOString(), status: 'pending' }];
+        return [
+          ...prev,
+          {
+            id,
+            content: text,
+            createdAt: new Date().toISOString(),
+            status: 'pending' as const,
+            replyTo: answering ? answering.id : null,
+            image: image ?? undefined,
+          },
+        ];
       });
       setError(null);
       if (answering) {
@@ -638,10 +838,11 @@ export default function GroupChatScreen({
       // Η μπάρα φεύγει αμέσως: το μήνυμα έχει ήδη φύγει με τον δείκτη μέσα του,
       // και μια μπάρα που μένει ανοιχτή μοιάζει σαν να μη στάλθηκε.
       setReplyingTo(null);
+      setPendingImage(null);
 
-      deliver(activeId, id, text, answering ? answering.id : null);
+      deliver(activeId, id, text, answering ? answering.id : null, image);
     },
-    [activeId, deliver, replyingTo],
+    [activeId, deliver, replyingTo, pendingImage],
   );
 
   /**
@@ -669,6 +870,7 @@ export default function GroupChatScreen({
 
       try {
         const saved = await editMessage(target.id, text);
+        setMentions(saved.id, mentionIds(text, membersRef.current));
         setMessages(function (prev) {
           return applyMessageUpdate(prev, saved);
         });
@@ -695,6 +897,11 @@ export default function GroupChatScreen({
 
       try {
         const saved = await deleteMessage(target.id);
+        // Ο trigger μηδένισε ήδη τη διαδρομή στη γραμμή· το αρχείο το σβήνουμε
+        // εμείς. Αν αποτύχει, μένει απρόσιτο — κοστίζει χώρο, όχι ιδιωτικότητα.
+        if (target.attachment) {
+          removeImage(target.attachment.path);
+        }
         setMessages(function (prev) {
           return applyMessageUpdate(prev, saved);
         });
@@ -764,6 +971,24 @@ export default function GroupChatScreen({
     [reactions, user.id],
   );
 
+  /** Ανοίγει τη συλλογή και κρατά τη σμικρυμένη εικόνα μέχρι να πατηθεί αποστολή. */
+  const choosePhoto = useCallback(async function choose() {
+    try {
+      const picked = await pickImage();
+      if (!picked) {
+        return;
+      }
+      const ready = await prepareImage(picked);
+      setError(null);
+      // Μόνιμο αντίγραφο εδώ και όχι στην αποστολή: ανάμεσα στα δύο μπορεί να
+      // περάσει ώρα, και ο επεξεργαστής γράφει σε προσωρινή μνήμη.
+      setPendingImage(persistImage(ready, newMessageId()));
+    } catch (problem) {
+      console.error('[squaddict] η επιλογή φωτογραφίας απέτυχε:', problem);
+      setError(problem instanceof Error ? problem.message : "Couldn't use that photo.");
+    }
+  }, []);
+
   // Ο composer έχει δύο δουλειές πλέον. Ποια από τις δύο, το λέει το `editing`.
   const handleComposerSend = useCallback(
     function submit(text: string) {
@@ -797,7 +1022,7 @@ export default function GroupChatScreen({
         );
       });
 
-      deliver(activeId, id, item.content, replyOfOutgoingRef.current[id] ?? null);
+      deliver(activeId, id, item.content, replyOfOutgoingRef.current[id] ?? null, item.image);
     },
     [activeId, deliver],
   );
@@ -947,6 +1172,10 @@ export default function GroupChatScreen({
 
     const message = item.message;
     const isMine = message.senderId === user.id;
+    // Τοπικό αρχείο όσο ανεβαίνει, υπογεγραμμένος σύνδεσμος μόλις φτάσει.
+    const photoUri =
+      item.image?.uri ??
+      (message.attachment ? signed[message.attachment.path]?.url ?? null : null);
 
     return (
       <MessageBubble
@@ -975,6 +1204,18 @@ export default function GroupChatScreen({
         reply={message.reply}
         // Είναι απάντηση, αλλά το πρωτότυπο δεν είναι στη φορτωμένη σελίδα.
         replyUnknown={message.replyTo !== null && message.reply === null}
+        members={members}
+        meId={user.id}
+        imageUri={photoUri}
+        imageWidth={item.image?.width ?? message.attachment?.width}
+        imageHeight={item.image?.height ?? message.attachment?.height}
+        onOpenImage={
+          photoUri
+            ? function () {
+                setViewing(photoUri);
+              }
+            : undefined
+        }
         reactions={summarise(reactions[message.id], user.id)}
         onToggleReaction={
           item.status
@@ -1015,6 +1256,7 @@ export default function GroupChatScreen({
           groups={groups}
           previews={previews}
           unread={unread}
+          mentions={mentionCounts}
           displayName={displayName}
           onSelect={openGroup}
           onBack={onBack}
@@ -1088,6 +1330,16 @@ export default function GroupChatScreen({
             }}
             onSend={handleComposerSend}
             onTyping={handleTypingActivity}
+            members={members}
+            meId={user.id}
+            attachment={pendingImage}
+            onPickImage={choosePhoto}
+            onClearImage={function () {
+              if (pendingImage) {
+                discardImage(pendingImage.uri);
+              }
+              setPendingImage(null);
+            }}
             disabled={!activeId}
           />
 
@@ -1122,6 +1374,30 @@ export default function GroupChatScreen({
               applyDelete(target);
             }}
           />
+          <Modal
+            visible={viewing !== null}
+            transparent
+            animationType="fade"
+            onRequestClose={function () {
+              setViewing(null);
+            }}
+          >
+            {/* Ολόκληρο το φόντο κλείνει: σε πλήρη οθόνη το μόνο που θέλει ο
+                χρήστης είναι να βγει, και το X είναι μικρός στόχος. */}
+            <Pressable
+              style={styles.viewer}
+              onPress={function () {
+                setViewing(null);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Close photo"
+            >
+              {viewing ? (
+                <Image source={{ uri: viewing }} style={styles.viewerImage} resizeMode="contain" />
+              ) : null}
+            </Pressable>
+          </Modal>
+
           <SearchOverlay
             groupId={activeGroup.id}
             visible={searchOpen}
@@ -1136,6 +1412,14 @@ export default function GroupChatScreen({
 }
 
 const styles = StyleSheet.create({
+  viewer: {
+    flex: 1,
+    backgroundColor: 'rgba(12, 25, 38, 0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: space.md,
+  },
+  viewerImage: { width: '100%', height: '100%' },
   center: { flex: 1, backgroundColor: paper.bg, alignItems: 'center', justifyContent: 'center' },
   screen: { flex: 1, backgroundColor: paper.bg },
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
