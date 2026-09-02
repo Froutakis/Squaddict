@@ -16,18 +16,19 @@ import {
   getFeed,
   type Center,
   type FeedEvent,
-  type FeedSquad,
 } from '../services/serviceFeed';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import { getCurrentCoords } from '../services/serviceLocation';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
 import EventCard, { type EventCardData } from '../components/events/EventCard';
-import { colors, font, layout, radius, space, textSize } from '../theme';
+import { colors, font, layout, space, textSize } from '../theme';
 import Chip from '../components/general/Chip';
 import SectionLabel from '../components/general/SectionLabel';
 import ListEmpty from '../components/home/ListEmpty';
 
 const RADII = [5, 10, 25, 50];
+
+const MIN_VISIBLE = 6;
 
 type LocationState = 'asking' | 'on' | 'off';
 
@@ -66,7 +67,6 @@ export default function ExploreScreen() {
   const [tags, setTags] = useState<EventTag[]>([]);
 
   const [events, setEvents] = useState<FeedEvent[]>([]);
-  const [squads, setSquads] = useState<FeedSquad[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(0);
 
@@ -105,7 +105,6 @@ export default function ExploreScreen() {
         const feed = await getFeed({ center, radiusKm, tags }, nextPage);
 
         setEvents((current) => (append ? [...current, ...feed.events] : feed.events));
-        setSquads(feed.squads);
         setHasMore(feed.hasMore);
         setPage(nextPage);
       } catch {
@@ -158,6 +157,14 @@ export default function ExploreScreen() {
     load(page + 1, true);
   }
 
+  const visible = events.filter((event) => event.myStatus === undefined);
+
+  useEffect(() => {
+    if (error || !hasMore || loading || loadingMore) return;
+    if (visible.length >= MIN_VISIBLE) return;
+    load(page + 1, true);
+  }, [visible.length, error, hasMore, loading, loadingMore, page, load]);
+
   const header = (
     <View style={styles.header}>
       <Text style={styles.screenTitle}>Explore</Text>
@@ -202,7 +209,7 @@ export default function ExploreScreen() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {events.length > 0 ? (
+      {visible.length > 0 ? (
         <View style={styles.sectionHead}>
           <SectionLabel>{center ? 'Closest to you' : 'Open to Parea'}</SectionLabel>
         </View>
@@ -221,29 +228,38 @@ export default function ExploreScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <FlatList
-        data={events}
+        data={visible}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
         ListHeaderComponent={header}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <ListEmpty
-              title="Nothing open around here"
-              body={
-                tags.length > 0
-                  ? 'No public plans match those tags yet. Try clearing them.'
-                  : 'No public plans in range. Try a wider radius.'
-              }
-              actionLabel={tags.length > 0 ? 'Clear filters' : 'Search wider'}
-              onAction={tags.length > 0 ? () => setTags([]) : cycleRadius}
-            />
+            {events.length > 0 ? (
+              <ListEmpty
+                title="That is everything, for now"
+                body="You have answered every open plan around here. Widen the radius or come back later."
+                actionLabel="Search wider"
+                onAction={cycleRadius}
+              />
+            ) : (
+              <ListEmpty
+                title="Nothing open around here"
+                body={
+                  tags.length > 0
+                    ? 'No public plans match those tags yet. Try clearing them.'
+                    : 'No public plans in range. Try a wider radius.'
+                }
+                actionLabel={tags.length > 0 ? 'Clear filters' : 'Search wider'}
+                onAction={tags.length > 0 ? () => setTags([]) : cycleRadius}
+              />
+            )}
           </View>
         }
         renderItem={({ item }) => (
           <View style={styles.item}>
             <EventCard
               event={toCardData(item)}
-              action={item.isMember ? 'rsvp' : 'request'}
+              action="rsvp"
               saving={savingId === item.id}
               onRsvp={(status) => handleRsvp(item.id, status)}
             />
@@ -317,18 +333,4 @@ const styles = StyleSheet.create({
   sectionHead: { paddingHorizontal: space.lg, paddingTop: space.xs },
   item: { paddingHorizontal: space.lg, paddingBottom: space.sm },
   empty: { paddingHorizontal: space.lg, paddingTop: space.sm },
-
-  rawSquad: {
-    padding: space.sm,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 2,
-  },
-  rawSquadName: { color: colors.text, fontFamily: font.semi, fontSize: textSize.base },
-  rawMeta: { color: colors.textFaint, fontFamily: font.medium, fontSize: textSize.caption },
-
-  footer: { gap: space.md, paddingTop: space.sm },
-  squads: { gap: space.sm, paddingHorizontal: space.lg, paddingTop: space.md },
 });
