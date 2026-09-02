@@ -723,3 +723,47 @@ export async function clearReaction(messageId: string): Promise<void> {
     .eq("user_id", user.id);
   if (error) throw error;
 }
+
+/** Καταγράφει το πλήρες σύνολο όσων αναφέρει ένα μήνυμα. Δεν πετάει ποτέ. */
+export async function setMentions(
+  messageId: string,
+  userIds: string[],
+): Promise<void> {
+  try {
+    let remove = supabase.from("message_mentions").delete().eq("message_id", messageId);
+    if (userIds.length > 0) {
+      // Οι υπάρχουσες μένουν: το created_at τους δείχνει πότε έγινε η αναφορά,
+      // και μια διόρθωση σε άλλο σημείο του μηνύματος δεν την κάνει καινούργια.
+      remove = remove.not("user_id", "in", '("' + userIds.join('","') + '")');
+    }
+
+    const { error: gone } = await remove;
+    if (gone) throw gone;
+
+    if (userIds.length === 0) {
+      return;
+    }
+
+    const { error } = await supabase.from("message_mentions").upsert(
+      userIds.map(function (id) {
+        return { message_id: messageId, user_id: id };
+      }),
+      { onConflict: "message_id,user_id", ignoreDuplicates: true },
+    );
+    if (error) throw error;
+  } catch (problem) {
+    console.error("[squaddict] οι αναφορές δεν καταγράφηκαν:", problem);
+  }
+}
+
+/** Σε πόσες αδιάβαστες αναφορές με φώναξαν, ανά Παρέα. Όποια λείπει έχει μηδέν. */
+export async function getMentionCounts(): Promise<Record<string, number>> {
+  const { data, error } = await supabase.rpc("mention_counts");
+  if (error) throw error;
+
+  const counts: Record<string, number> = {};
+  for (const row of (data ?? []) as any[]) {
+    counts[row.squad] = row.mentions;
+  }
+  return counts;
+}

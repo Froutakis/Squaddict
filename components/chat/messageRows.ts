@@ -10,6 +10,8 @@ export type OutgoingMessage = {
   content: string;
   createdAt: string;
   status: 'pending' | 'failed';
+  /** Σε ποιο μήνυμα απαντά. Ταξιδεύει μαζί του ώστε να επιβιώνει της επανεκκίνησης. */
+  replyTo?: string | null;
 };
 
 /** Ό,τι μπαίνει στη λίστα: είτε μήνυμα, είτε διαχωριστικό ημέρας. */

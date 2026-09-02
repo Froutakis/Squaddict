@@ -20,6 +20,8 @@
     "test-search": "tsx debug/test-search.ts",
     "test-reactions": "tsx debug/test-reactions.ts",
     "test-replies": "tsx debug/test-replies.ts",
+    "test-mentions": "tsx debug/test-mentions.ts",
+    "test-cache": "tsx debug/test-cache.ts",
     "test-unread": "tsx debug/test-unread.ts",
     "test-pagination": "tsx --env-file=.env debug/test-pagination.ts",
     "test-location": "tsx debug/test-location.ts",

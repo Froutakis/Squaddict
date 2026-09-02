@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { applyMention, matchMembers, mentionQuery, type Member } from './mentions';
+import { SquadMonogram } from './SquadPicker';
 import { paper, paperFont, radius, space } from '../../theme';
 
 type ChatComposerProps = {
@@ -32,7 +34,14 @@ type ChatComposerProps = {
    * του γονιού, που ξέρει και το κανάλι.
    */
   onTyping?: () => void;
+  /** Τα μέλη της Παρέας — ο κατάλογος που ανοίγει με '@'. */
+  members?: Member[];
+  /** Ποιος είμαι· λείπω από τον κατάλογο. */
+  meId?: string;
 };
+
+/** Τι έχει ήδη επιλεγεί, ώστε ο κατάλογος να μην ξανανοίξει για το ίδιο '@'. */
+type Dismissed = { at: number; query: string };
 
 export default function ChatComposer({
   onSend,
@@ -43,12 +52,58 @@ export default function ChatComposer({
   replyTo = null,
   onCancel,
   onTyping,
+  members,
+  meId,
 }: ChatComposerProps) {
   const [text, setText] = useState(initialText);
   const [focused, setFocused] = useState(false);
+  /** Πού βρίσκεται ο δρομέας — από εκεί ξεκινά η αναζήτηση αναφοράς. */
+  const [cursor, setCursor] = useState(initialText.length);
+  /** Θέση δρομέα που επιβάλλουμε για ένα render, μετά από επιλογή ονόματος. */
+  const [forcedCursor, setForcedCursor] = useState<number | null>(null);
+  const [dismissed, setDismissed] = useState<Dismissed | null>(null);
+  const [active, setActive] = useState(0);
 
   const trimmed = text.trim();
   const canSend = trimmed.length > 0 && !disabled;
+
+  const found = disabled ? null : mentionQuery(text, cursor);
+
+  /** Έχει ήδη διαλεχθεί όνομα για αυτό το '@'; */
+  const hushed =
+    found !== null &&
+    dismissed !== null &&
+    found.at === dismissed.at &&
+    found.query.startsWith(dismissed.query);
+
+  const suggestions =
+    found && !hushed && members && members.length > 0
+      ? matchMembers(members, found.query, meId)
+      : [];
+
+  const picking = suggestions.length > 0;
+  const highlighted = Math.min(active, suggestions.length - 1);
+
+  /** Βάζει το πλήρες όνομα στο κείμενο και κλείνει τον κατάλογο. */
+  function pick(member: Member) {
+    if (!found) {
+      return;
+    }
+
+    const next = applyMention(text, found, member);
+    setText(next.text);
+    setCursor(next.cursor);
+    setForcedCursor(next.cursor);
+    setDismissed({ at: found.at, query: next.text.slice(found.at + 1, next.cursor) });
+    setActive(0);
+  }
+
+  /** Κλείνει τον κατάλογο χωρίς επιλογή. */
+  function closeList() {
+    if (found) {
+      setDismissed({ at: found.at, query: found.query });
+    }
+  }
 
   function handleSend() {
     if (!canSend) return;
@@ -56,6 +111,9 @@ export default function ChatComposer({
     // Καθαρίζει αμέσως: το μήνυμα ζει πλέον στη λίστα, όχι στο πεδίο.
     onSend(trimmed);
     setText('');
+    setCursor(0);
+    setDismissed(null);
+    setActive(0);
   }
 
   /**
@@ -76,6 +134,30 @@ export default function ChatComposer({
     // Όσο ένα IME συνθέτει χαρακτήρα, το Enter επιβεβαιώνει τη σύνθεση — όχι αποστολή.
     const composing = event.nativeEvent?.isComposing === true;
 
+    // Με ανοιχτό κατάλογο το Enter διαλέγει αντί να στέλνει.
+    if (picking && !composing) {
+      if (key === 'Enter' && !withShift) {
+        event.preventDefault();
+        pick(suggestions[highlighted]);
+        return;
+      }
+      if (key === 'ArrowDown') {
+        event.preventDefault();
+        setActive((highlighted + 1) % suggestions.length);
+        return;
+      }
+      if (key === 'ArrowUp') {
+        event.preventDefault();
+        setActive((highlighted - 1 + suggestions.length) % suggestions.length);
+        return;
+      }
+      if (key === 'Escape') {
+        event.preventDefault();
+        closeList();
+        return;
+      }
+    }
+
     if (key === 'Enter' && !withShift && !composing) {
       event.preventDefault();
       handleSend();
@@ -91,6 +173,41 @@ export default function ChatComposer({
 
   return (
     <View style={styles.bar}>
+      {picking ? (
+        <View style={styles.picker}>
+          <ScrollView
+            keyboardShouldPersistTaps="always"
+            showsVerticalScrollIndicator={false}
+            style={styles.pickerScroll}
+          >
+            {suggestions.map(function (member, index) {
+              return (
+                <Pressable
+                  key={member.id}
+                  onPress={function () {
+                    pick(member);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={'Mention ' + member.name}
+                  style={function ({ pressed }) {
+                    return [
+                      styles.suggestion,
+                      index === highlighted && styles.suggestionActive,
+                      pressed && styles.pressed,
+                    ];
+                  }}
+                >
+                  <SquadMonogram name={member.name} size={24} />
+                  <Text style={styles.suggestionName} numberOfLines={1}>
+                    {member.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+
       {editing ? (
         <View style={styles.editBanner}>
           <Ionicons name="pencil" size={13} color={paper.accent} />
@@ -131,13 +248,24 @@ export default function ChatComposer({
         <TextInput
           style={styles.input}
           value={text}
+          selection={forcedCursor === null ? undefined : { start: forcedCursor, end: forcedCursor }}
           onChangeText={function (next) {
             setText(next);
+            // Το onSelectionChange έρχεται ένα render αργότερα· ο κατάλογος
+            // χρειάζεται τον δρομέα τώρα.
+            const moved = next.length - text.length;
+            setCursor(function (prev) {
+              return Math.max(0, Math.min(next.length, prev + moved));
+            });
             // Το σβήσιμο δεν είναι γράψιμο: αλλιώς κρατώντας το Backspace θα
             // έστελνες «γράφει…» ενώ αδειάζεις το πεδίο.
             if (next.length > text.length) {
               onTyping?.();
             }
+          }}
+          onSelectionChange={function (event) {
+            setCursor(event.nativeEvent.selection.start);
+            setForcedCursor(null);
           }}
           onKeyPress={handleKeyPress}
           onFocus={function () {
@@ -210,6 +338,29 @@ const styles = StyleSheet.create({
     color: paper.accent,
     fontFamily: paperFont.medium,
     fontSize: 12,
+  },
+  picker: {
+    marginBottom: space.xs,
+    backgroundColor: paper.surface,
+    borderWidth: 1,
+    borderColor: paper.line,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  pickerScroll: { maxHeight: 4 * 40 },
+  suggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  suggestionActive: { backgroundColor: paper.accentSoft },
+  suggestionName: {
+    flex: 1,
+    color: paper.ink,
+    fontFamily: paperFont.medium,
+    fontSize: 14,
   },
   replyText: { flex: 1 },
   replyBody: { color: paper.inkSoft, fontFamily: paperFont.regular, fontSize: 11 },
