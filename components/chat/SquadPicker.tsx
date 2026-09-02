@@ -109,6 +109,8 @@ type SquadPickerProps = {
   previews: Record<string, GroupPreview>;
   /** Αδιάβαστα ανά παρέα. Όποια λείπει έχει μηδέν — δεν στέλνουμε μηδενικά. */
   unread?: Record<string, number>;
+  /** Πόσες από τις αδιάβαστες με αναφέρουν ονομαστικά. */
+  mentions?: Record<string, number>;
   onSelect: (id: string) => void;
   /** Το όνομα του χρήστη για την κορυφή — άδειο όσο φορτώνει το προφίλ. */
   displayName?: string;
@@ -124,6 +126,7 @@ export default function SquadPicker({
   groups,
   previews,
   unread = {},
+  mentions = {},
   onSelect,
   onBack,
   displayName = '',
@@ -212,6 +215,7 @@ export default function SquadPicker({
           {shown.map(function (group, index) {
             const preview = previews[group.id];
             const badge = unreadLabel(unread[group.id] ?? 0);
+            const called = badge !== null && (mentions[group.id] ?? 0) > 0;
 
             let line = 'No messages yet';
             if (preview) {
@@ -223,6 +227,9 @@ export default function SquadPicker({
             let label = `Open ${group.name}`;
             if (badge) {
               label = `Open ${group.name}, ${badge} unread`;
+              if (called) {
+                label += ', mentions you';
+              }
             }
 
             return (
@@ -263,7 +270,8 @@ export default function SquadPicker({
                       δύο σύμβολα στη σειρά στριμώχνουν τη γραμμή, και το βέλος
                       δεν λέει τίποτα που δεν λέει ήδη ολόκληρη η πατημένη σειρά. */}
                   {badge ? (
-                    <View style={styles.badge}>
+                    <View style={called ? [styles.badge, styles.badgeCalled] : styles.badge}>
+                      {called ? <Text style={styles.badgeAt}>@</Text> : null}
                       <Text style={styles.badgeText}>{badge}</Text>
                     </View>
                   ) : (
@@ -393,10 +401,20 @@ const styles = StyleSheet.create({
     minWidth: 20,
     height: 20,
     paddingHorizontal: 6,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 1,
     borderRadius: radius.pill,
     backgroundColor: paper.accent,
+  },
+  badgeCalled: { paddingHorizontal: 5 },
+  badgeAt: {
+    color: '#FFFFFF',
+    fontFamily: paperFont.semi,
+    fontSize: 11,
+    lineHeight: 14,
+    opacity: 0.85,
   },
   badgeText: {
     color: '#FFFFFF',

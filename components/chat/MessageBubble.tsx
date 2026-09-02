@@ -1,5 +1,7 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ReplyQuote } from '../../services/serviceGroup';
+import { mentionParts, type Member } from './mentions';
 import type { ReactionCount } from './reactions';
 import { paper, paperFont, space } from '../../theme';
 import { SquadMonogram } from './SquadPicker';
@@ -45,6 +47,10 @@ type MessageBubbleProps = {
   reply?: ReplyQuote | null;
   /** Είναι απάντηση, αλλά το πρωτότυπο δεν είναι φορτωμένο. */
   replyUnknown?: boolean;
+  /** Τα μέλη της Παρέας — για να αναγνωριστούν οι αναφορές μέσα στο κείμενο. */
+  members?: Member[];
+  /** Ποιος είμαι — η αναφορά σε εμένα ξεχωρίζει από τις υπόλοιπες. */
+  meId?: string;
 };
 
 export default function MessageBubble({
@@ -63,7 +69,51 @@ export default function MessageBubble({
   onToggleReaction,
   reply,
   replyUnknown,
+  members,
+  meId,
 }: MessageBubbleProps) {
+  /** Τα κομμάτια του μηνύματος, ή null όταν δεν υπάρχει καμία αναφορά. */
+  const body = useMemo(
+    function () {
+      if (!members || members.length === 0 || content.length === 0) {
+        return null;
+      }
+      const parts = mentionParts(content, members);
+      return parts.length === 1 && parts[0].userId === null ? null : parts;
+    },
+    [content, members],
+  );
+
+  /** Το σώμα του μηνύματος, με τις αναφορές τονισμένες. */
+  function renderText(textStyle: any) {
+    if (body === null) {
+      return <Text style={textStyle}>{content}</Text>;
+    }
+
+    return (
+      <Text style={textStyle}>
+        {body.map(function (part, index) {
+          if (part.userId === null) {
+            return part.text;
+          }
+          const isMe = part.userId === meId;
+          return (
+            <Text
+              key={index}
+              style={[
+                styles.mention,
+                mine && styles.mentionOnMine,
+                isMe && (mine ? styles.mentionMeOnMine : styles.mentionMe),
+              ]}
+            >
+              {part.text}
+            </Text>
+          );
+        })}
+      </Text>
+    );
+  }
+
   // Πατητή γίνεται η φυσαλίδα σε δύο περιπτώσεις: για επανάληψη αποστολής, ή
   // για το μενού επεξεργασίας. Ένα σβησμένο μήνυμα δεν πατιέται καθόλου.
   const bubblePress = !deleted && ((status === 'failed' && onRetry) || onLongPress);
@@ -154,7 +204,7 @@ export default function MessageBubble({
               ];
             }}
           >
-            <Text style={[styles.text, mine && styles.textMine]}>{content}</Text>
+            {renderText([styles.text, mine && styles.textMine])}
           </Pressable>
         ) : (
           /* Χωρίς χειριστή αφής όπου δεν χρειάζεται: η λίστα δεν πρέπει να
@@ -167,7 +217,7 @@ export default function MessageBubble({
               status === 'pending' && styles.bubblePending,
             ]}
           >
-            <Text style={[styles.text, mine && styles.textMine]}>{content}</Text>
+            {renderText([styles.text, mine && styles.textMine])}
           </View>
         )}
 
@@ -312,6 +362,11 @@ const styles = StyleSheet.create({
   },
   text: { color: paper.ink, fontFamily: paperFont.regular, fontSize: 15, lineHeight: 22 },
   textMine: { color: paper.onMine },
+
+  mention: { color: paper.accent, fontFamily: paperFont.semi },
+  mentionOnMine: { color: paper.accentOnMine },
+  mentionMe: { backgroundColor: paper.accentSoft },
+  mentionMeOnMine: { backgroundColor: 'rgba(157, 180, 255, 0.22)' },
   time: {
     marginTop: 4,
     marginHorizontal: 2,
