@@ -35,13 +35,22 @@ export async function removeKey(key: string): Promise<void> {
   }
 }
 
+/** Τα κλειδιά που αρχίζουν από το πρόθεμα. */
+export async function keysWithPrefix(prefix: string): Promise<string[]> {
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    return keys.filter(function (key) {
+      return key.startsWith(prefix);
+    });
+  } catch {
+    return [];
+  }
+}
+
 /** Σβήνει κάθε κλειδί που αρχίζει από το πρόθεμα. */
 export async function removeByPrefix(prefix: string): Promise<void> {
   try {
-    const keys = await AsyncStorage.getAllKeys();
-    const mine = keys.filter(function (key) {
-      return key.startsWith(prefix);
-    });
+    const mine = await keysWithPrefix(prefix);
     if (mine.length > 0) {
       await AsyncStorage.multiRemove(mine);
     }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import type { LocalImage } from './messageRows';
 import { applyMention, matchMembers, mentionQuery, type Member } from './mentions';
 import { SquadMonogram } from './SquadPicker';
 import { paper, paperFont, radius, space } from '../../theme';
@@ -38,6 +39,12 @@ type ChatComposerProps = {
   members?: Member[];
   /** Ποιος είμαι· λείπω από τον κατάλογο. */
   meId?: string;
+  /** Η φωτογραφία που περιμένει να σταλεί μαζί με το μήνυμα. */
+  attachment?: LocalImage | null;
+  /** Άνοιγμα της συλλογής. Λείπει σε λειτουργία διόρθωσης. */
+  onPickImage?: () => void;
+  /** Αφαίρεση της επιλεγμένης φωτογραφίας. */
+  onClearImage?: () => void;
 };
 
 /** Τι έχει ήδη επιλεγεί, ώστε ο κατάλογος να μην ξανανοίξει για το ίδιο '@'. */
@@ -54,6 +61,9 @@ export default function ChatComposer({
   onTyping,
   members,
   meId,
+  attachment = null,
+  onPickImage,
+  onClearImage,
 }: ChatComposerProps) {
   const [text, setText] = useState(initialText);
   const [focused, setFocused] = useState(false);
@@ -65,7 +75,8 @@ export default function ChatComposer({
   const [active, setActive] = useState(0);
 
   const trimmed = text.trim();
-  const canSend = trimmed.length > 0 && !disabled;
+  // Με φωτογραφία, το κείμενο είναι προαιρετική λεζάντα.
+  const canSend = (trimmed.length > 0 || attachment !== null) && !disabled;
 
   const found = disabled ? null : mentionQuery(text, cursor);
 
@@ -243,8 +254,40 @@ export default function ChatComposer({
         </View>
       ) : null}
 
+      {attachment ? (
+        <View style={styles.attachment}>
+          <Image source={{ uri: attachment.uri }} style={styles.thumb} />
+          <Text style={styles.attachmentLabel} numberOfLines={1}>
+            Photo ready to send
+          </Text>
+          <Pressable
+            onPress={onClearImage}
+            accessibilityRole="button"
+            accessibilityLabel="Remove photo"
+            hitSlop={8}
+          >
+            <Ionicons name="close" size={16} color={paper.inkSoft} />
+          </Pressable>
+        </View>
+      ) : null}
+
       {/* Ένα ενιαίο κουτί: πεδίο και κουμπί ζουν μέσα στο ίδιο περίγραμμα. */}
       <View style={[styles.box, focused && styles.boxFocused]}>
+        {/* Η διόρθωση αλλάζει μόνο κείμενο — η φωτογραφία ενός σταλμένου
+            μηνύματος είναι αμετάβλητη, το επιβάλλει και ο trigger. */}
+        {onPickImage && !editing ? (
+          <Pressable
+            onPress={onPickImage}
+            disabled={disabled}
+            accessibilityRole="button"
+            accessibilityLabel="Add a photo"
+            style={function ({ pressed }) {
+              return [styles.attach, pressed && styles.pressed];
+            }}
+          >
+            <Ionicons name="image-outline" size={20} color={paper.inkSoft} />
+          </Pressable>
+        ) : null}
         <TextInput
           style={styles.input}
           value={text}
@@ -339,6 +382,25 @@ const styles = StyleSheet.create({
     fontFamily: paperFont.medium,
     fontSize: 12,
   },
+  attach: {
+    width: SEND,
+    height: SEND,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    marginBottom: space.xs,
+    padding: 6,
+    backgroundColor: paper.surface,
+    borderWidth: 1,
+    borderColor: paper.line,
+    borderRadius: radius.md,
+  },
+  thumb: { width: 34, height: 34, borderRadius: radius.sm, backgroundColor: paper.surfaceAlt },
+  attachmentLabel: { flex: 1, color: paper.inkSoft, fontFamily: paperFont.medium, fontSize: 12 },
   picker: {
     marginBottom: space.xs,
     backgroundColor: paper.surface,

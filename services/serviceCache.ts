@@ -6,7 +6,7 @@ import {
   userPrefix,
 } from "../components/chat/cache";
 import type { OutgoingMessage } from "../components/chat/messageRows";
-import { readJson, removeByPrefix, writeJson } from "../lib/store";
+import { keysWithPrefix, readJson, removeByPrefix, writeJson } from "../lib/store";
 import type { ChatMessage, Group, GroupPreview } from "./serviceGroup";
 
 /** Ό,τι χρειάζεται η λίστα Παρεών για να ζωγραφιστεί χωρίς δίκτυο. */
@@ -54,6 +54,22 @@ export async function writeOutbox(
   outbox: OutgoingMessage[],
 ): Promise<void> {
   await writeJson(outboxKey(userId, groupId), outbox);
+}
+
+/** Κάθε τοπικό αρχείο που διεκδικεί κάποιο outbox, σε όλες τις Παρέες. */
+export async function referencedImages(userId: string): Promise<string[]> {
+  const prefix = userPrefix(userId) + "out:";
+  const uris: string[] = [];
+
+  for (const key of await keysWithPrefix(prefix)) {
+    const outbox = await readJson<OutgoingMessage[]>(key);
+    for (const item of outbox ?? []) {
+      if (item.image) {
+        uris.push(item.image.uri);
+      }
+    }
+  }
+  return uris;
 }
 
 /** Σβήνει ό,τι κρατάμε για έναν λογαριασμό. Καλείται στην αποσύνδεση. */

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ReplyQuote } from '../../services/serviceGroup';
+import { bubbleSize } from './media';
 import { mentionParts, type Member } from './mentions';
 import type { ReactionCount } from './reactions';
 import { paper, paperFont, space } from '../../theme';
@@ -51,7 +52,20 @@ type MessageBubbleProps = {
   members?: Member[];
   /** Ποιος είμαι — η αναφορά σε εμένα ξεχωρίζει από τις υπόλοιπες. */
   meId?: string;
+  /**
+   * Πού βρίσκεται η εικόνα ΤΩΡΑ: υπογεγραμμένος σύνδεσμος για ό,τι έχει ανέβει,
+   * τοπικό αρχείο για ό,τι ταξιδεύει ακόμα. Η φυσαλίδα δεν ξέρει τη διαφορά.
+   */
+  imageUri?: string | null;
+  imageWidth?: number;
+  imageHeight?: number;
+  /** Πάτημα στη φωτογραφία — άνοιγμα σε πλήρη οθόνη. */
+  onOpenImage?: () => void;
 };
+
+/** Το μεγαλύτερο που επιτρέπεται να πιάσει μια φωτογραφία μέσα στη λίστα. */
+const PHOTO_MAX_WIDTH = 232;
+const PHOTO_MAX_HEIGHT = 300;
 
 export default function MessageBubble({
   content,
@@ -71,6 +85,10 @@ export default function MessageBubble({
   replyUnknown,
   members,
   meId,
+  imageUri,
+  imageWidth = 0,
+  imageHeight = 0,
+  onOpenImage,
 }: MessageBubbleProps) {
   /** Τα κομμάτια του μηνύματος, ή null όταν δεν υπάρχει καμία αναφορά. */
   const body = useMemo(
@@ -111,6 +129,37 @@ export default function MessageBubble({
           );
         })}
       </Text>
+    );
+  }
+
+  const hasPhoto = !deleted && !!imageUri;
+  const photo = bubbleSize(imageWidth, imageHeight, PHOTO_MAX_WIDTH, PHOTO_MAX_HEIGHT);
+  const captionOnly = content.trim().length > 0;
+
+  /** Φωτογραφία, λεζάντα, ή και τα δύο. */
+  function renderContent(textStyle: any) {
+    if (!hasPhoto) {
+      return renderText(textStyle);
+    }
+
+    return (
+      <>
+        <Pressable
+          onPress={onOpenImage}
+          disabled={!onOpenImage}
+          accessibilityRole="imagebutton"
+          accessibilityLabel="Photo"
+        >
+          <Image
+            source={{ uri: imageUri as string }}
+            style={[styles.photo, { width: photo.width, height: photo.height }]}
+            resizeMode="cover"
+          />
+        </Pressable>
+        {captionOnly ? (
+          <View style={styles.caption}>{renderText(textStyle)}</View>
+        ) : null}
+      </>
     );
   }
 
@@ -196,6 +245,8 @@ export default function MessageBubble({
             style={function ({ pressed }) {
               return [
                 styles.bubble,
+                hasPhoto && styles.bubblePhoto,
+                hasPhoto && !captionOnly && styles.bubbleBarePhoto,
                 mine ? styles.bubbleMine : styles.bubbleOther,
                 status === 'failed' && styles.bubbleFailed,
                 status === 'pending' && styles.bubblePending,
@@ -204,7 +255,7 @@ export default function MessageBubble({
               ];
             }}
           >
-            {renderText([styles.text, mine && styles.textMine])}
+            {renderContent([styles.text, mine && styles.textMine])}
           </Pressable>
         ) : (
           /* Χωρίς χειριστή αφής όπου δεν χρειάζεται: η λίστα δεν πρέπει να
@@ -212,12 +263,14 @@ export default function MessageBubble({
           <View
             style={[
               styles.bubble,
+              hasPhoto && styles.bubblePhoto,
+              hasPhoto && !captionOnly && styles.bubbleBarePhoto,
               mine ? styles.bubbleMine : styles.bubbleOther,
               shape,
               status === 'pending' && styles.bubblePending,
             ]}
           >
-            {renderText([styles.text, mine && styles.textMine])}
+            {renderContent([styles.text, mine && styles.textMine])}
           </View>
         )}
 
@@ -296,6 +349,12 @@ const styles = StyleSheet.create({
   columnOther: { alignItems: 'flex-start' },
 
   bubble: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: ROUND },
+  // Με φωτογραφία το γέμισμα γίνεται λεπτό πλαίσιο· χωρίς λεζάντα φεύγει τελείως
+  // και η εικόνα πιάνει ολόκληρη τη φυσαλίδα.
+  bubblePhoto: { padding: 4, overflow: 'hidden' },
+  bubbleBarePhoto: { padding: 0 },
+  photo: { borderRadius: ROUND - 4, backgroundColor: paper.surfaceAlt },
+  caption: { paddingHorizontal: 10, paddingTop: 7, paddingBottom: 3 },
   bubbleMine: { backgroundColor: paper.mine },
   bubbleOther: {
     backgroundColor: paper.surface,

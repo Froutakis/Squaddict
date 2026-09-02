@@ -44,6 +44,33 @@ export function trimForCache(messages: ChatMessage[]): ChatMessage[] {
  * υπόλοιπα γυρίζουν ως `failed` και όχι ως `pending`: δεν ξέρουμε αν έφτασαν,
  * και δεν στέλνουμε ξανά κάτι εν αγνοία του χρήστη. Το πάτημα είναι δικό του.
  */
+/**
+ * Πετάει τις φωτογραφίες που δεν υπάρχουν πια στη συσκευή.
+ *
+ * Με μόνιμο αντίγραφο δεν πρέπει να συμβαίνει· συμβαίνει αν ο χρήστης καθαρίσει
+ * τα δεδομένα της εφαρμογής. Ό,τι είχε και λεζάντα επιβιώνει ως σκέτο κείμενο —
+ * μισό μήνυμα είναι καλύτερο από ένα που δεν στέλνεται ποτέ. Ό,τι ήταν μόνο
+ * φωτογραφία δεν έχει τι να στείλει και φεύγει.
+ */
+export function dropMissingImages(
+  outbox: OutgoingMessage[],
+  exists: (uri: string) => boolean,
+): OutgoingMessage[] {
+  const kept: OutgoingMessage[] = [];
+
+  for (const item of outbox) {
+    if (!item.image || exists(item.image.uri)) {
+      kept.push(item);
+      continue;
+    }
+    if (item.content.trim().length > 0) {
+      kept.push({ ...item, image: undefined });
+    }
+  }
+
+  return kept;
+}
+
 export function restoreOutbox(
   saved: OutgoingMessage[],
   history: ChatMessage[],

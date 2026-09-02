@@ -4,7 +4,9 @@ import type { RealtimeChannel, User as AuthUser } from '@supabase/supabase-js';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -34,8 +36,9 @@ import {
 import SearchOverlay from '../components/chat/SearchOverlay';
 import SquadPicker from '../components/chat/SquadPicker';
 import { mentionIds, toMembers, type Member } from '../components/chat/mentions';
-import { restoreOutbox } from '../components/chat/cache';
-import { buildRows, type OutgoingMessage, type Row } from '../components/chat/messageRows';
+import { dropMissingImages, restoreOutbox } from '../components/chat/cache';
+import { mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
+import { buildRows, type LocalImage, type OutgoingMessage, type Row } from '../components/chat/messageRows';
 import {
   applyMessageUpdate,
   connectionFrom,
@@ -52,6 +55,7 @@ import {
 } from '../components/chat/typing';
 import { newMessageId } from '../lib/ids';
 import {
+  referencedImages,
   readMessages as readCachedMessages,
   readOutbox as readCachedOutbox,
   readSquads as readCachedSquads,
@@ -81,6 +85,17 @@ import {
   type ChatMessage,
   type GroupPreview,
 } from '../services/serviceGroup';
+import {
+  discardImage,
+  imageExists,
+  persistImage,
+  pickImage,
+  prepareImage,
+  removeImage,
+  signImages,
+  sweepOutboxImages,
+  uploadImage,
+} from '../services/serviceMedia';
 import { closeGroupChat, sendTyping, startChat } from '../services/serviceRealtime';
 import { getUserById } from '../services/serviceUser';
 import { layout, paper, paperFont, space } from '../theme';
@@ -123,6 +138,12 @@ export default function GroupChatScreen({
   const [members, setMembers] = useState<Member[]>([]);
   /** Σε ποια Παρέα ανήκουν τα `messages`. Φυλάει το αντίγραφο από λάθος κλειδί. */
   const [messagesFor, setMessagesFor] = useState<string | null>(null);
+  /** Η φωτογραφία που διάλεξε ο χρήστης και δεν έχει σταλεί ακόμα. */
+  const [pendingImage, setPendingImage] = useState<LocalImage | null>(null);
+  /** Υπογεγραμμένοι σύνδεσμοι ανά διαδρομή. Λήγουν, γι' αυτό κρατάμε και ώρα. */
+  const [signed, setSigned] = useState<SignedMap>({});
+  /** Η φωτογραφία που κοιτάμε σε πλήρη οθόνη. */
+  const [viewing, setViewing] = useState<string | null>(null);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [loadingChat, setLoadingChat] = useState(false);
   // Η δική μας σύνδεση με το κανάλι της συνομιλίας.
@@ -325,6 +346,9 @@ export default function GroupChatScreen({
 
     loadCached();
     loadGroups();
+    // Φωτογραφίες που διαλέχτηκαν και δεν στάλθηκαν ποτέ: κανένα outbox δεν τις
+    // διεκδικεί, και ο φάκελος θα μεγάλωνε για πάντα.
+    referencedImages(user.id).then(sweepOutboxImages);
 
     // Cleanup: τρέχει στο unmount ή πριν ξανατρέξει το effect.
     return function cleanup() {
@@ -357,6 +381,43 @@ export default function GroupChatScreen({
     writeCachedOutbox(user.id, messagesFor, outbox);
   }, [user.id, activeId, messagesFor, outbox]);
 
+  // 2ε. Υπογεγραμμένοι σύνδεσμοι για τις φωτογραφίες που φορτώθηκαν.
+  //
+  // Το bucket είναι κλειστό: χωρίς υπογραφή δεν εμφανίζεται εικόνα. Οι σύνδεσμοι
+  // λήγουν, γι' αυτό ο έλεγχος δεν είναι «λείπει;» αλλά «λείπει ή κοντεύει;».
+  useEffect(() => {
+    let cancelled = false;
+
+    const paths = messages
+      .map(function (message) {
+        return message.attachment?.path;
+      })
+      .filter(function (path): path is string {
+        return typeof path === 'string';
+      });
+
+    const missing = pathsToSign(paths, signed, Date.now());
+    if (missing.length === 0) {
+      return;
+    }
+
+    signImages(missing)
+      .then(function (fresh) {
+        if (!cancelled) {
+          setSigned(function (prev) {
+            return mergeSigned(prev, fresh);
+          });
+        }
+      })
+      .catch(function (problem) {
+        console.error('[squaddict] η υπογραφή συνδέσμων απέτυχε:', problem);
+      });
+
+    return function cleanup() {
+      cancelled = true;
+    };
+  }, [messages, signed]);
+
   // 3. Ιστορικό + realtime κανάλι της ενεργής παρέας.
   useEffect(() => {
     // Καμία ενεργή παρέα -> είμαστε στη λίστα, δεν ανοίγουμε κανάλι.
@@ -364,6 +425,9 @@ export default function GroupChatScreen({
       setMessages([]);
       setMessagesFor(null);
       setOutbox([]);
+      setPendingImage(null);
+      setSigned({});
+      setViewing(null);
       setMemberCount(0);
       setHasMore(false);
       setConnection('connecting');
@@ -390,6 +454,9 @@ export default function GroupChatScreen({
     setMessages([]);
     setMessagesFor(null);
     setOutbox([]);
+    setPendingImage(null);
+    setSigned({});
+    setViewing(null);
     setHasMore(false);
     setConnection('connecting');
     connectionRef.current = 'connecting';
@@ -624,7 +691,7 @@ export default function GroupChatScreen({
 
         const saved = await readCachedOutbox(user.id, groupId);
         if (!cancelled && saved && saved.length > 0) {
-          const left = restoreOutbox(saved, chat.messages);
+          const left = dropMissingImages(restoreOutbox(saved, chat.messages), imageExists);
           for (const item of left) {
             if (item.replyTo) {
               replyOfOutgoingRef.current[item.id] = item.replyTo;
@@ -698,9 +765,19 @@ export default function GroupChatScreen({
    * το κόβει ο έλεγχος διπλών.
    */
   const deliver = useCallback(
-    async function deliver(groupId: string, id: string, text: string, replyTo?: string | null) {
+    async function deliver(
+      groupId: string,
+      id: string,
+      text: string,
+      replyTo?: string | null,
+      image?: LocalImage | null,
+    ) {
       try {
-        const saved = await sendMessage(groupId, user.id, text, id, replyTo);
+        // Η εικόνα πρώτη: αν το ανέβασμα αποτύχει, δεν θέλουμε μήνυμα που να
+        // δείχνει σε αρχείο που δεν υπάρχει. Το ίδιο id δίνει το ίδιο όνομα
+        // αρχείου, οπότε η επανάληψη γράφει από πάνω αντί να αφήσει δεύτερο.
+        const attachment = image ? await uploadImage(groupId, id, image) : null;
+        const saved = await sendMessage(groupId, user.id, text, id, replyTo, attachment);
         setMentions(saved.id, mentionIds(text, membersRef.current));
 
         setMessages(function (prev) {
@@ -713,6 +790,9 @@ export default function GroupChatScreen({
         setOutbox(function (prev) {
           return prev.filter((item) => item.id !== id);
         });
+        if (image) {
+          discardImage(image.uri);
+        }
       } catch (problem) {
         // Ο χρήστης βλέπει «Not sent» — εμείς χρειαζόμαστε το ΓΙΑΤΙ. Χωρίς αυτό
         // το σφάλμα της Postgres χάνεται και μένει μόνο ένα κόκκινο κουτάκι.
@@ -736,6 +816,7 @@ export default function GroupChatScreen({
 
       const id = newMessageId();
       const answering = replyingTo;
+      const image = pendingImage;
 
       setOutbox(function (prev) {
         return [
@@ -746,6 +827,7 @@ export default function GroupChatScreen({
             createdAt: new Date().toISOString(),
             status: 'pending' as const,
             replyTo: answering ? answering.id : null,
+            image: image ?? undefined,
           },
         ];
       });
@@ -756,10 +838,11 @@ export default function GroupChatScreen({
       // Η μπάρα φεύγει αμέσως: το μήνυμα έχει ήδη φύγει με τον δείκτη μέσα του,
       // και μια μπάρα που μένει ανοιχτή μοιάζει σαν να μη στάλθηκε.
       setReplyingTo(null);
+      setPendingImage(null);
 
-      deliver(activeId, id, text, answering ? answering.id : null);
+      deliver(activeId, id, text, answering ? answering.id : null, image);
     },
-    [activeId, deliver, replyingTo],
+    [activeId, deliver, replyingTo, pendingImage],
   );
 
   /**
@@ -814,6 +897,11 @@ export default function GroupChatScreen({
 
       try {
         const saved = await deleteMessage(target.id);
+        // Ο trigger μηδένισε ήδη τη διαδρομή στη γραμμή· το αρχείο το σβήνουμε
+        // εμείς. Αν αποτύχει, μένει απρόσιτο — κοστίζει χώρο, όχι ιδιωτικότητα.
+        if (target.attachment) {
+          removeImage(target.attachment.path);
+        }
         setMessages(function (prev) {
           return applyMessageUpdate(prev, saved);
         });
@@ -883,6 +971,24 @@ export default function GroupChatScreen({
     [reactions, user.id],
   );
 
+  /** Ανοίγει τη συλλογή και κρατά τη σμικρυμένη εικόνα μέχρι να πατηθεί αποστολή. */
+  const choosePhoto = useCallback(async function choose() {
+    try {
+      const picked = await pickImage();
+      if (!picked) {
+        return;
+      }
+      const ready = await prepareImage(picked);
+      setError(null);
+      // Μόνιμο αντίγραφο εδώ και όχι στην αποστολή: ανάμεσα στα δύο μπορεί να
+      // περάσει ώρα, και ο επεξεργαστής γράφει σε προσωρινή μνήμη.
+      setPendingImage(persistImage(ready, newMessageId()));
+    } catch (problem) {
+      console.error('[squaddict] η επιλογή φωτογραφίας απέτυχε:', problem);
+      setError(problem instanceof Error ? problem.message : "Couldn't use that photo.");
+    }
+  }, []);
+
   // Ο composer έχει δύο δουλειές πλέον. Ποια από τις δύο, το λέει το `editing`.
   const handleComposerSend = useCallback(
     function submit(text: string) {
@@ -916,7 +1022,7 @@ export default function GroupChatScreen({
         );
       });
 
-      deliver(activeId, id, item.content, replyOfOutgoingRef.current[id] ?? null);
+      deliver(activeId, id, item.content, replyOfOutgoingRef.current[id] ?? null, item.image);
     },
     [activeId, deliver],
   );
@@ -1066,6 +1172,10 @@ export default function GroupChatScreen({
 
     const message = item.message;
     const isMine = message.senderId === user.id;
+    // Τοπικό αρχείο όσο ανεβαίνει, υπογεγραμμένος σύνδεσμος μόλις φτάσει.
+    const photoUri =
+      item.image?.uri ??
+      (message.attachment ? signed[message.attachment.path]?.url ?? null : null);
 
     return (
       <MessageBubble
@@ -1096,6 +1206,16 @@ export default function GroupChatScreen({
         replyUnknown={message.replyTo !== null && message.reply === null}
         members={members}
         meId={user.id}
+        imageUri={photoUri}
+        imageWidth={item.image?.width ?? message.attachment?.width}
+        imageHeight={item.image?.height ?? message.attachment?.height}
+        onOpenImage={
+          photoUri
+            ? function () {
+                setViewing(photoUri);
+              }
+            : undefined
+        }
         reactions={summarise(reactions[message.id], user.id)}
         onToggleReaction={
           item.status
@@ -1212,6 +1332,14 @@ export default function GroupChatScreen({
             onTyping={handleTypingActivity}
             members={members}
             meId={user.id}
+            attachment={pendingImage}
+            onPickImage={choosePhoto}
+            onClearImage={function () {
+              if (pendingImage) {
+                discardImage(pendingImage.uri);
+              }
+              setPendingImage(null);
+            }}
             disabled={!activeId}
           />
 
@@ -1246,6 +1374,30 @@ export default function GroupChatScreen({
               applyDelete(target);
             }}
           />
+          <Modal
+            visible={viewing !== null}
+            transparent
+            animationType="fade"
+            onRequestClose={function () {
+              setViewing(null);
+            }}
+          >
+            {/* Ολόκληρο το φόντο κλείνει: σε πλήρη οθόνη το μόνο που θέλει ο
+                χρήστης είναι να βγει, και το X είναι μικρός στόχος. */}
+            <Pressable
+              style={styles.viewer}
+              onPress={function () {
+                setViewing(null);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Close photo"
+            >
+              {viewing ? (
+                <Image source={{ uri: viewing }} style={styles.viewerImage} resizeMode="contain" />
+              ) : null}
+            </Pressable>
+          </Modal>
+
           <SearchOverlay
             groupId={activeGroup.id}
             visible={searchOpen}
@@ -1260,6 +1412,14 @@ export default function GroupChatScreen({
 }
 
 const styles = StyleSheet.create({
+  viewer: {
+    flex: 1,
+    backgroundColor: 'rgba(12, 25, 38, 0.94)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: space.md,
+  },
+  viewerImage: { width: '100%', height: '100%' },
   center: { flex: 1, backgroundColor: paper.bg, alignItems: 'center', justifyContent: 'center' },
   screen: { flex: 1, backgroundColor: paper.bg },
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
