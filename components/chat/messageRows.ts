@@ -10,7 +10,14 @@ export type OutgoingMessage = {
   content: string;
   createdAt: string;
   status: 'pending' | 'failed';
+  /** Σε ποιο μήνυμα απαντά. Ταξιδεύει μαζί του ώστε να επιβιώνει της επανεκκίνησης. */
+  replyTo?: string | null;
+  /** Η φωτογραφία όσο ανεβαίνει: τοπικό αρχείο, όχι διαδρομή αποθήκης. */
+  image?: LocalImage;
 };
+
+/** Εικόνα που ζει ακόμα στη συσκευή. */
+export type LocalImage = { uri: string; width: number; height: number };
 
 /** Ό,τι μπαίνει στη λίστα: είτε μήνυμα, είτε διαχωριστικό ημέρας. */
 export type Row =
@@ -23,6 +30,8 @@ export type Row =
       isLast: boolean;
       /** Λείπει για όσα έχουν επιβεβαιωθεί. */
       status?: 'pending' | 'failed';
+      /** Μόνο για ανεπιβεβαίωτα: η εικόνα από τη συσκευή, πριν ανέβει. */
+      image?: LocalImage;
     };
 
 function dayKey(date: Date) {
@@ -62,8 +71,12 @@ export function buildRows(
   // Τα ανεπιβεβαίωτα φορούν σχήμα ChatMessage για να περάσουν από την ίδια
   // λογική· το status τα ξεχωρίζει ξανά μόλις φτιαχτεί η γραμμή.
   const pendingStatus = new Map<string, 'pending' | 'failed'>();
+  const pendingImage = new Map<string, LocalImage>();
   const asMessages: ChatMessage[] = outgoing.map((item) => {
     pendingStatus.set(item.id, item.status);
+    if (item.image) {
+      pendingImage.set(item.id, item.image);
+    }
     return {
       id: item.id,
       content: item.content,
@@ -76,6 +89,8 @@ export function buildRows(
       deletedAt: null,
       replyTo: null,
       reply: null,
+      // Η εικόνα δεν είναι ακόμα στην αποθήκη· ταξιδεύει χωριστά, ως τοπικό αρχείο.
+      attachment: null,
     };
   });
 
@@ -101,6 +116,7 @@ export function buildRows(
       isFirst: startsDay || prev.senderId !== message.senderId,
       isLast: endsDay || next.senderId !== message.senderId,
       status: pendingStatus.get(message.id),
+      image: pendingImage.get(message.id),
     });
   });
 
