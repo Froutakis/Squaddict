@@ -5,13 +5,14 @@ import type { Attendee, MyEvent, RsvpStatus } from '../../services/serviceEvents
 import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/serviceEvents';
 import { getMemberNames } from '../../services/serviceGroup';
 import { colors, font, radius, space, textSize } from '../../theme';
-import { formatDateTime } from '../../lib/datetime';
+import { formatDateTime, keyOf } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import { mapsUrl } from '../../lib/maps';
 import { ticketCode } from '../../lib/ticket';
 import CloseButton from '../general/CloseButton';
 import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 import Ticket from '../general/Ticket';
+import EventPhotos from './EventPhotos';
 import RsvpButtons from './RsvpButtons';
 
 type Person = { userId: string; name: string };
@@ -32,9 +33,10 @@ type EventSheetProps = {
   onClose: () => void;
   onChanged: () => void | Promise<void>;
   onEdit?: (event: MyEvent) => void;
+  onPhotosChanged?: () => void;
 };
 
-export default function EventSheet({ event, currentUserId, onClose, onChanged, onEdit }: EventSheetProps) {
+export default function EventSheet({ event, currentUserId, onClose, onChanged, onEdit, onPhotosChanged }: EventSheetProps) {
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [memberNames, setMemberNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -122,6 +124,7 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
 
   const myStatus = attendees.find((a) => a.userId === currentUserId)?.status;
   const isOwner = event?.createdBy === currentUserId;
+  const hasHappened = event ? event.date <= keyOf(new Date()) : false;
 
   return (
     <Modal
@@ -194,6 +197,16 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
                   <ActivityIndicator color={colors.primary} style={styles.loader} />
                 ) : (
                   <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+                    {hasHappened ? (
+                      <EventPhotos
+                        eventId={event.id}
+                        groupId={event.groupId}
+                        currentUserId={currentUserId}
+                        canAdd={myStatus === 'in'}
+                        onChanged={onPhotosChanged}
+                      />
+                    ) : null}
+
                     <Section
                       title="Going"
                       people={going}
@@ -379,7 +392,7 @@ const styles = StyleSheet.create({
   error: { color: colors.danger, fontFamily: font.medium, fontSize: textSize.body },
   loader: { marginVertical: space.lg },
 
-  list: { maxHeight: 260 },
+  list: { maxHeight: 320 },
   listContent: { gap: space.md, paddingBottom: space.sm },
   section: { gap: space.sm },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs },

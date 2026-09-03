@@ -5,7 +5,8 @@ import type { Group } from '../services/serviceGroup';
 import type { MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getUserById } from '../services/serviceUser';
 import { getGroupsForUser } from '../services/serviceGroup';
-import { clearRsvp, getMyEvents, setRsvp } from '../services/serviceEvents';
+import { clearRsvp, getEventCovers, getMyEvents, setRsvp } from '../services/serviceEvents';
+import { signImages } from '../services/serviceMedia';
 import { colors, font, layout, space } from '../theme';
 import { dayFilterLabel, keyOf } from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
@@ -62,6 +63,8 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const [openEvent, setOpenEvent] = useState<MyEvent | null>(null);
   const [editEvent, setEditEvent] = useState<MyEvent | null>(null);
   const [rsvpError, setRsvpError] = useState<string | null>(null);
+  const [covers, setCovers] = useState<Record<string, string>>({});
+  const [photoNonce, setPhotoNonce] = useState(0);
 
   const load = useCallback(
     async function load() {
@@ -143,6 +146,50 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   );
   const weekBest = dayMode ? null : bestOfWeek(visible, new Date());
 
+  const pastIds = events
+    .filter((e) => e.date < today)
+    .map((e) => e.id)
+    .sort()
+    .join(',');
+
+  useEffect(() => {
+    if (pastIds === '') {
+      setCovers({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadCovers() {
+      try {
+        const byEvent = await getEventCovers(pastIds.split(','));
+        const paths = Object.values(byEvent).map((photo) => photo.path);
+        if (paths.length === 0) {
+          if (!cancelled) setCovers({});
+          return;
+        }
+
+        const signed = await signImages(paths);
+        if (cancelled) return;
+
+        const byDate: Record<string, string> = {};
+        for (const event of events) {
+          const photo = byEvent[event.id];
+          const url = photo ? signed[photo.path]?.url : undefined;
+          if (url && !byDate[event.date]) byDate[event.date] = url;
+        }
+        setCovers(byDate);
+      } catch {
+        if (!cancelled) setCovers({});
+      }
+    }
+
+    loadCovers();
+    return () => {
+      cancelled = true;
+    };
+  }, [pastIds, photoNonce]);
+
   function renderBody() {
     if (loading) {
       return (
@@ -202,6 +249,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
             selectedDate={selectedDate}
             onSelectDate={(d) => setSelectedDate(d === selectedDate ? null : d)}
             onAddEvent={() => openNewEvent(selectedDate)}
+            covers={covers}
           />
         </View>
 
@@ -297,6 +345,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
         currentUserId={user.id}
         onClose={() => setOpenEvent(null)}
         onChanged={async () => setEvents(await getMyEvents(user.id))}
+        onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
         onEdit={(e) => {
           setOpenEvent(null);
           setEditEvent(e);
