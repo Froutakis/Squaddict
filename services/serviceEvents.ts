@@ -324,6 +324,14 @@ export async function addEventPhoto(
         .single();
 
     if (error) {
+        console.error("[squaddict] η γραμμή της φωτογραφίας απορρίφθηκε:", {
+            path,
+            eventId: event.id,
+            userId: user.id,
+            code: error.code,
+            message: error.message,
+            details: error.details,
+        });
         await removeImage(path);
         throw error;
     }

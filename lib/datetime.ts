@@ -86,6 +86,49 @@ export function dayFilterLabel(dateStr: string) {
   return `${weekday} ${d.getDate()}`;
 }
 
+const PHOTO_WINDOW_HOURS = 12;
+
+function atTime(day: Date, time: string, dayOffset = 0) {
+  const [h, m] = time.split(':').map(Number);
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate() + dayOffset, h, m);
+}
+
+export function photoWindow(dateStr: string, startTime?: string, endTime?: string) {
+  const day = parseLocal(dateStr);
+  const opensAt = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+
+  let end: Date;
+  if (endTime) {
+    const pastMidnight = startTime !== undefined && endTime < startTime;
+    end = atTime(day, endTime, pastMidnight ? 1 : 0);
+  } else if (startTime) {
+    end = atTime(day, startTime);
+  } else {
+    end = atTime(day, '23:59');
+  }
+
+  return { opensAt, closesAt: new Date(end.getTime() + PHOTO_WINDOW_HOURS * 3600000) };
+}
+
+export function inPhotoWindow(
+  dateStr: string,
+  startTime?: string,
+  endTime?: string,
+  now: Date = new Date(),
+) {
+  const { opensAt, closesAt } = photoWindow(dateStr, startTime, endTime);
+  return now >= opensAt && now < closesAt;
+}
+
+export function windowLeftLabel(closesAt: Date, now: Date = new Date()) {
+  const ms = closesAt.getTime() - now.getTime();
+  if (ms <= 0) return 'CLOSED';
+
+  const minutes = Math.floor(ms / 60000);
+  const hours = Math.floor(minutes / 60);
+  return hours > 0 ? `${hours}H ${minutes % 60}M LEFT` : `${minutes}M LEFT`;
+}
+
 export function timeLabel(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
