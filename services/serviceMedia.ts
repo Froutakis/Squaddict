@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { Directory, File, Paths } from "expo-file-system";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
@@ -5,7 +6,7 @@ import {
   MAX_DIMENSION,
   SIGNED_URL_TTL_SECONDS,
   fitWithin,
-  rejectionFor,
+  uploadRejection,
   type Attachment,
   type SignedMap,
 } from "../components/chat/media";
@@ -41,11 +42,25 @@ export async function pickImage(): Promise<PickedImage | null> {
   }
 
   const asset = result.assets[0];
-  const problem = rejectionFor(asset.mimeType, asset.fileSize);
-  if (problem) {
-    throw new Error(problem);
+  return { uri: asset.uri, width: asset.width, height: asset.height };
+}
+
+export async function takePhoto(): Promise<PickedImage | null> {
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (!permission.granted) {
+    return null;
   }
 
+  const result = await ImagePicker.launchCameraAsync({
+    mediaTypes: ["images"],
+    quality: 1,
+  });
+
+  if (result.canceled || result.assets.length === 0) {
+    return null;
+  }
+
+  const asset = result.assets[0];
   return { uri: asset.uri, width: asset.width, height: asset.height };
 }
 
@@ -54,28 +69,53 @@ export async function pickImage(): Promise<PickedImage | null> {
  *
  * Χωρίς αυτό ανεβαίνει το αρχείο της κάμερας ως έχει — και κατεβαίνει ολόκληρο
  * σε κάθε συσκευή που θα ανοίξει τη συνομιλία.
+ *
+ * Εδώ γίνεται ΚΑΙ η μετατροπή τύπου: ό,τι κι αν διάλεξε ο χρήστης — HEIC από
+ * iPhone, το στιγμιότυπο ενός Live Photo, png, gif — βγαίνει jpeg. Γι' αυτό δεν
+ * ελέγχουμε τον τύπο του πρωτοτύπου πουθενά: αν διαβάζεται, ανεβαίνει.
  */
 export async function prepareImage(picked: PickedImage): Promise<PickedImage> {
   const target = fitWithin(picked.width, picked.height, MAX_DIMENSION);
   const alreadySmall =
     target.width === picked.width && target.height === picked.height;
 
-  const context = ImageManipulator.ImageManipulator.manipulate(picked.uri);
-  if (!alreadySmall) {
-    context.resize({ width: target.width, height: target.height });
+  try {
+    const context = ImageManipulator.ImageManipulator.manipulate(picked.uri);
+    if (!alreadySmall) {
+      context.resize({ width: target.width, height: target.height });
+    }
+
+    const rendered = await context.renderAsync();
+    const saved = await rendered.saveAsync({
+      format: ImageManipulator.SaveFormat.JPEG,
+      compress: 0.8,
+    });
+
+    return {
+      uri: saved.uri,
+      width: saved.width ?? target.width,
+      height: saved.height ?? target.height,
+    };
+  } catch (problem) {
+    console.error("[squaddict] η εικόνα δεν διαβάστηκε:", problem);
+    throw new Error("That photo could not be read. Try another one.");
   }
+}
 
-  const rendered = await context.renderAsync();
-  const saved = await rendered.saveAsync({
-    format: ImageManipulator.SaveFormat.JPEG,
-    compress: 0.8,
-  });
-
-  return {
-    uri: saved.uri,
-    width: saved.width ?? target.width,
-    height: saved.height ?? target.height,
-  };
+/**
+ * Τα bytes του αρχείου, ΟΧΙ Blob.
+ *
+ * Το storage-js αγνοεί το contentType όταν του δώσεις Blob: το τυλίγει σ~ε
+ * FormData και ο τύπος βγαίνει από το `blob.type`, που στο React Native πάνω σε
+ * file:// URI είναι κενός. Το bucket δέχεται μόνο εικόνες και απορρίπτει.
+ * Με ArrayBuffer μπαίνει κανονικό header `content-type: image/jpeg`.
+ */
+async function readBytes(uri: string): Promise<ArrayBuffer> {
+  if (Platform.OS === "web") {
+    const response = await fetch(uri);
+    return await response.arrayBuffer();
+  }
+  return await new File(uri).arrayBuffer();
 }
 
 /**
@@ -89,14 +129,27 @@ export async function uploadImage(
   path: string,
   image: PickedImage,
 ): Promise<Attachment> {
-  const response = await fetch(image.uri);
-  const blob = await response.blob();
+  const bytes = await readBytes(image.uri);
 
-  const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
+  const problem = uploadRejection(bytes.byteLength);
+  if (problem) {
+    throw new Error(problem);
+  }
+
+  const { error } = await supabase.storage.from(BUCKET).upload(path, bytes, {
     contentType: "image/jpeg",
     upsert: true,
   });
-  if (error) throw error;
+  if (error) {
+    console.error("[squaddict] το ανέβασμα απέρριψε:", {
+      path,
+      bytes: bytes.byteLength,
+      name: (error as any).name,
+      message: error.message,
+      status: (error as any).status ?? (error as any).statusCode,
+    });
+    throw error;
+  }
 
   return {
     path,

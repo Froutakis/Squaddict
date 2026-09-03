@@ -10,9 +10,6 @@ export const SIGNED_URL_TTL_SECONDS = 60 * 60;
 /** Ζητάμε νέο σύνδεσμο τόσο πριν λήξει, ώστε να μη σβήσει εικόνα στην οθόνη. */
 const RENEW_BEFORE_MS = 5 * 60 * 1000;
 
-/** Οι τύποι που δέχεται το bucket. */
-export const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-
 /** Το συνημμένο ενός μηνύματος. */
 export type Attachment = {
   path: string;
@@ -74,16 +71,17 @@ export function bubbleSize(
   };
 }
 
-/** Είναι αποδεκτό αρχείο για ανέβασμα; */
-export function rejectionFor(
-  type: string | undefined,
-  bytes: number | undefined,
-): string | null {
-  if (type && !ALLOWED_TYPES.includes(type.toLowerCase())) {
-    return 'That file type is not supported.';
-  }
-  if (bytes !== undefined && bytes > MAX_UPLOAD_BYTES) {
-    return 'That photo is larger than 5 MB.';
+/**
+ * Είναι αποδεκτό ΤΟ ΑΡΧΕΙΟ ΠΟΥ ΑΝΕΒΑΙΝΕΙ;
+ *
+ * Ελέγχεται το τελικό jpeg και όχι το πρωτότυπο. Ο τύπος δεν χρειάζεται έλεγχο
+ * — η prepareImage γράφει πάντα jpeg, που το bucket δέχεται. Το μέγεθος του
+ * πρωτοτύπου επίσης δεν λέει τίποτα: ένα HEIC 8MB γίνεται 300KB μετά τη
+ * σμίκρυνση, και θα κοβόταν άδικα.
+ */
+export function uploadRejection(bytes: number): string | null {
+  if (bytes > MAX_UPLOAD_BYTES) {
+    return 'That photo is still larger than 5 MB after compression.';
   }
   return null;
 }

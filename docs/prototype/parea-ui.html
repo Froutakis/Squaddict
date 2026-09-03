@@ -371,7 +371,7 @@ a{color:inherit}
     <div class="spec"><dt>Shape</dt><dd>Perforated cards, 20px corners, one floating glass tab bar. No gradients, no accent rails.</dd></div>
     <div class="spec"><dt>Squads</dt><dd>A squad is a <b>profile</b>, not a chat room: handle, bio, members, a wall of nights. Two squads follow each other and throw one night together.</dd></div>
     <div class="spec"><dt>Rooms</dt><dd>A plan can open a <b>room that lives 48 hours</b> — one day before the night, one day after. That is the only place two pareas talk, and it is the only thread with a clock on it.</dd></div>
-    <div class="spec"><dt>After</dt><dd>When a room shuts, what was in it becomes the memory. A month of those reads as a grid, the way a calendar of nights should.</dd></div>
+    <div class="spec"><dt>After</dt><dd>A plan that has passed keeps a <b>roll of photos</b>, added by the people who were actually in it, and those covers surface on the week strip. Screens marked <span class="built yes">Built</span> exist in the app; <span class="built no">Not yet</span> is where this is heading.</dd></div>
     <div class="spec"><dt>Scroll</dt><dd>Every screen below scrolls inside its own frame. Try it.</dd></div>
   </dl>
 </header>
@@ -569,16 +569,19 @@ a{color:inherit}
               <div class="col" style="gap:2px;min-width:0">
                 <span class="lbl">Last night</span>
                 <b style="font-size:14.5px;margin-top:2px">Vinyl night at Nikos place</b>
-                <span class="tiny">Nikos and Elena posted. Add yours by midnight.</span>
+                <span class="tiny">Nikos and Elena added 4 photos. Add yours.</span>
               </div>
               <span class="sp"></span>
-              <div class="btn sm ink" style="width:40px;padding:0;flex:none"><svg class="ic sm"><use href="#i-camera"/></svg></div>
+              <div class="btn sm ink" style="width:40px;padding:0;flex:none"><svg class="ic sm"><use href="#i-plus"/></svg></div>
             </div>
           </div>
 
           <div style="margin-top:22px">
-            <div class="pad row" style="margin-bottom:9px"><span class="lbl">Your week</span><span class="sp"></span><span class="code" style="color:var(--scob)">CALENDAR</span></div>
+            <div class="pad row" style="margin-bottom:9px"><span class="lbl">Your week</span><span class="sp"></span><span class="code" style="color:var(--scob)">&#8592; SWIPE BACK</span></div>
             <div class="hscroll">
+              <div class="day mem"><div class="ph ph-tavli"></div><span>S</span><b>30</b><i class="mp"></i></div>
+              <div class="day mem"><div class="ph ph-dawn"></div><span>S</span><b>31</b><i class="mp"></i></div>
+              <div class="day mem"><div class="ph ph-vinyl"></div><span>T</span><b>1</b><i class="mp"></i></div>
               <div class="day"><span>W</span><b>2</b><i class="dot cob"></i></div>
               <div class="day on"><span>T</span><b>3</b><i class="dot sun"></i></div>
               <div class="day"><span>F</span><b>4</b></div>
@@ -779,6 +782,30 @@ a{color:inherit}
 .tlt{font-size:11.5px;color:var(--sink3);padding-top:2px;text-align:right}
 .tlbar{border-radius:2px;background:var(--scob);min-height:56px}
 .tlbar.ol{background:var(--solive)}
+
+/* A past day in the week strip wears the night's photo. */
+.day.mem{border:none;overflow:hidden;position:relative;justify-content:flex-end;padding-bottom:7px}
+.day.mem > .ph{position:absolute;inset:0;border-radius:16px}
+.day.mem::after{content:"";position:absolute;inset:0;border-radius:16px;z-index:2;
+  background:linear-gradient(180deg,rgba(12,25,38,.02) 34%,rgba(12,25,38,.66) 100%)}
+.day.mem span,.day.mem b{position:relative;z-index:3}
+.day.mem span{color:rgba(255,255,255,.72)}
+.day.mem b{color:#fff}
+.day.mem i.mp{position:absolute;z-index:3;top:5px;right:5px;width:9px;height:9px;border-radius:50%;
+  background:#0A1420;box-shadow:inset 0 1px 2px #000,0 0 0 1.8px var(--ssun)}
+
+/* The photo grid on a finished plan. */
+.pgrid{display:flex;flex-wrap:wrap;gap:6px}
+.ptile{width:64px;height:64px;border-radius:12px;overflow:hidden;position:relative;flex:none}
+.ptile .pdel{position:absolute;top:4px;right:4px;z-index:4;width:18px;height:18px;border-radius:50%;
+  background:rgba(12,25,38,.62);color:#fff;display:grid;place-items:center}
+.padd{width:64px;height:64px;border-radius:12px;flex:none;display:grid;place-items:center;
+  border:1.5px solid var(--sline);background:var(--sbg);color:var(--sink3)}
+.cap .built,.spec .built,.built{display:inline-flex;align-items:center;width:auto;height:19px;
+  padding:0 8px;margin-left:7px;border-radius:10px;vertical-align:2px;
+  font:600 9.5px/1 var(--ui);letter-spacing:.09em;text-transform:uppercase}
+.built.yes{background:rgba(31,122,87,.13);color:#1F7A57}
+.built.no{background:rgba(12,25,38,.06);color:var(--sink3)}
 </style>
 
 <!-- ══════════════ SECTION: THE PLAN ══════════════ -->
@@ -950,7 +977,7 @@ a{color:inherit}
               <svg class="ic" style="color:var(--sink2);margin-top:2px"><use href="#i-globe"/></svg>
               <div class="col" style="gap:2px;min-width:0">
                 <b style="font-size:14.5px">Open to Parea</b>
-                <span class="tiny" style="line-height:1.45">Anyone nearby can find this plan and ask to come. Off means Attic Birds only.</span>
+                <span class="tiny" style="line-height:1.45">Anyone nearby can find this plan and answer it &#8212; public means public, no approval. Off means Attic Birds only.</span>
               </div>
               <div class="switch on"></div>
             </div>
@@ -1044,7 +1071,7 @@ a{color:inherit}
               <div class="tk-perf"></div>
               <div class="tk-stub" style="gap:9px">
                 <div class="stack"><div class="av xs c2">Α</div><div class="av xs c5">Π</div><div class="av xs c6">Ρ</div><div class="av xs c4">+9</div></div>
-                <span class="sp"></span><div class="btn sm ink" style="padding:0 15px">Ask to come</div>
+                <span class="sp"></span><div class="row" style="gap:6px;flex:none"><div class="btn sm ink" style="padding:0 16px">In</div><div class="btn sm ghost" style="padding:0 14px">Out</div></div>
               </div>
             </div>
             <div class="tk" style="flex:none;width:290px">
@@ -1056,7 +1083,7 @@ a{color:inherit}
               <div class="tk-perf"></div>
               <div class="tk-stub" style="gap:9px">
                 <div class="stack"><div class="av xs c1">Δ</div><div class="av xs c3">Λ</div></div>
-                <span class="sp"></span><div class="btn sm ink" style="padding:0 15px">Ask to come</div>
+                <span class="sp"></span><div class="row" style="gap:6px;flex:none"><div class="btn sm ink" style="padding:0 16px">In</div><div class="btn sm ghost" style="padding:0 14px">Out</div></div>
               </div>
             </div>
           </div>
@@ -1116,7 +1143,7 @@ a{color:inherit}
                 <div class="tk-perf"></div>
                 <div class="tk-stub" style="gap:9px">
                   <div class="av xs c2">PN</div><span class="mono tiny">@plaka.nights · 12 in</span>
-                  <span class="sp"></span><div class="btn sm ink" style="padding:0 15px">Ask to come</div>
+                  <span class="sp"></span><div class="row" style="gap:6px;flex:none"><div class="btn sm ink" style="padding:0 16px">In</div><div class="btn sm ghost" style="padding:0 14px">Out</div></div>
                 </div>
               </div>
 
@@ -1131,7 +1158,7 @@ a{color:inherit}
                 <div class="tk-perf"></div>
                 <div class="tk-stub" style="gap:9px">
                   <div class="av xs c5">AS</div><span class="mono tiny">@athens.slowrun · 4 in</span>
-                  <span class="sp"></span><div class="btn sm ink" style="padding:0 15px">Ask to come</div>
+                  <span class="sp"></span><div class="row" style="gap:6px;flex:none"><div class="btn sm ink" style="padding:0 16px">In</div><div class="btn sm ghost" style="padding:0 14px">Out</div></div>
                 </div>
               </div>
 
@@ -1145,7 +1172,7 @@ a{color:inherit}
                 <div class="tk-perf"></div>
                 <div class="tk-stub" style="gap:9px">
                   <div class="av xs c3">SM</div><span class="mono tiny">@sunday.market · 7 in</span>
-                  <span class="sp"></span><div class="btn sm ink" style="padding:0 15px">Ask to come</div>
+                  <span class="sp"></span><div class="row" style="gap:6px;flex:none"><div class="btn sm ink" style="padding:0 16px">In</div><div class="btn sm ghost" style="padding:0 14px">Out</div></div>
                 </div>
               </div>
             </div>
@@ -1598,7 +1625,7 @@ a{color:inherit}
                 <div class="tk-perf"></div>
                 <div class="tk-stub" style="gap:9px">
                   <div class="stack"><div class="av xs c2">Α</div><div class="av xs c5">Π</div><div class="av xs c4">+10</div></div>
-                  <span class="sp"></span><div class="btn sm ink" style="padding:0 15px">Ask to come</div>
+                  <span class="sp"></span><div class="row" style="gap:6px;flex:none"><div class="btn sm ink" style="padding:0 16px">In</div><div class="btn sm ghost" style="padding:0 14px">Out</div></div>
                 </div>
               </div>
             </div>
@@ -1760,11 +1787,92 @@ a{color:inherit}
 <section class="sec">
   <div class="sec-head">
     <h2>Afterwards</h2>
-    <p>The ticket does not end at the door. When a plan is over it asks for a picture, and what comes back becomes a calendar of the nights you actually kept.</p>
+    <p>The ticket does not end at the door. The first screen is what the app does <b>today</b>: a finished plan collects photos from whoever actually turned up, and those photos surface on the week strip. The three after it are where this is going &#8212; a window that asks, a month read as a grid, one night reopened.</p>
   </div>
   <div class="rail">
 
-    <!-- S14 · THE ASK -->
+    <!-- S13b · MEMORIES ON A FINISHED PLAN -->
+    <div class="slot">
+      <div class="frame"><div class="phone"><div class="island"></div><div class="scr">
+        <div class="statusbar"><span class="t">9:41</span><span></span><svg class="ic" style="width:70px;height:14px"><use href="#i-status"/></svg></div>
+        <div class="body">
+          <div class="pad row" style="padding-top:6px">
+            <div class="glassbtn" style="box-shadow:none;background:var(--spaper);border:1px solid var(--sline)"><svg class="ic"><use href="#i-left"/></svg></div>
+            <span class="sp"></span>
+            <span class="code">&#8470; 0409</span>
+          </div>
+
+          <div class="pad" style="margin-top:12px">
+            <div class="tk hero">
+              <div class="tk-main" style="padding:16px 17px 14px">
+                <div class="row"><span class="chip" style="background:rgba(255,255,255,.12);border-color:transparent;color:#fff;height:24px;font-size:11px">@atticbirds</span>
+                  <span class="sp"></span><span class="code" style="color:rgba(255,255,255,.5)">LAST NIGHT</span></div>
+                <div class="dsp" style="font-size:27px;margin-top:10px">Vinyl night at Nikos place</div>
+                <div class="row" style="margin-top:10px;gap:14px;font-size:13px">
+                  <span class="row" style="gap:6px"><svg class="ic sm"><use href="#i-clock"/></svg><span class="mono">TUE 21:00</span></span>
+                  <span class="row" style="gap:6px"><svg class="ic sm"><use href="#i-pin"/></svg><span>Exarchia</span></span>
+                </div>
+              </div>
+              <div class="tk-perf"></div>
+              <div class="tk-stub" style="padding:12px 17px 14px">
+                <div class="punch on"></div>
+                <div class="col" style="gap:0"><b style="font-size:13.5px">You were in</b>
+                  <span class="tiny" style="color:rgba(255,255,255,.55)">Which is why you can add to this roll</span></div>
+                <span class="sp"></span>
+                <div class="stack"><div class="av xs c2">&#925;</div><div class="av xs c6">&#917;</div><div class="av xs c3">&#924;</div><div class="av xs c5">+3</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:20px">
+            <span class="lbl">Memories</span>
+            <div class="pgrid" style="margin-top:10px">
+              <div class="padd"><svg class="ic"><use href="#i-plus"/></svg></div>
+              <div class="ptile ph ph-vinyl"><span class="pdel"><svg class="ic sm" style="width:11px;height:11px"><use href="#i-x"/></svg></span></div>
+              <div class="ptile ph ph-roof"></div>
+              <div class="ptile ph ph-tavli"><span class="pdel"><svg class="ic sm" style="width:11px;height:11px"><use href="#i-x"/></svg></span></div>
+              <div class="ptile ph ph-dawn"></div>
+            </div>
+            <span class="tiny" style="display:block;margin-top:9px;line-height:1.5">Four photos from three people. The &#215; is only on yours &#8212; the row nobody else can delete.</span>
+          </div>
+
+          <div class="pad" style="margin-top:22px">
+            <div class="row"><i class="dot" style="background:var(--solive)"></i><span class="lbl" style="margin-left:6px">Going &#183; 6</span></div>
+            <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:9px">
+              <span class="chip"><div class="av xs c1">&#916;</div>Dimitris</span>
+              <span class="chip"><div class="av xs c2">&#925;</div>Nikos</span>
+              <span class="chip"><div class="av xs c6">&#917;</div>Elena</span>
+              <span class="chip"><div class="av xs c3">&#924;</div>Maria</span>
+            </div>
+          </div>
+
+          <div class="pad" style="margin-top:20px;padding-bottom:150px">
+            <div class="row"><i class="dot ru"></i><span class="lbl" style="margin-left:6px">Could not make it &#183; 2</span></div>
+            <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:9px">
+              <span class="chip"><div class="av xs c5">&#915;</div>Giorgos</span>
+              <span class="chip"><div class="av xs c4">&#931;</div>Sofia</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="fade"></div>
+        <div class="tabs">
+          <div class="tab on"><svg class="ic"><use href="#i-ticket"/></svg><span>Today</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-compass"/></svg><span>Explore</span></div>
+          <div class="tabplus"><svg class="ic"><use href="#i-plus"/></svg></div>
+          <div class="tab"><svg class="ic"><use href="#i-chat"/></svg><span>Parea</span></div>
+          <div class="tab"><svg class="ic"><use href="#i-user"/></svg><span>You</span></div>
+        </div>
+        <div class="hi"></div>
+      </div></div></div>
+      <div class="cap">
+        <b>A plan that already happened <span class="built yes">Built</span></b>
+        <span>The memory is not a separate place &#8212; it is the same plan, later. Open a night that has passed and the roll is sitting under the ticket. The add tile appears only if you punched in: the database refuses a photo from anyone who was not, so the button never offers what would be rejected.</span>
+        <span class="tagline">Photos belong to the plan &#183; library picker &#183; only attendees add</span>
+      </div>
+    </div>
+
+    <!-- S14 &#183; THE ASK -->
     <div class="slot">
       <div class="frame"><div class="phone"><div class="island"></div><div class="scr dark" style="background:#080E16">
         <div class="ph ph-vinyl" style="position:absolute;inset:0"></div>
@@ -1800,7 +1908,7 @@ a{color:inherit}
         <div class="hi"></div>
       </div></div></div>
       <div class="cap">
-        <b>The ask</b>
+        <b>The ask <span class="built no">Not yet</span></b>
         <span>The one moment Parea is allowed to interrupt you: right after a plan ends, with a window that closes. It names the ticket you punched and who has posted already, because that is what actually makes you lift the phone.</span>
         <span class="tagline">Post-event capture · window · both cameras</span>
       </div>
@@ -1891,7 +1999,7 @@ a{color:inherit}
         <div class="hi"></div>
       </div></div></div>
       <div class="cap">
-        <b>The wall</b>
+        <b>The wall <span class="built no">Not yet</span></b>
         <span>A month of nights, one tile each, empty days left as outlines so the gaps are part of the picture. The yellow ring in the corner is the same punch from the ticket — proof you were there, not just invited. Switch the segment and you are looking at the whole squad's month instead of your own.</span>
         <span class="tagline">Memories calendar · per squad · streak</span>
       </div>
@@ -1951,7 +2059,7 @@ a{color:inherit}
         <div class="hi"></div>
       </div></div></div>
       <div class="cap">
-        <b>One night, opened</b>
+        <b>One night, opened <span class="built no">Not yet</span></b>
         <span>The stub is printed over the photo, so the picture and the plan it came from are never separated. Everyone who punched in that night contributed to the same roll — nine photos, one memory, no individual posts to scroll past.</span>
         <span class="tagline">Memory detail · shared roll · reactions</span>
       </div>

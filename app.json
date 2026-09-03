@@ -18,6 +18,13 @@
           "locationWhenInUsePermission": "Parea uses your location to show you what is happening nearby. It is never stored or shared."
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Parea uses your photos so you can add them to a night you were part of.",
+          "cameraPermission": "Parea uses the camera so you can add a photo to a night you were part of."
+        }
+      ],
       "expo-font",
       "expo-status-bar"
     ],
