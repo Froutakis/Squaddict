@@ -1,6 +1,8 @@
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
 import { toEventTags, type EventTag } from "../lib/tags";
+import { newId } from "../lib/ids";
+import { removeImage, uploadImage, type PickedImage } from "./serviceMedia";
 
 type EventRow = {
   id: string;
@@ -23,6 +25,16 @@ type AttendeeRow = {
   user_id: string;
   status: string;
   profiles: { display_name: string } | null;
+};
+
+type EventPhotoRow = {
+  id: string;
+  event_id: string;
+  user_id: string;
+  path: string;
+  width: number;
+  height: number;
+  created_at: string;
 };
 
 type EventRowWithJoins = EventRow & {
@@ -53,6 +65,16 @@ export type NewEvent = Omit<
 > & {
   isPublic?: boolean;
   tags?: EventTag[];
+};
+
+export type EventPhoto = {
+  id: string;
+  eventId: string;
+  userId: string;
+  path: string;
+  width: number;
+  height: number;
+  createdAt: string;
 };
 
 export type RsvpStatus = "in" | "out";
@@ -232,4 +254,89 @@ export async function getAttendees(eventId: string): Promise<Attendee[]> {
     if (error) throw error;
 
     return (data as unknown as AttendeeRow[]).map(toAttendee);
+}
+
+function toEventPhoto(r: EventPhotoRow): EventPhoto {
+  return {
+    id: r.id,
+    eventId: r.event_id,
+    userId: r.user_id,
+    path: r.path,
+    width: r.width,
+    height: r.height,
+    createdAt: r.created_at,
+  };
+}
+
+export function eventPhotoPath(groupId: string, eventId: string, photoId: string): string {
+  return `${groupId}/events/${eventId}/${photoId}.jpg`;
+}
+
+export async function getEventPhotos(eventId: string): Promise<EventPhoto[]> {
+    const { data, error } = await supabase
+        .from("event_photos")
+        .select("*")
+        .eq("event_id", eventId)
+        .order("created_at", { ascending: true });
+    if (error) throw error;
+
+    return (data as EventPhotoRow[]).map(toEventPhoto);
+}
+
+export async function getEventCovers(eventIds: string[]): Promise<Record<string, EventPhoto>> {
+    if (eventIds.length === 0) return {};
+
+    const { data, error } = await supabase
+        .from("event_photos")
+        .select("*")
+        .in("event_id", eventIds)
+        .order("created_at", { ascending: true });
+    if (error) throw error;
+
+    const covers: Record<string, EventPhoto> = {};
+    for (const row of data as EventPhotoRow[]) {
+        if (!covers[row.event_id]) covers[row.event_id] = toEventPhoto(row);
+    }
+    return covers;
+}
+
+export async function addEventPhoto(
+    event: { id: string; groupId: string },
+    image: PickedImage,
+): Promise<EventPhoto> {
+    const user = await requireUser();
+
+    const id = newId();
+    const path = eventPhotoPath(event.groupId, event.id, id);
+    const attachment = await uploadImage(path, image);
+
+    const { data, error } = await supabase
+        .from("event_photos")
+        .insert({
+            id,
+            event_id: event.id,
+            user_id: user.id,
+            path: attachment.path,
+            width: attachment.width,
+            height: attachment.height,
+        })
+        .select()
+        .single();
+
+    if (error) {
+        await removeImage(path);
+        throw error;
+    }
+
+    return toEventPhoto(data as EventPhotoRow);
+}
+
+export async function removeEventPhoto(photo: EventPhoto): Promise<void> {
+    const { error } = await supabase
+        .from("event_photos")
+        .delete()
+        .eq("id", photo.id);
+    if (error) throw error;
+
+    await removeImage(photo.path);
 }

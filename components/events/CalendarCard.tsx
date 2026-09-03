@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent } from '../../services/serviceEvents';
 import { colors, font, radius, shadow, solidFor, space } from '../../theme';
 import { addDays, keyOf, startOfWeek } from '../../lib/datetime';
@@ -11,6 +11,7 @@ type CalendarCardProps = {
   selectedDate: string | null;
   onSelectDate: (date: string) => void;
   onAddEvent?: () => void;
+  covers?: Record<string, string>;
 };
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -20,7 +21,7 @@ function shortMonth(d: Date) {
   return d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
 }
 
-export default function CalendarCard({ events, daysShown, selectedDate, onSelectDate, onAddEvent }: CalendarCardProps) {
+export default function CalendarCard({ events, daysShown, selectedDate, onSelectDate, onAddEvent, covers = {} }: CalendarCardProps) {
   const [firstDay, setFirstDay] = useState(() => startOfWeek(new Date()));
 
   const days = Array.from({ length: daysShown }, (_, i) => addDays(firstDay, i));
@@ -73,6 +74,7 @@ export default function CalendarCard({ events, daysShown, selectedDate, onSelect
             const isToday = key === todayKey;
             const isSelected = key === selectedDate;
             const dots = (colorsByDay.get(key) ?? []).slice(0, MAX_DOTS);
+            const cover = covers[key];
 
             return (
               <Pressable
@@ -85,10 +87,18 @@ export default function CalendarCard({ events, daysShown, selectedDate, onSelect
               >
                 <Text style={styles.weekday}>{WEEKDAYS[i % 7]}</Text>
                 <View style={[styles.circle, isToday && styles.today, isSelected && !isToday && styles.selected]}>
-                  <Text style={[styles.dayText, isToday && styles.dayTextToday]}>{day.getDate()}</Text>
+                  {cover ? (
+                    <>
+                      <Image source={{ uri: cover }} style={styles.cover} resizeMode="cover" />
+                      <View style={styles.scrim} />
+                    </>
+                  ) : null}
+                  <Text style={[styles.dayText, isToday && styles.dayTextToday, cover && styles.dayTextOnCover]}>
+                    {day.getDate()}
+                  </Text>
                 </View>
                 <View style={styles.dotSlot}>
-                  {dots.map((color) => (
+                  {cover ? null : dots.map((color) => (
                     <View key={color} style={[styles.dot, { backgroundColor: color }]} />
                   ))}
                 </View>
@@ -146,6 +156,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: radius.pill,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
@@ -153,8 +164,11 @@ const styles = StyleSheet.create({
   },
   today: { backgroundColor: colors.primary },
   selected: { borderColor: colors.primary },
+  cover: { ...StyleSheet.absoluteFillObject, width: undefined, height: undefined },
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(12,25,38,0.35)' },
   dayText: { color: colors.text, fontFamily: font.medium, fontSize: 13.5 },
   dayTextToday: { color: '#FFFFFF', fontFamily: font.semi },
+  dayTextOnCover: { color: '#FFFFFF', fontFamily: font.semi },
   dotSlot: { height: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2 },
   dot: { width: 4.5, height: 4.5, borderRadius: radius.pill },
 });

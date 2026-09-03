@@ -4,7 +4,6 @@ import * as ImagePicker from "expo-image-picker";
 import {
   MAX_DIMENSION,
   SIGNED_URL_TTL_SECONDS,
-  attachmentPath,
   fitWithin,
   rejectionFor,
   type Attachment,
@@ -87,12 +86,9 @@ export async function prepareImage(picked: PickedImage): Promise<PickedImage> {
  * έσκαγε πάνω σε ό,τι πρόλαβε να ανέβει στην πρώτη.
  */
 export async function uploadImage(
-  groupId: string,
-  messageId: string,
+  path: string,
   image: PickedImage,
 ): Promise<Attachment> {
-  const path = attachmentPath(groupId, messageId);
-
   const response = await fetch(image.uri);
   const blob = await response.blob();
 

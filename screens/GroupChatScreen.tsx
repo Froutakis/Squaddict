@@ -37,7 +37,7 @@ import SearchOverlay from '../components/chat/SearchOverlay';
 import SquadPicker from '../components/chat/SquadPicker';
 import { mentionIds, toMembers, type Member } from '../components/chat/mentions';
 import { dropMissingImages, restoreOutbox } from '../components/chat/cache';
-import { mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
+import { attachmentPath, mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
 import { buildRows, type LocalImage, type OutgoingMessage, type Row } from '../components/chat/messageRows';
 import {
   applyMessageUpdate,
@@ -49,11 +49,11 @@ import {
 import {
   activeTypists,
   noteTyping,
-  typingLabel,
+  typingLabel,  
   TYPING_THROTTLE_MS,
   type Typist,
 } from '../components/chat/typing';
-import { newMessageId } from '../lib/ids';
+import { newId } from '../lib/ids';
 import {
   referencedImages,
   readMessages as readCachedMessages,
@@ -776,7 +776,7 @@ export default function GroupChatScreen({
         // Η εικόνα πρώτη: αν το ανέβασμα αποτύχει, δεν θέλουμε μήνυμα που να
         // δείχνει σε αρχείο που δεν υπάρχει. Το ίδιο id δίνει το ίδιο όνομα
         // αρχείου, οπότε η επανάληψη γράφει από πάνω αντί να αφήσει δεύτερο.
-        const attachment = image ? await uploadImage(groupId, id, image) : null;
+        const attachment = image ? await uploadImage(attachmentPath(groupId, id), image) : null;
         const saved = await sendMessage(groupId, user.id, text, id, replyTo, attachment);
         setMentions(saved.id, mentionIds(text, membersRef.current));
 
@@ -814,7 +814,7 @@ export default function GroupChatScreen({
         return;
       }
 
-      const id = newMessageId();
+      const id = newId();
       const answering = replyingTo;
       const image = pendingImage;
 
@@ -982,7 +982,7 @@ export default function GroupChatScreen({
       setError(null);
       // Μόνιμο αντίγραφο εδώ και όχι στην αποστολή: ανάμεσα στα δύο μπορεί να
       // περάσει ώρα, και ο επεξεργαστής γράφει σε προσωρινή μνήμη.
-      setPendingImage(persistImage(ready, newMessageId()));
+      setPendingImage(persistImage(ready, newId()));
     } catch (problem) {
       console.error('[squaddict] η επιλογή φωτογραφίας απέτυχε:', problem);
       setError(problem instanceof Error ? problem.message : "Couldn't use that photo.");
