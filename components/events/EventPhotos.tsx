@@ -1,17 +1,107 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   addEventPhoto,
   getEventPhotos,
   removeEventPhoto,
   type EventPhoto,
+  type MyEvent,
 } from '../../services/serviceEvents';
-import { pickImage, prepareImage, signImages } from '../../services/serviceMedia';
+import { pickImage, prepareImage, signImages, takePhoto } from '../../services/serviceMedia';
 import type { SignedMap } from '../chat/media';
-import { colors, font, radius, space, textSize } from '../../theme';
+import { photoWindow, windowLeftLabel } from '../../lib/datetime';
+import { colors, font, radius, solidFor, space, textSize } from '../../theme';
 
 const TILE = 72;
+
+type PhotoSource = 'camera' | 'library';
+
+async function capture(source: PhotoSource, event: { id: string; groupId: string }) {
+  const picked = source === 'camera' ? await takePhoto() : await pickImage();
+  if (!picked) return null;
+
+  const ready = await prepareImage(picked);
+  const photo = await addEventPhoto(event, ready);
+  const fresh = await signImages([photo.path]);
+
+  return { photo, signed: fresh };
+}
+
+function messageFor(problem: unknown) {
+  if (typeof problem === 'string' && problem.length > 0) return problem;
+
+  if (problem !== null && typeof problem === 'object') {
+    const shape = problem as { message?: unknown; code?: unknown; statusCode?: unknown };
+    const code = shape.code ?? shape.statusCode;
+
+    if (typeof shape.message === 'string' && shape.message.length > 0) {
+      return code ? `${shape.message} (${String(code)})` : shape.message;
+    }
+  }
+
+  return 'Could not add that photo.';
+}
+
+type PhotoSourceSheetProps = {
+  visible: boolean;
+  onClose: () => void;
+  onPick: (source: PhotoSource) => void;
+};
+
+function PhotoSourceSheet({ visible, onClose, onPick }: PhotoSourceSheetProps) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={() => {}}>
+          <View style={styles.grabber} />
+          <Text style={styles.sheetTitle}>Add a photo</Text>
+
+          <Pressable
+            onPress={() => onPick('camera')}
+            accessibilityRole="button"
+            accessibilityLabel="Take a photo"
+            style={({ pressed }) => [styles.option, pressed && styles.pressed]}
+          >
+            <View style={styles.optionIcon}>
+              <Ionicons name="camera-outline" size={20} color={colors.text} />
+            </View>
+            <View style={styles.optionText}>
+              <Text style={styles.optionTitle}>Take a photo</Text>
+              <Text style={styles.optionBody}>Straight from the camera</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={17} color={colors.textFaint} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => onPick('library')}
+            accessibilityRole="button"
+            accessibilityLabel="Choose from library"
+            style={({ pressed }) => [styles.option, pressed && styles.pressed]}
+          >
+            <View style={styles.optionIcon}>
+              <Ionicons name="images-outline" size={20} color={colors.text} />
+            </View>
+            <View style={styles.optionText}>
+              <Text style={styles.optionTitle}>Choose from library</Text>
+              <Text style={styles.optionBody}>One you already took</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={17} color={colors.textFaint} />
+          </Pressable>
+
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}
+          >
+            <Text style={styles.cancelText}>Cancel</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
 
 type EventPhotosProps = {
   eventId: string;
@@ -21,11 +111,18 @@ type EventPhotosProps = {
   onChanged?: () => void;
 };
 
-export default function EventPhotos({ eventId, groupId, currentUserId, canAdd, onChanged }: EventPhotosProps) {
+export default function EventPhotos({
+  eventId,
+  groupId,
+  currentUserId,
+  canAdd,
+  onChanged,
+}: EventPhotosProps) {
   const [photos, setPhotos] = useState<EventPhoto[]>([]);
   const [signed, setSigned] = useState<SignedMap>({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -56,23 +153,20 @@ export default function EventPhotos({ eventId, groupId, currentUserId, canAdd, o
     };
   }, [eventId]);
 
-  async function handleAdd() {
+  async function handleAdd(source: PhotoSource) {
+    setAsking(false);
     setError(null);
+    setBusy(true);
 
     try {
-      const picked = await pickImage();
-      if (!picked) return;
+      const added = await capture(source, { id: eventId, groupId });
+      if (!added) return;
 
-      setBusy(true);
-      const ready = await prepareImage(picked);
-      const saved = await addEventPhoto({ id: eventId, groupId }, ready);
-      const fresh = await signImages([saved.path]);
-
-      setPhotos((current) => [...current, saved]);
-      setSigned((current) => ({ ...current, ...fresh }));
+      setPhotos((current) => [...current, added.photo]);
+      setSigned((current) => ({ ...current, ...added.signed }));
       onChanged?.();
     } catch (problem) {
-      setError(problem instanceof Error ? problem.message : 'Could not add that photo.');
+      setError(messageFor(problem));
     } finally {
       setBusy(false);
     }
@@ -106,7 +200,7 @@ export default function EventPhotos({ eventId, groupId, currentUserId, canAdd, o
       <View style={styles.grid}>
         {canAdd ? (
           <Pressable
-            onPress={handleAdd}
+            onPress={() => setAsking(true)}
             disabled={busy}
             accessibilityRole="button"
             accessibilityLabel="Add a photo"
@@ -154,6 +248,128 @@ export default function EventPhotos({ eventId, groupId, currentUserId, canAdd, o
       ) : null}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      <PhotoSourceSheet visible={asking} onClose={() => setAsking(false)} onPick={handleAdd} />
+    </View>
+  );
+}
+
+type PhotoPromptProps = {
+  event: MyEvent;
+  onChanged?: () => void;
+};
+
+export function PhotoPrompt({ event, onChanged }: PhotoPromptProps) {
+  const [photos, setPhotos] = useState<EventPhoto[]>([]);
+  const [cover, setCover] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const rows = await getEventPhotos(event.id);
+        if (cancelled) return;
+        setPhotos(rows);
+        if (rows.length === 0) {
+          setCover(null);
+          return;
+        }
+
+        const fresh = await signImages([rows[0].path]);
+        if (cancelled) return;
+        setCover(fresh[rows[0].path]?.url ?? null);
+      } catch {
+        if (!cancelled) setCover(null);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [event.id]);
+
+  async function handleAdd(source: PhotoSource) {
+    setAsking(false);
+    setError(null);
+    setBusy(true);
+
+    try {
+      const added = await capture(source, { id: event.id, groupId: event.groupId });
+      if (!added) return;
+
+      setPhotos((current) => [...current, added.photo]);
+      setCover((current) => current ?? added.signed[added.photo.path]?.url ?? null);
+      onChanged?.();
+    } catch (problem) {
+      setError(messageFor(problem));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const { closesAt } = photoWindow(event.date, event.startTime, event.endTime);
+  if (now >= closesAt) return null;
+
+  const count = photos.length;
+
+  return (
+    <View style={styles.prompt}>
+      <View style={styles.promptRow}>
+        <View style={styles.thumb}>
+          {cover ? (
+            <Image source={{ uri: cover }} style={styles.image} resizeMode="cover" />
+          ) : (
+            <View style={[styles.image, { backgroundColor: solidFor(event.groupName) }]} />
+          )}
+        </View>
+
+        <View style={styles.promptBody}>
+          <View style={styles.promptHead}>
+            <Text style={styles.label}>Add a memory</Text>
+            <View style={styles.spacer} />
+            <Text style={styles.left}>{windowLeftLabel(closesAt, now)}</Text>
+          </View>
+
+          <Text style={styles.promptTitle} numberOfLines={1}>
+            {event.title}
+          </Text>
+          <Text style={styles.promptBodyText} numberOfLines={2}>
+            {count === 0
+              ? 'Nobody has added a photo yet. Go first.'
+              : `${count} ${count === 1 ? 'photo' : 'photos'} so far. Add yours.`}
+          </Text>
+        </View>
+
+        <Pressable
+          onPress={() => setAsking(true)}
+          disabled={busy}
+          accessibilityRole="button"
+          accessibilityLabel="Add a photo"
+          accessibilityState={{ disabled: busy }}
+          style={({ pressed }) => [styles.promptBtn, pressed && styles.pressed]}
+        >
+          {busy ? (
+            <ActivityIndicator color={colors.textOnBrand} />
+          ) : (
+            <Ionicons name="camera" size={19} color={colors.textOnBrand} />
+          )}
+        </Pressable>
+      </View>
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      <PhotoSourceSheet visible={asking} onClose={() => setAsking(false)} onPick={handleAdd} />
     </View>
   );
 }
@@ -161,6 +377,7 @@ export default function EventPhotos({ eventId, groupId, currentUserId, canAdd, o
 const styles = StyleSheet.create({
   wrap: { gap: space.sm },
   loader: { marginVertical: space.md },
+  spacer: { flex: 1 },
 
   label: {
     color: colors.textSoft,
@@ -202,4 +419,91 @@ const styles = StyleSheet.create({
 
   empty: { color: colors.textFaint, fontFamily: font.medium, fontSize: textSize.body },
   error: { color: colors.danger, fontFamily: font.medium, fontSize: textSize.body },
+
+  prompt: {
+    gap: space.xs,
+    padding: space.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  promptRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  thumb: { width: 50, height: 64, borderRadius: radius.sm, overflow: 'hidden' },
+  promptBody: { flex: 1, minWidth: 0, gap: 2 },
+  promptHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  left: { color: colors.accent, fontFamily: font.mono, fontSize: 9.5, letterSpacing: 1 },
+  promptTitle: {
+    color: colors.text,
+    fontFamily: font.title,
+    fontSize: textSize.lead,
+    letterSpacing: -0.2,
+  },
+  promptBodyText: {
+    color: colors.textSoft,
+    fontFamily: font.medium,
+    fontSize: textSize.small,
+    lineHeight: 17,
+  },
+  promptBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.sm,
+    backgroundColor: colors.text,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheet: {
+    gap: space.xs,
+    paddingHorizontal: space.lg,
+    paddingTop: space.sm,
+    paddingBottom: space.xl,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    backgroundColor: colors.surface,
+  },
+  grabber: {
+    width: 40,
+    height: 4,
+    alignSelf: 'center',
+    marginBottom: space.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.borderStrong,
+  },
+  sheetTitle: {
+    color: colors.text,
+    fontFamily: font.display,
+    fontSize: textSize.heading,
+    letterSpacing: -0.3,
+    marginBottom: space.xs,
+  },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.bg,
+  },
+  optionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionText: { flex: 1, minWidth: 0, gap: 1 },
+  optionTitle: { color: colors.text, fontFamily: font.semi, fontSize: textSize.base },
+  optionBody: { color: colors.textFaint, fontFamily: font.medium, fontSize: textSize.small },
+  cancel: {
+    marginTop: space.xs,
+    paddingVertical: space.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelText: { color: colors.textSoft, fontFamily: font.semi, fontSize: textSize.base },
 });

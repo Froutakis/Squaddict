@@ -8,7 +8,7 @@ import { getGroupsForUser } from '../services/serviceGroup';
 import { clearRsvp, getEventCovers, getMyEvents, setRsvp } from '../services/serviceEvents';
 import { signImages } from '../services/serviceMedia';
 import { colors, font, layout, space } from '../theme';
-import { dayFilterLabel, keyOf } from '../lib/datetime';
+import { dayFilterLabel, inPhotoWindow, keyOf } from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
 import DayFilterRow from '../components/home/DayFilterRow';
 import ListEmpty from '../components/home/ListEmpty';
@@ -18,6 +18,7 @@ import CalendarCard from '../components/events/CalendarCard';
 import EventCard, { type EventCardData } from '../components/events/EventCard';
 import UpNext from '../components/events/UpNext';
 import EventOfTheWeek, { bestOfWeek } from '../components/events/EventOfTheWeek';
+import { PhotoPrompt } from '../components/events/EventPhotos';
 import EventSheet from '../components/events/EventSheet';
 import EventFormSheet from '../components/events/EventFormSheet';
 import GroupFormSheet from '../components/group/GroupFormSheet';
@@ -145,6 +146,9 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     dayMode ? visible.filter((e) => e.date === selectedDate) : upcoming.slice(1),
   );
   const weekBest = dayMode ? null : bestOfWeek(visible, new Date());
+  const wantsPhoto = visible.find(
+    (e) => e.myStatus === 'in' && inPhotoWindow(e.date, e.startTime, e.endTime),
+  );
 
   const pastIds = events
     .filter((e) => e.date < today)
@@ -242,10 +246,18 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     return (
       <>
 
+        {wantsPhoto ? (
+          <View style={styles.body}>
+            <PhotoPrompt
+              event={wantsPhoto}
+              onChanged={() => setPhotoNonce((n) => n + 1)}
+            />
+          </View>
+        ) : null}
+
         <View style={styles.body}>
           <CalendarCard
             events={visible}
-            daysShown={7}
             selectedDate={selectedDate}
             onSelectDate={(d) => setSelectedDate(d === selectedDate ? null : d)}
             onAddEvent={() => openNewEvent(selectedDate)}
