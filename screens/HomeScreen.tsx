@@ -43,12 +43,6 @@ function toCardData(event: MyEvent): EventCardData {
   };
 }
 
-function unansweredFirst(list: MyEvent[]): MyEvent[] {
-  return [...list].sort(
-    (a, b) => Number(a.myStatus !== undefined) - Number(b.myStatus !== undefined),
-  );
-}
-
 export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const [displayName, setDisplayName] = useState('');
   const [groups, setGroups] = useState<Group[]>([]);
@@ -142,9 +136,9 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const visible = squadId ? events.filter((e) => e.groupId === squadId) : events;
   const upcoming = visible.filter((e) => e.date >= today);
   const upNextEvent = dayMode ? undefined : upcoming[0];
-  const listEvents = unansweredFirst(
-    dayMode ? visible.filter((e) => e.date === selectedDate) : upcoming.slice(1),
-  );
+  const pool = dayMode ? visible.filter((e) => e.date === selectedDate) : upcoming.slice(1);
+  const waiting = pool.filter((e) => e.myStatus === undefined);
+  const later = pool.filter((e) => e.myStatus !== undefined);
   const weekBest = dayMode ? null : bestOfWeek(visible, new Date());
   const wantsPhoto = visible.find(
     (e) => e.myStatus === 'in' && inPhotoWindow(e.date, e.startTime, e.endTime),
@@ -246,6 +240,17 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     return (
       <>
 
+        {upNextEvent ? (
+          <View style={styles.body}>
+            <SectionLabel>Up next</SectionLabel>
+            <UpNext
+              event={upNextEvent}
+              onPress={() => setOpenEvent(upNextEvent)}
+              onRsvp={(status) => handleRsvp(upNextEvent.id, status)}
+            />
+          </View>
+        ) : null}
+
         {wantsPhoto ? (
           <View style={styles.body}>
             <PhotoPrompt
@@ -280,29 +285,37 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
           </View>
         ) : null}
 
-        {upNextEvent ? (
+        {waiting.length > 0 ? (
           <View style={styles.body}>
-            <SectionLabel>Up next</SectionLabel>
-            <UpNext
-              event={upNextEvent}
-              onPress={() => setOpenEvent(upNextEvent)}
-              onRsvp={(status) => handleRsvp(upNextEvent.id, status)}
-            />
+            <SectionLabel count={waiting.length}>Waiting on you</SectionLabel>
+            {waiting.map((event) => (
+              <EventCard
+                key={event.id}
+                event={toCardData(event)}
+                action="rsvp"
+                onPress={() => setOpenEvent(event)}
+                onRsvp={(status) => handleRsvp(event.id, status)}
+              />
+            ))}
           </View>
         ) : null}
 
         <View style={styles.body}>
           <SectionLabel>{dayMode ? 'On this day' : 'Later'}</SectionLabel>
 
-          {listEvents.length === 0 ? (
-            <ListEmpty
-              title={dayMode ? `Nothing on ${dayFilterLabel(selectedDate)}` : 'Nothing else planned'}
-              body="A free evening is a terrible thing to waste."
-              actionLabel="Propose something"
-              onAction={() => openNewEvent(selectedDate)}
-            />
+          {later.length === 0 ? (
+            waiting.length === 0 ? (
+              <ListEmpty
+                title={dayMode ? `Nothing on ${dayFilterLabel(selectedDate)}` : 'Nothing else planned'}
+                body="A free evening is a terrible thing to waste."
+                actionLabel="Propose something"
+                onAction={() => openNewEvent(selectedDate)}
+              />
+            ) : (
+              <Text style={styles.quiet}>Nothing else on the books.</Text>
+            )
           ) : (
-            listEvents.map((event) => (
+            later.map((event) => (
               <EventCard
                 key={event.id}
                 event={toCardData(event)}
@@ -381,6 +394,7 @@ const styles = StyleSheet.create({
   },
   body: { paddingHorizontal: space.lg, gap: space.sm },
   error: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
+  quiet: { color: colors.textFaint, fontFamily: font.medium, fontSize: 13 },
   state: { alignItems: 'center', paddingHorizontal: space.lg, paddingVertical: space.xl, gap: space.xs },
   stateTitle: {
     color: colors.text,
