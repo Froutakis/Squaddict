@@ -3,9 +3,5 @@ node_modules/
 *.log
 debug
 .expo
-<<<<<<< HEAD
 docs
 supabase/.temp
-=======
-docs
->>>>>>> cc07c1dc5c204d55629a24b56e91f996bd1b0119
