@@ -28,21 +28,6 @@ type HomeScreenProps = {
   createNonce?: number;
 };
 
-function toCardData(event: MyEvent): EventCardData {
-  return {
-    id: event.id,
-    title: event.title,
-    date: event.date,
-    startTime: event.startTime,
-    location: event.location,
-    placeLabel: event.placeLabel,
-    squadName: event.groupName,
-    myStatus: event.myStatus,
-    going: event.going,
-    goingCount: event.going.length,
-  };
-}
-
 export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const [displayName, setDisplayName] = useState('');
   const [groups, setGroups] = useState<Group[]>([]);
@@ -73,276 +58,51 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
           getMyEvents(user.id),
         ]);
 
-        setDisplayName(profile?.name ?? '');
-        setGroups(myGroups);
-        setEvents(myEvents);
-      } catch {
-        setError("Couldn't load your week");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [user.id],
-  );
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  function applyRsvp(list: MyEvent[], eventId: string, status: RsvpStatus | null): MyEvent[] {
-    return list.map(function (event) {
-      if (event.id !== eventId) {
-        return event;
-      }
-
-      const others = event.going.filter((person) => person.id !== user.id);
-      const going =
-        status === 'in' ? [...others, { id: user.id, name: displayName }] : others;
-
-      return { ...event, myStatus: status ?? undefined, going };
-    });
-  }
-
-  async function handleRsvp(eventId: string, status: RsvpStatus | null) {
-    const previous = events;
-
-    setRsvpError(null);
-    setEvents(applyRsvp(events, eventId, status));
-
-    try {
-      if (status) {
-        await setRsvp(eventId, status);
-      } else {
-        await clearRsvp(eventId);
-      }
-    } catch {
-      setEvents(previous);
-      setRsvpError('Could not save your answer. Try again.');
-    }
-  }
-
-  useEffect(() => {
-    if (createNonce > 0) openNewEvent(selectedDate);
-  }, [createNonce]);
-
-  function openNewEvent(date: string | null) {
-    setEditEvent(null);
-    setFormDate(date);
-    setShowCreate(true);
-  }
-
-  const today = keyOf(new Date());
-  const dayMode = selectedDate !== null;
-  const visible = squadId ? events.filter((e) => e.groupId === squadId) : events;
-  const upcoming = visible.filter((e) => e.date >= today);
-  const upNextEvent = dayMode ? undefined : upcoming[0];
-  const pool = dayMode ? visible.filter((e) => e.date === selectedDate) : upcoming.slice(1);
-  const waiting = pool.filter((e) => e.myStatus === undefined);
-  const later = pool.filter((e) => e.myStatus !== undefined);
-  const weekBest = dayMode ? null : bestOfWeek(visible, new Date());
-  const wantsPhoto = visible.find(
-    (e) => e.myStatus === 'in' && inPhotoWindow(e.date, e.startTime, e.endTime),
-  );
-
-  const pastIds = events
-    .filter((e) => e.date < today)
-    .map((e) => e.id)
-    .sort()
-    .join(',');
-
-  useEffect(() => {
-    if (pastIds === '') {
-      setCovers({});
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadCovers() {
-      try {
-        const byEvent = await getEventCovers(pastIds.split(','));
-        const paths = Object.values(byEvent).map((photo) => photo.path);
-        if (paths.length === 0) {
-          if (!cancelled) setCovers({});
-          return;
+            setDisplayName(profile?.name ?? '');
+            setGroups(myGroups);
+            setEvents(myEvents);
+            setLoading(false);
         }
 
-        const signed = await signImages(paths);
-        if (cancelled) return;
-
-        const byDate: Record<string, string> = {};
-        for (const event of events) {
-          const photo = byEvent[event.id];
-          const url = photo ? signed[photo.path]?.url : undefined;
-          if (url && !byDate[event.date]) byDate[event.date] = url;
-        }
-        setCovers(byDate);
-      } catch {
-        if (!cancelled) setCovers({});
-      }
+        load();
+    },[user.id]);
+    if (loading){
+        return (
+        <SafeAreaView style={styles.center}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        </SafeAreaView>   
+        )
     }
-
-    loadCovers();
-    return () => {
-      cancelled = true;
-    };
-  }, [pastIds, photoNonce]);
-
-  function renderBody() {
-    if (loading) {
-      return (
-        <View style={styles.state}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      );
-    }
-
-    if (error) {
-      return (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>{error}</Text>
-          <Text style={styles.stateBody}>The connection dropped. Your plans are still there.</Text>
-          <View style={styles.stateButton}>
-            <Button title="Try again" onPress={load} />
-          </View>
-        </View>
-      );
-    }
-
-    if (groups.length === 0) {
-      return (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>No squads yet</Text>
-          <Text style={styles.stateBody}>
-            Start one and send the code to your people, or paste a code somebody sent you.
-          </Text>
-          <View style={styles.stateButton}>
-            <Button title="Start a squad" onPress={() => setShowSquadForm(true)} />
-          </View>
-        </View>
-      );
-    }
-
-    if (events.length === 0) {
-      return (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>Nothing on. Suspicious.</Text>
-          <Text style={styles.stateBody}>
-            Your week is wide open. Somebody has to go first — might as well be you.
-          </Text>
-          <View style={styles.stateButton}>
-            <Button title="Propose an outing" onPress={() => openNewEvent(null)} />
-          </View>
-        </View>
-      );
-    }
-
     return (
-      <>
+        <SafeAreaView style={styles.screen}>
+            <ScrollView contentContainerStyle={styles.content}>
+            <Text style={styles.greeting}>Hi{displayName ? `, ${displayName}` : ''}</Text>
+            <Text style={styles.subtitle}>{user.email}</Text>
 
-        {upNextEvent ? (
-          <View style={styles.body}>
-            <SectionLabel>Up next</SectionLabel>
-            <UpNext
-              event={upNextEvent}
-              onPress={() => setOpenEvent(upNextEvent)}
-              onRsvp={(status) => handleRsvp(upNextEvent.id, status)}
-            />
-          </View>
-        ) : null}
+            <Pressable accessibilityRole="button" onPress={() => logout()}>
+              <Text style={styles.logoutText}>Sign out</Text>
+            </Pressable>
 
-        {wantsPhoto ? (
-          <View style={styles.body}>
-            <PhotoPrompt
-              event={wantsPhoto}
-              onChanged={() => setPhotoNonce((n) => n + 1)}
-            />
-          </View>
-        ) : null}
-
-        <View style={styles.body}>
-          <CalendarCard
-            events={visible}
-            selectedDate={selectedDate}
-            onSelectDate={(d) => setSelectedDate(d === selectedDate ? null : d)}
-            onAddEvent={() => openNewEvent(selectedDate)}
-            covers={covers}
-          />
-        </View>
-
-        {dayMode ? (
-          <View style={styles.body}>
-            <DayFilterRow
-              label={dayFilterLabel(selectedDate)}
-              onClear={() => setSelectedDate(null)}
-            />
-          </View>
-        ) : null}
-
-        {rsvpError ? (
-          <View style={styles.body}>
-            <Text style={styles.error}>{rsvpError}</Text>
-          </View>
-        ) : null}
-
-        {waiting.length > 0 ? (
-          <View style={styles.body}>
-            <SectionLabel count={waiting.length}>Waiting on you</SectionLabel>
-            {waiting.map((event) => (
-              <EventCard
-                key={event.id}
-                event={toCardData(event)}
-                action="rsvp"
-                onPress={() => setOpenEvent(event)}
-                onRsvp={(status) => handleRsvp(event.id, status)}
-              />
-            ))}
-          </View>
-        ) : null}
-
-        <View style={styles.body}>
-          <SectionLabel>{dayMode ? 'On this day' : 'Later'}</SectionLabel>
-
-          {later.length === 0 ? (
-            waiting.length === 0 ? (
-              <ListEmpty
-                title={dayMode ? `Nothing on ${dayFilterLabel(selectedDate)}` : 'Nothing else planned'}
-                body="A free evening is a terrible thing to waste."
-                actionLabel="Propose something"
-                onAction={() => openNewEvent(selectedDate)}
-              />
+            <Text style={styles.sectionTitle}>Your squads</Text>
+            {groups.length === 0 ? (
+                <Text style={styles.emptyText}>You haven't joined any squad yet.</Text>
             ) : (
-              <Text style={styles.quiet}>Nothing else on the books.</Text>
-            )
-          ) : (
-            later.map((event) => (
-              <EventCard
-                key={event.id}
-                event={toCardData(event)}
-                onPress={() => setOpenEvent(event)}
-              />
-            ))
-          )}
-        </View>
+                groups.map((group) => (
+                <Text key={group.id} style={styles.itemText}>{group.name}</Text>
+                ))
+            )}
 
-        {weekBest ? (
-          <View style={styles.body}>
-            <EventOfTheWeek
-              event={toCardData(weekBest)}
-              onPress={() => setOpenEvent(weekBest)}
-            />
-          </View>
-        ) : null}
-      </>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <HomeHeader displayName={displayName} />
-        {renderBody()}
-      </ScrollView>
+            <Text style={styles.sectionTitle}>Upcoming events</Text>
+            {events.length === 0 ? (
+                <Text style={styles.emptyText}>No upcoming events.</Text>
+            ) : (
+                events.map((event) => (
+                <Text key={event.id} style={styles.itemText}>
+                    {event.date} — {event.title} ({event.groupName})
+                </Text>
+                ))
+            )}
+            </ScrollView>
 
       <EventFormSheet
         visible={showCreate}
@@ -384,31 +144,11 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  content: {
-    width: '100%',
-    maxWidth: layout.column,
-    alignSelf: 'center',
-    paddingVertical: space.md,
-    paddingBottom: 110,
-    gap: space.md,
-  },
-  body: { paddingHorizontal: space.lg, gap: space.sm },
-  error: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
-  quiet: { color: colors.textFaint, fontFamily: font.medium, fontSize: 13 },
-  state: { alignItems: 'center', paddingHorizontal: space.lg, paddingVertical: space.xl, gap: space.xs },
-  stateTitle: {
-    color: colors.text,
-    fontFamily: font.display,
-    fontSize: 21,
-    letterSpacing: -0.3,
-    textAlign: 'center',
-  },
-  stateBody: {
-    color: colors.textSoft,
-    fontFamily: font.medium,
-    fontSize: 14.5,
-    lineHeight: 21,
-    textAlign: 'center',
-  },
-  stateButton: { alignSelf: 'stretch', marginTop: space.sm },
+  content: { padding: space.lg, gap: space.sm },
+  greeting: { color: colors.text, fontFamily: font.display, fontSize: 24 },
+  subtitle: { color: colors.textSoft, fontFamily: font.medium, fontSize: 14 },
+  logoutText: { color: colors.primary, fontFamily: font.semi, fontSize: 14, marginBottom: space.md },
+  sectionTitle: { color: colors.textStrong, fontFamily: font.semi, fontSize: 17, marginTop: space.md },
+  emptyText: { color: colors.textFaint, fontFamily: font.medium, fontSize: 14 },
+  itemText: { color: colors.text, fontFamily: font.medium, fontSize: 15 },
 });
