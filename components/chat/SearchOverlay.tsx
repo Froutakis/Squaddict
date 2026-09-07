@@ -14,38 +14,19 @@ import { searchMessages, type SearchHit } from '../../services/serviceGroup';
 import { highlightParts, isSearchable, snippet } from './search';
 import { layout, paper, paperFont, radius, space } from '../../theme';
 
-/** Πόσο περιμένουμε μετά το τελευταίο πλήκτρο πριν ρωτήσουμε τη βάση. */
 const DEBOUNCE_MS = 250;
 
 type SearchOverlayProps = {
-  /** Πού ψάχνουμε. */
   groupId: string;
   visible: boolean;
   onClose: () => void;
 };
 
-/**
- * Η αναζήτηση μηνυμάτων μιας Παρέας.
- *
- * Κρατά όλη τη δική της κατάσταση — όρο, αποτελέσματα, φόρτωση. Ο γονιός ξέρει
- * μόνο αν είναι ανοιχτή. Έτσι το κλείσιμο καθαρίζει τα πάντα από μόνο του: ο
- * γονιός αλλάζει το `visible`, το component ξεστήνεται, και δεν μένει
- * παλιός όρος να εμφανιστεί την επόμενη φορά που θα ανοίξει.
- */
 export default function SearchOverlay({ groupId, visible, onClose }: SearchOverlayProps) {
   const [term, setTerm] = useState('');
-  // null = δεν έχει γίνει ακόμα αναζήτηση· [] = έγινε και δεν βρήκε τίποτα.
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
 
-  /**
-   * Η αναζήτηση, με καθυστέρηση.
-   *
-   * Χωρίς αυτήν θα έφευγε ένα ερώτημα ανά πλήκτρο, και οι απαντήσεις θα
-   * επέστρεφαν με άλλη σειρά από αυτή που στάλθηκαν — το «παρα» θα μπορούσε να
-   * απαντηθεί μετά το «παραλ» και να δείξει λάθος αποτελέσματα. Η σημαία
-   * `cancelled` κόβει κάθε απάντηση που δεν αφορά πια τον τρέχοντα όρο.
-   */
   useEffect(() => {
     if (!visible) {
       return;
@@ -131,7 +112,6 @@ export default function SearchOverlay({ groupId, visible, onClose }: SearchOverl
   );
 }
 
-/** Ένα αποτέλεσμα — ο όρος τονισμένος μέσα σε ένα απόσπασμα του μηνύματος. */
 function Hit({ hit, term }: { hit: SearchHit; term: string }) {
   const text = snippet(hit.content, term);
   const who = hit.senderName || 'Someone';
@@ -147,8 +127,6 @@ function Hit({ hit, term }: { hit: SearchHit; term: string }) {
       </Text>
       <Text style={styles.hitText}>
         {highlightParts(text, term).map(function (part, index) {
-          // Το key είναι ο δείκτης επίτηδες: τα κομμάτια δεν αναδιατάσσονται
-          // ποτέ — ξαναφτιάχνονται από την αρχή σε κάθε αλλαγή του όρου.
           return (
             <Text key={index} style={part.match ? styles.hitMatch : undefined}>
               {part.text}
@@ -161,8 +139,6 @@ function Hit({ hit, term }: { hit: SearchHit; term: string }) {
 }
 
 const styles = StyleSheet.create({
-  // Πλήρης οθόνη, όχι φύλλο: τα αποτελέσματα θέλουν ύψος, και στο κινητό το
-  // πληκτρολόγιο τρώει το μισό.
   screen: { flex: 1, backgroundColor: paper.bg },
   bar: {
     flexDirection: 'row',
@@ -185,7 +161,6 @@ const styles = StyleSheet.create({
     color: paper.ink,
     fontFamily: paperFont.regular,
     fontSize: 14,
-    // Το web βάζει δικό του περίγραμμα στο focus — το σβήνουμε.
     outlineStyle: 'none',
   } as any,
   results: { flex: 1 },
@@ -218,7 +193,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   hitText: { color: paper.ink, fontFamily: paperFont.regular, fontSize: 14, lineHeight: 20 },
-  // Τονισμός με φόντο και όχι μόνο με χρώμα γράμματος: διαβάζεται και όταν ο
-  // όρος πέφτει πάνω σε σημεία στίξης.
   hitMatch: { backgroundColor: paper.accentSoft, color: paper.accent, fontFamily: paperFont.semi },
 });

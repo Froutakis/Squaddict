@@ -13,27 +13,21 @@ import { paper, paperFont, radius, space } from '../../theme';
 
 type ChatHeaderProps = {
   name: string;
-  /** Πόσα μέλη έχει η Παρέα. */
   memberCount: number;
-  /** Πόσοι από αυτά είναι συνδεδεμένοι τώρα. */
   online: number;
   onBack: () => void;
   onSearch: () => void;
+  onOpenGroup: () => void;
 };
 
-/**
- * Η κορυφή της συνομιλίας: πίσω, μονόγραμμα, όνομα, και η λούπα.
- *
- * Ο υπότιτλος βγαίνει από την presenceLabel και όχι από συνένωση εδώ: ο
- * ενικός/πληθυντικός και το «· N online» κρίνονται μαζί, και η λογική τους
- * δοκιμάζεται στο test-typing.
- */
+
 export default function ChatHeader({
   name,
   memberCount,
   online,
   onBack,
   onSearch,
+  onOpenGroup,
 }: ChatHeaderProps) {
   return (
     <View style={styles.bar}>
@@ -63,11 +57,18 @@ export default function ChatHeader({
       >
         <Ionicons name="search" size={19} color={paper.ink} />
       </Pressable>
+      <Pressable 
+        onPress={onOpenGroup}
+        accessibilityRole="button"
+        accessibilityLabel="Open group"
+        style={roundButtonStyle}
+      >
+        <Ionicons name="information-circle-outline" size={19} color={paper.ink} />
+      </Pressable>
     </View>
   );
 }
 
-/** Το Pressable καλεί αυτή τη συνάρτηση και της δίνει { pressed: true/false }. */
 function roundButtonStyle({ pressed }: { pressed: boolean }): StyleProp<ViewStyle> {
   if (pressed) {
     return [styles.round, styles.pressed];
@@ -76,7 +77,6 @@ function roundButtonStyle({ pressed }: { pressed: boolean }): StyleProp<ViewStyl
 }
 
 const styles = StyleSheet.create({
-  // Μία λεπτή γραμμή χωρίζει τον header από τα μηνύματα — καμία σκιά.
   bar: {
     flexDirection: 'row',
     alignItems: 'center',

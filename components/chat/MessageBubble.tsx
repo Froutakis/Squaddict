@@ -8,11 +8,8 @@ import { paper, paperFont, shadow, space } from '../../theme';
 import { SquadMonogram } from './SquadPicker';
 
 const AVATAR = 24;
-/** Στρογγυλή εξωτερική γωνία φυσαλίδας. */
 const ROUND = 18;
-/** Οι "εσωτερικές" γωνίες μέσα σε μια σερί μηνυμάτων. */
 const TIGHT = 6;
-/** Η μύτη στο τελευταίο μήνυμα της σερί. */
 const TAIL = 5;
 
 function timeLabel(iso: string) {
@@ -24,48 +21,27 @@ function timeLabel(iso: string) {
 type MessageBubbleProps = {
   content: string;
   senderName: string;
-  /** ISO timestamp από τη βάση. */
   createdAt: string;
-  /** Δικό μου μήνυμα — πάει δεξιά, σε μελανί κουτί. */
   mine: boolean;
-  /** Πρώτο μιας σερί του ίδιου αποστολέα — μόνο εκεί δείχνουμε όνομα. */
   isFirst: boolean;
-  /** Τελευταίο της σερί — μόνο εκεί δείχνουμε avatar και ώρα. */
   isLast: boolean;
-  /** Λείπει για όσα έχουν επιβεβαιωθεί από τη βάση. */
   status?: 'pending' | 'failed';
-  /** Καλείται όταν πατηθεί μήνυμα που απέτυχε. */
   onRetry?: () => void;
-  /** Πότε διορθώθηκε· null αν δεν πειράχτηκε ποτέ. */
   editedAt?: string | null;
-  /** Σβησμένο μήνυμα: η φυσαλίδα μένει, το κείμενο έχει ήδη φύγει από τη βάση. */
   deleted?: boolean;
-  /** Παρατεταμένο πάτημα — ανοίγει το μενού. */
   onLongPress?: () => void;
-  /** Αντιδράσεις, ήδη ομαδοποιημένες. Άδειο = δεν δείχνουμε τίποτα. */
   reactions?: ReactionCount[];
-  /** Πάτημα σε chip: βάζει τη δική μου, ή την παίρνει πίσω αν είναι ήδη αυτή. */
   onToggleReaction?: (emoji: string) => void;
-  /** Το μήνυμα που παρατίθεται· null αν δεν είναι απάντηση. */
   reply?: ReplyQuote | null;
-  /** Είναι απάντηση, αλλά το πρωτότυπο δεν είναι φορτωμένο. */
   replyUnknown?: boolean;
-  /** Τα μέλη της Παρέας — για να αναγνωριστούν οι αναφορές μέσα στο κείμενο. */
   members?: Member[];
-  /** Ποιος είμαι — η αναφορά σε εμένα ξεχωρίζει από τις υπόλοιπες. */
   meId?: string;
-  /**
-   * Πού βρίσκεται η εικόνα ΤΩΡΑ: υπογεγραμμένος σύνδεσμος για ό,τι έχει ανέβει,
-   * τοπικό αρχείο για ό,τι ταξιδεύει ακόμα. Η φυσαλίδα δεν ξέρει τη διαφορά.
-   */
   imageUri?: string | null;
   imageWidth?: number;
   imageHeight?: number;
-  /** Πάτημα στη φωτογραφία — άνοιγμα σε πλήρη οθόνη. */
   onOpenImage?: () => void;
 };
 
-/** Το μεγαλύτερο που επιτρέπεται να πιάσει μια φωτογραφία μέσα στη λίστα. */
 const PHOTO_MAX_WIDTH = 232;
 const PHOTO_MAX_HEIGHT = 300;
 
@@ -92,7 +68,6 @@ export default function MessageBubble({
   imageHeight = 0,
   onOpenImage,
 }: MessageBubbleProps) {
-  /** Τα κομμάτια του μηνύματος, ή null όταν δεν υπάρχει καμία αναφορά. */
   const body = useMemo(
     function () {
       if (!members || members.length === 0 || content.length === 0) {
@@ -104,7 +79,6 @@ export default function MessageBubble({
     [content, members],
   );
 
-  /** Το σώμα του μηνύματος, με τις αναφορές τονισμένες. */
   function renderText(textStyle: any) {
     if (body === null) {
       return <Text style={textStyle}>{content}</Text>;
@@ -138,7 +112,6 @@ export default function MessageBubble({
   const photo = bubbleSize(imageWidth, imageHeight, PHOTO_MAX_WIDTH, PHOTO_MAX_HEIGHT);
   const captionOnly = content.trim().length > 0;
 
-  /** Φωτογραφία, λεζάντα, ή και τα δύο. */
   function renderContent(textStyle: any) {
     if (!hasPhoto) {
       return renderText(textStyle);
@@ -165,13 +138,8 @@ export default function MessageBubble({
     );
   }
 
-  // Πατητή γίνεται η φυσαλίδα σε δύο περιπτώσεις: για επανάληψη αποστολής, ή
-  // για το μενού επεξεργασίας. Ένα σβησμένο μήνυμα δεν πατιέται καθόλου.
   const bubblePress = !deleted && ((status === 'failed' && onRetry) || onLongPress);
 
-  // Στρογγυλή γωνία μόνο στις εξωτερικές άκρες, ώστε η σερί να διαβάζεται σαν μία
-  // στήλη. Στο τελευταίο της σερί η κάτω γωνία κόβεται σε μύτη — η ουρά που
-  // δείχνει ποιος μιλάει.
   const shape = mine
     ? {
         borderTopRightRadius: isFirst ? ROUND : TIGHT,
@@ -184,7 +152,7 @@ export default function MessageBubble({
 
   return (
     <View style={[styles.row, mine ? styles.rowMine : styles.rowOther, isFirst && styles.rowFirst]}>
-      {/* Το avatar μπαίνει μόνο στο τελευταίο μήνυμα της σερί· αλλιώς κρατάμε τη θέση του κενή. */}
+      {}
       {mine ? null : isLast ? (
         <SquadMonogram name={senderName || '?'} size={AVATAR} />
       ) : (
@@ -198,8 +166,7 @@ export default function MessageBubble({
           </Text>
         ) : null}
 
-        {/* Η παράθεση κάθεται πάνω από τη φυσαλίδα, με κάθετη γραμμή αριστερά —
-            το ίδιο σχήμα που χρησιμοποιεί κάθε πρόγραμμα αλληλογραφίας. */}
+        {}
         {reply || replyUnknown ? (
           <View style={styles.quote}>
             <View style={styles.quoteBar} />
@@ -217,8 +184,6 @@ export default function MessageBubble({
                   </Text>
                 </>
               ) : (
-                // Απάντηση σε μήνυμα εκτός φορτωμένου ιστορικού. Δεν εφευρίσκουμε
-                // περιεχόμενο — λέμε ότι υπάρχει και ότι δεν το έχουμε.
                 <Text style={[styles.quoteBody, styles.quoteGone]} numberOfLines={1}>
                   Replying to an earlier message
                 </Text>
@@ -227,8 +192,7 @@ export default function MessageBubble({
           </View>
         ) : null}
 
-        {/* Σβησμένο μήνυμα: δεν δείχνουμε ποτέ το content — έχει ήδη μηδενιστεί
-            στη βάση, αλλά ούτε καν το ρωτάμε. Ό,τι κι αν έρθει, γράφουμε το ίδιο. */}
+        {}
         {deleted ? (
           <View
             style={[styles.bubble, styles.bubbleDeleted, shape]}
@@ -262,8 +226,6 @@ export default function MessageBubble({
             {renderContent([styles.text, mine && styles.textMine])}
           </Pressable>
         ) : (
-          /* Χωρίς χειριστή αφής όπου δεν χρειάζεται: η λίστα δεν πρέπει να
-             μαζεύει χιλιάδες άχρηστους Pressable. */
           <View
             style={[
               styles.bubble,
@@ -278,8 +240,7 @@ export default function MessageBubble({
           </View>
         )}
 
-        {/* Τα chips κάθονται κάτω από τη φυσαλίδα, στην ίδια πλευρά με αυτήν —
-            γι' αυτό η στοίχιση έρχεται από το columnMine/columnOther. */}
+        {}
         {reactions && reactions.length > 0 ? (
           <View style={styles.reactions}>
             {reactions.map(function (item) {
@@ -299,8 +260,7 @@ export default function MessageBubble({
                   style={item.mine ? [styles.chip, styles.chipMine] : styles.chip}
                 >
                   <Text style={styles.chipEmoji}>{item.emoji}</Text>
-                  {/* Το πλήθος μπαίνει μόνο από δύο και πάνω: με έναν, ο
-                      αριθμός δεν λέει τίποτα που δεν λέει το ίδιο το emoji. */}
+                  {}
                   {item.count > 1 ? (
                     <Text style={item.mine ? [styles.chipCount, styles.chipCountMine] : styles.chipCount}>
                       {item.count}
@@ -312,8 +272,7 @@ export default function MessageBubble({
           </View>
         ) : null}
 
-        {/* Όσο εκκρεμεί ή έχει αποτύχει, η κατάσταση παίρνει τη θέση της ώρας:
-            η ώρα ενός μηνύματος που δεν έφτασε ποτέ δεν σημαίνει τίποτα. */}
+        {}
         {status === 'failed' ? (
           <Text style={styles.failedNote}>Not sent · Tap to try again</Text>
         ) : status === 'pending' ? (
@@ -321,8 +280,7 @@ export default function MessageBubble({
         ) : isLast ? (
           <Text style={styles.time}>
             {timeLabel(createdAt)}
-            {/* Η σήμανση μένει για πάντα: αυτό είναι το αντάλλαγμα για το ότι
-                δεν βάλαμε χρονικό όριο στην επεξεργασία. */}
+            {}
             {editedAt && !deleted ? ' · edited' : ''}
           </Text>
         ) : null}
@@ -331,7 +289,6 @@ export default function MessageBubble({
   );
 }
 
-/** Διαχωριστικό ημέρας — ένα μικρό χάπι στο κέντρο, χωρίς γραμμές εκατέρωθεν. */
 export function DateSeparator({ label }: { label: string }) {
   return (
     <View style={styles.separator}>
@@ -351,19 +308,14 @@ const styles = StyleSheet.create({
   columnOther: { alignItems: 'flex-start' },
 
   bubble: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: ROUND },
-  // Με φωτογραφία το γέμισμα γίνεται λεπτό πλαίσιο· χωρίς λεζάντα φεύγει τελείως
-  // και η εικόνα πιάνει ολόκληρη τη φυσαλίδα.
   bubblePhoto: { padding: 4, overflow: 'hidden' },
   bubbleBarePhoto: { padding: 0 },
   photo: { borderRadius: ROUND - 4, backgroundColor: paper.surfaceAlt },
   caption: { paddingHorizontal: 10, paddingTop: 7, paddingBottom: 3 },
   bubbleMine: { backgroundColor: paper.mine },
   bubbleOther: { backgroundColor: paper.surface, ...shadow.bubble },
-  // Ξεθωριασμένο όσο ταξιδεύει — αρκετά για να φανεί, όχι τόσο ώστε να μη διαβάζεται.
   bubblePending: { opacity: 0.55 },
   bubbleFailed: { backgroundColor: paper.danger },
-  // Το σβησμένο δεν παίρνει ούτε το μελανί των δικών μου ούτε το λευκό των
-  // άλλων: διάστικτο περίγραμμα χωρίς γέμισμα, ώστε να διαβάζεται σαν κενό.
   bubbleDeleted: {
     backgroundColor: 'transparent',
     borderWidth: 1,
@@ -403,8 +355,6 @@ const styles = StyleSheet.create({
     borderColor: paper.line,
     borderRadius: 999,
   },
-  // Η δική μου ξεχωρίζει με περίγραμμα και όχι με γέμισμα: το emoji πρέπει να
-  // παραμείνει το πιο έντονο πράγμα στο chip.
   chipMine: { borderColor: paper.accent, backgroundColor: paper.accentSoft },
   chipEmoji: { fontSize: 12, lineHeight: 16 },
   chipCount: { color: paper.inkSoft, fontFamily: paperFont.medium, fontSize: 11 },

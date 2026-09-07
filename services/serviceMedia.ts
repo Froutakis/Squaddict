@@ -14,17 +14,12 @@ import { supabase } from "./supabaseClient";
 
 const BUCKET = "chat";
 
-/** Μια εικόνα έτοιμη για ανέβασμα — τοπικό αρχείο, όχι ακόμα στη βάση. */
 export type PickedImage = {
   uri: string;
   width: number;
   height: number;
 };
 
-/**
- * Ανοίγει τη συλλογή. `null` όταν ο χρήστης το ακύρωσε ή αρνήθηκε την άδεια —
- * και τα δύο είναι απάντηση, όχι σφάλμα.
- */
 export async function pickImage(): Promise<PickedImage | null> {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
@@ -64,16 +59,6 @@ export async function takePhoto(): Promise<PickedImage | null> {
   return { uri: asset.uri, width: asset.width, height: asset.height };
 }
 
-/**
- * Σμικραίνει και μετατρέπει σε jpeg.
- *
- * Χωρίς αυτό ανεβαίνει το αρχείο της κάμερας ως έχει — και κατεβαίνει ολόκληρο
- * σε κάθε συσκευή που θα ανοίξει τη συνομιλία.
- *
- * Εδώ γίνεται ΚΑΙ η μετατροπή τύπου: ό,τι κι αν διάλεξε ο χρήστης — HEIC από
- * iPhone, το στιγμιότυπο ενός Live Photo, png, gif — βγαίνει jpeg. Γι' αυτό δεν
- * ελέγχουμε τον τύπο του πρωτοτύπου πουθενά: αν διαβάζεται, ανεβαίνει.
- */
 export async function prepareImage(picked: PickedImage): Promise<PickedImage> {
   const target = fitWithin(picked.width, picked.height, MAX_DIMENSION);
   const alreadySmall =
@@ -102,14 +87,6 @@ export async function prepareImage(picked: PickedImage): Promise<PickedImage> {
   }
 }
 
-/**
- * Τα bytes του αρχείου, ΟΧΙ Blob.
- *
- * Το storage-js αγνοεί το contentType όταν του δώσεις Blob: το τυλίγει σ~ε
- * FormData και ο τύπος βγαίνει από το `blob.type`, που στο React Native πάνω σε
- * file:// URI είναι κενός. Το bucket δέχεται μόνο εικόνες και απορρίπτει.
- * Με ArrayBuffer μπαίνει κανονικό header `content-type: image/jpeg`.
- */
 async function readBytes(uri: string): Promise<ArrayBuffer> {
   if (Platform.OS === "web") {
     const response = await fetch(uri);
@@ -118,13 +95,6 @@ async function readBytes(uri: string): Promise<ArrayBuffer> {
   return await new File(uri).arrayBuffer();
 }
 
-/**
- * Ανεβάζει και γυρίζει τι πρέπει να γραφτεί στο μήνυμα.
- *
- * Το `upsert` δεν είναι ευκολία: η επανάληψη μιας αποστολής που απέτυχε φέρνει
- * το ΙΔΙΟ id, άρα το ίδιο όνομα αρχείου. Χωρίς αυτό η δεύτερη προσπάθεια θα
- * έσκαγε πάνω σε ό,τι πρόλαβε να ανέβει στην πρώτη.
- */
 export async function uploadImage(
   path: string,
   image: PickedImage,
@@ -159,12 +129,6 @@ export async function uploadImage(
   };
 }
 
-/**
- * Υπογεγραμμένοι σύνδεσμοι για μια σελίδα μηνυμάτων, με ένα αίτημα.
- *
- * Το bucket είναι κλειστό: χωρίς υπογραφή δεν υπάρχει τρόπος να δει κανείς την
- * εικόνα, ούτε καν με τη διαδρομή στο χέρι.
- */
 export async function signImages(paths: string[]): Promise<SignedMap> {
   if (paths.length === 0) {
     return {};
@@ -185,12 +149,6 @@ export async function signImages(paths: string[]): Promise<SignedMap> {
   return signed;
 }
 
-/**
- * Σβήνει το αρχείο μιας διαγραμμένης φωτογραφίας.
- *
- * Δεν πετάει: το μήνυμα έχει ήδη σβηστεί και η γραμμή δεν δείχνει πια εδώ. Ένα
- * αρχείο που έμεινε είναι απρόσιτο — κακό για τον χώρο, όχι για την ιδιωτικότητα.
- */
 export async function removeImage(path: string): Promise<void> {
   try {
     const { error } = await supabase.storage.from(BUCKET).remove([path]);
@@ -201,13 +159,6 @@ export async function removeImage(path: string): Promise<void> {
 }
 
 
-/**
- * Ο φάκελος όπου περιμένουν οι φωτογραφίες που δεν έχουν σταλεί.
- *
- * Ο επεξεργαστής εικόνας γράφει στην ΠΡΟΣΩΡΙΝΗ μνήμη, που το σύστημα αδειάζει
- * όποτε θέλει. Ένα μήνυμα που περίμενε αποστολή ξυπνούσε δείχνοντας σε αρχείο
- * που δεν υπήρχε πια.
- */
 const OUTBOX_DIR = "outbox";
 
 function outboxDirectory(): Directory {
@@ -218,13 +169,6 @@ function outboxDirectory(): Directory {
   return dir;
 }
 
-/**
- * Αντιγράφει την εικόνα σε μόνιμο φάκελο και γυρίζει τη νέα της θέση.
- *
- * Σε αποτυχία γυρίζει την εικόνα ως έχει: καλύτερα να σταλεί τώρα και να χαθεί
- * σε επανεκκίνηση, παρά να μη σταλεί καθόλου. Το web δεν έχει τέτοιο σύστημα
- * αρχείων και περνά από εδώ αμετάβλητο.
- */
 export function persistImage(image: PickedImage, name: string): PickedImage {
   try {
     const target = new File(outboxDirectory(), name + ".jpg");
@@ -239,18 +183,14 @@ export function persistImage(image: PickedImage, name: string): PickedImage {
   }
 }
 
-/** Υπάρχει ακόμα το αρχείο; */
 export function imageExists(uri: string): boolean {
   try {
     return new File(uri).exists;
   } catch {
-    // Χωρίς σύστημα αρχείων δεν μπορούμε να το διαψεύσουμε, οπότε το δεχόμαστε:
-    // η αποστολή θα το πει καθαρά αν λείπει.
     return true;
   }
 }
 
-/** Σβήνει ένα αντίγραφο που δεν χρειάζεται πια. Σιωπηλά. */
 export function discardImage(uri: string): void {
   try {
     const file = new File(uri);
@@ -258,17 +198,9 @@ export function discardImage(uri: string): void {
       file.delete();
     }
   } catch {
-    // το μαζεύει το sweepOutboxImages
   }
 }
 
-/**
- * Σβήνει ό,τι έμεινε στον φάκελο και δεν το διεκδικεί κανένα outbox.
- *
- * Χρειάζεται επειδή ο χρήστης μπορεί να διαλέξει φωτογραφία και να μην τη
- * στείλει ποτέ — να αλλάξει Παρέα, να κλείσει την εφαρμογή. Χωρίς αυτό, ο
- * φάκελος μεγαλώνει για πάντα.
- */
 export function sweepOutboxImages(keep: string[]): void {
   try {
     for (const entry of outboxDirectory().list()) {
@@ -277,6 +209,5 @@ export function sweepOutboxImages(keep: string[]): void {
       }
     }
   } catch {
-    // σιωπηλά — καθάρισμα, όχι λειτουργία
   }
 }

@@ -1,25 +1,16 @@
 import type { ChatMessage } from '../../services/serviceGroup';
 
-/**
- * Μήνυμα που έχει εμφανιστεί στην οθόνη αλλά δεν έχει επιβεβαιωθεί από τη βάση.
- * Ζει χωριστά από τα ChatMessage ώστε ο τύπος του service να μη γεμίσει
- * καταστάσεις που αφορούν μόνο την οθόνη.
- */
 export type OutgoingMessage = {
   id: string;
   content: string;
   createdAt: string;
   status: 'pending' | 'failed';
-  /** Σε ποιο μήνυμα απαντά. Ταξιδεύει μαζί του ώστε να επιβιώνει της επανεκκίνησης. */
   replyTo?: string | null;
-  /** Η φωτογραφία όσο ανεβαίνει: τοπικό αρχείο, όχι διαδρομή αποθήκης. */
   image?: LocalImage;
 };
 
-/** Εικόνα που ζει ακόμα στη συσκευή. */
 export type LocalImage = { uri: string; width: number; height: number };
 
-/** Ό,τι μπαίνει στη λίστα: είτε μήνυμα, είτε διαχωριστικό ημέρας. */
 export type Row =
   | { kind: 'date'; id: string; label: string }
   | {
@@ -28,9 +19,7 @@ export type Row =
       message: ChatMessage;
       isFirst: boolean;
       isLast: boolean;
-      /** Λείπει για όσα έχουν επιβεβαιωθεί. */
       status?: 'pending' | 'failed';
-      /** Μόνο για ανεπιβεβαίωτα: η εικόνα από τη συσκευή, πριν ανέβει. */
       image?: LocalImage;
     };
 
@@ -53,23 +42,11 @@ function dayLabel(date: Date) {
   });
 }
 
-/**
- * Χτίζει τη λίστα: διαχωριστικό σε κάθε αλλαγή ημέρας, και σημάδια για το πρώτο
- * και το τελευταίο μήνυμα κάθε σερί του ίδιου αποστολέα — εκεί μπαίνουν όνομα,
- * avatar και ώρα, ώστε τα ενδιάμεσα να κολλάνε μεταξύ τους.
- *
- * Τα `outgoing` είναι δικά μου μηνύματα που δεν έχουν επιβεβαιωθεί ακόμα. Μπαίνουν
- * στο τέλος — είναι πάντα τα νεότερα — αλλά περνούν από την ΙΔΙΑ λογική σερί με
- * τα υπόλοιπα. Αν τα κολλούσαμε απ' έξω, ένα μήνυμα που μόλις έστειλες δεν θα
- * ένωνε με τα προηγούμενα δικά σου, και η στήλη θα έσπαγε στα δύο μπροστά σου.
- */
 export function buildRows(
   messages: ChatMessage[],
   outgoing: OutgoingMessage[] = [],
   me?: { id: string; name: string },
 ): Row[] {
-  // Τα ανεπιβεβαίωτα φορούν σχήμα ChatMessage για να περάσουν από την ίδια
-  // λογική· το status τα ξεχωρίζει ξανά μόλις φτιαχτεί η γραμμή.
   const pendingStatus = new Map<string, 'pending' | 'failed'>();
   const pendingImage = new Map<string, LocalImage>();
   const asMessages: ChatMessage[] = outgoing.map((item) => {
@@ -83,13 +60,10 @@ export function buildRows(
       senderId: me?.id ?? '',
       senderName: me?.name ?? '',
       createdAt: item.createdAt,
-      // Ένα μήνυμα που δεν έχει φτάσει ακόμα στη βάση δεν έχει διορθωθεί ούτε
-      // σβηστεί — και δεν μπορεί: το μενού ανοίγει μόνο σε επιβεβαιωμένα.
       editedAt: null,
       deletedAt: null,
       replyTo: null,
       reply: null,
-      // Η εικόνα δεν είναι ακόμα στην αποθήκη· ταξιδεύει χωριστά, ως τοπικό αρχείο.
       attachment: null,
     };
   });

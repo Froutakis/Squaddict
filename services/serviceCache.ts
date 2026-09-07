@@ -9,7 +9,6 @@ import type { OutgoingMessage } from "../components/chat/messageRows";
 import { keysWithPrefix, readJson, removeByPrefix, writeJson } from "../lib/store";
 import type { ChatMessage, Group, GroupPreview } from "./serviceGroup";
 
-/** Ό,τι χρειάζεται η λίστα Παρεών για να ζωγραφιστεί χωρίς δίκτυο. */
 export type CachedSquads = {
   groups: Group[];
   previews: Record<string, GroupPreview>;
@@ -56,7 +55,6 @@ export async function writeOutbox(
   await writeJson(outboxKey(userId, groupId), outbox);
 }
 
-/** Κάθε τοπικό αρχείο που διεκδικεί κάποιο outbox, σε όλες τις Παρέες. */
 export async function referencedImages(userId: string): Promise<string[]> {
   const prefix = userPrefix(userId) + "out:";
   const uris: string[] = [];
@@ -72,7 +70,6 @@ export async function referencedImages(userId: string): Promise<string[]> {
   return uris;
 }
 
-/** Σβήνει ό,τι κρατάμε για έναν λογαριασμό. Καλείται στην αποσύνδεση. */
 export async function clearCache(userId: string): Promise<void> {
   await removeByPrefix(userPrefix(userId));
 }

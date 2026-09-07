@@ -11,8 +11,6 @@ if (!supabaseUrl || !supabaseKey) {
   );
 }
 
-// Χωρίς ρητό storage, το supabase-js ψάχνει localStorage. Στο κινητό δεν
-// υπάρχει: η συνεδρία μένει στη μνήμη και χάνεται σε κάθε κλείσιμο.
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
     storage: AsyncStorage,

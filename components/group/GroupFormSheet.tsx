@@ -28,7 +28,6 @@ type GroupFormSheetProps = {
   visible: boolean;
   onClose: () => void;
   onDone: (group: Group) => void | Promise<void>;
-  /** Σε ποια καρτέλα ανοίγει. Οι δύο μπορούν πάντα να εναλλαχθούν από μέσα. */
   initialMode?: Mode;
 };
 

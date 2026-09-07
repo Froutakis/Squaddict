@@ -16,11 +16,6 @@ import { initialsFor } from '../general/GradientAvatar';
 import { unreadLabel } from './unread';
 import { layout, paper, paperFont, radius, shadow, solidFor, space } from '../../theme';
 
-/**
- * Τετράγωνο μονόγραμμα παρέας — επίπεδο πλακίδιο σε απαλή απόχρωση του
- * χρώματος της παρέας. Ίδιο σχήμα σε λίστα και σε header, μόνο το μέγεθος
- * αλλάζει.
- */
 export function SquadMonogram({ name, size = 44 }: { name: string; size?: number }) {
   const color = solidFor(name);
 
@@ -48,7 +43,6 @@ export function SquadMonogram({ name, size = 44 }: { name: string; size?: number
   );
 }
 
-/** "14:32" σήμερα, "Yesterday" χθες, αλλιώς "12 Aug". */
 function stampFor(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
@@ -73,12 +67,6 @@ function stampFor(iso: string) {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-/**
- * Το ανθρωπάκι της κορυφής — δεν είναι emoji ούτε γραμματοσειρά εικονιδίων,
- * αλλά δύο σκέτα Views: ένας κύκλος για το κεφάλι και ένα τόξο για τους ώμους,
- * όπως τα πικτογράμματα στις πινακίδες. Το `overflow: 'hidden'` κόβει το κάτω
- * μισό των ώμων, ώστε να μένει μόνο η καμπύλη.
- */
 function PersonGlyph({ size = 34 }: { size?: number }) {
   const head = Math.round(size * 0.3);
   const shoulders = Math.round(size * 0.58);
@@ -109,25 +97,16 @@ function PersonGlyph({ size = 34 }: { size?: number }) {
 
 type SquadPickerProps = {
   groups: Group[];
-  /** Τελευταίο μήνυμα ανά παρέα — μπορεί να λείπει όσο φορτώνει. */
   previews: Record<string, GroupPreview>;
-  /** Αδιάβαστα ανά παρέα. Όποια λείπει έχει μηδέν — δεν στέλνουμε μηδενικά. */
   unread?: Record<string, number>;
-  /** Πόσες από τις αδιάβαστες με αναφέρουν ονομαστικά. */
   mentions?: Record<string, number>;
   onSelect: (id: string) => void;
-  /** Το όνομα του χρήστη για την κορυφή — άδειο όσο φορτώνει το προφίλ. */
   displayName?: string;
-  /** Προαιρετικό βελάκι πίσω — μπαίνει μόνο όταν η οθόνη ανοίγει από αλλού. */
   onBack?: () => void;
   onCreateSquad?: () => void;
   onEnterCode?: () => void;
 };
 
-/**
- * Η πρώτη οθόνη του tab: διαλέγεις παρέα και μετά ανοίγει η συνομιλία της.
- * Κάθε παρέα είναι μια γραμμή σε μια ενιαία κάρτα με λεπτά διαχωριστικά.
- */
 export default function SquadPicker({
   groups,
   previews,
@@ -139,13 +118,10 @@ export default function SquadPicker({
   onCreateSquad,
   onEnterCode,
 }: SquadPickerProps) {
-  // Όσο φορτώνει το προφίλ δεν έχουμε όνομα — δείχνουμε μια ουδέτερη προσφώνηση
-  // αντί για κενό, ώστε να μην "πηδάει" η γραμμή όταν έρθει το όνομα.
   const who = displayName || 'you';
 
   const [query, setQuery] = useState('');
 
-  // Φιλτράρισμα στη μνήμη — οι παρέες ενός χρήστη είναι λίγες, δεν θέλει ερώτημα.
   const needle = query.trim().toLowerCase();
   const shown = needle
     ? groups.filter(function (group) {
@@ -250,7 +226,7 @@ export default function SquadPicker({
                 accessibilityLabel={label}
                 style={rowStyle}
               >
-                {/* Διαχωριστικό μόνο ανάμεσα στις γραμμές, όχι πάνω από την πρώτη. */}
+                {}
                 {index > 0 ? <View style={styles.divider} /> : null}
 
                 <SquadMonogram name={group.name} />
@@ -274,9 +250,7 @@ export default function SquadPicker({
                     </Text>
                   ) : null}
 
-                  {/* Το badge παίρνει τη θέση του βέλους αντί να μπει δίπλα του:
-                      δύο σύμβολα στη σειρά στριμώχνουν τη γραμμή, και το βέλος
-                      δεν λέει τίποτα που δεν λέει ήδη ολόκληρη η πατημένη σειρά. */}
+                  {}
                   {badge ? (
                     <View style={called ? [styles.badge, styles.badgeCalled] : styles.badge}>
                       {called ? <Text style={styles.badgeAt}>@</Text> : null}
@@ -346,7 +320,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingBottom: space.xl,
   },
-  // Ανθρωπάκι και όνομα στην ίδια γραμμή, κεντραρισμένα μαζί.
   head: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -355,7 +328,6 @@ const styles = StyleSheet.create({
     paddingTop: space.lg,
     paddingBottom: space.md,
   },
-  // Απόλυτη θέση: το βελάκι μένει αριστερά χωρίς να χαλάει το κεντράρισμα.
   back: {
     position: 'absolute',
     left: -6,
@@ -372,14 +344,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
     textAlign: 'center',
   },
-  // Το πλακίδιο του ανθρωπάκι: απαλός δίσκος, το σχήμα κόβεται στο περίγραμμά του.
   glyph: {
     alignItems: 'center',
     overflow: 'hidden',
     backgroundColor: paper.surfaceAlt,
   },
 
-  // Πεδίο αναζήτησης: ίδιο κουτί με τον composer, ώστε οι δύο οθόνες να δένουν.
   search: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -396,11 +366,9 @@ const styles = StyleSheet.create({
     color: paper.ink,
     fontFamily: paperFont.regular,
     fontSize: 14,
-    // Το web βάζει δικό του περίγραμμα στο focus — το σβήνουμε.
     outlineStyle: 'none',
   } as any,
 
-  // Επικεφαλίδα ενότητας πάνω αριστερά από τη στοίβα.
   section: {
     marginTop: space.lg,
     marginBottom: space.sm,
@@ -420,7 +388,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   startRow: { flexDirection: 'row', gap: 9 },
-  // Ίσα κουτιά με flex, ώστε το ένα να μη μεγαλώνει από το κείμενό του.
   startTile: {
     flex: 1,
     gap: 6,
@@ -444,7 +411,6 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
   },
   rowPressed: { backgroundColor: paper.surfaceAlt },
-  // Απόλυτη θέση: η γραμμή κάθεται στην κορυφή της σειράς χωρίς να την ψηλώνει.
   divider: {
     position: 'absolute',
     top: 0,
@@ -456,14 +422,11 @@ const styles = StyleSheet.create({
   rowText: { flex: 1 },
   name: { color: paper.ink, fontFamily: paperFont.semi, fontSize: 15 },
   preview: { marginTop: 2, color: paper.inkSoft, fontFamily: paperFont.regular, fontSize: 13 },
-  // Όταν υπάρχουν αδιάβαστα, η γραμμή σκουραίνει αντί να αλλάξει χρώμα: το
-  // κεραμιδί το κρατάμε αποκλειστικά για το badge, ώστε να τραβάει αυτό το μάτι.
   previewUnread: { color: paper.ink, fontFamily: paperFont.medium },
   rowEnd: { alignItems: 'flex-end', gap: 4 },
   stamp: { color: paper.inkFaint, fontFamily: paperFont.mono, fontSize: 10.5 },
   stampUnread: { color: paper.accent, fontFamily: paperFont.medium },
 
-  // minWidth αντί για σταθερό πλάτος: το "3" μένει κύκλος, το "99+" απλώνει.
   badge: {
     minWidth: 20,
     height: 20,
@@ -487,7 +450,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: paperFont.semi,
     fontSize: 11,
-    // Το RN κεντράρει κάθετα με βάση το line height, όχι το οπτικό ύψος.
     lineHeight: 14,
   },
 

@@ -1,9 +1,7 @@
 import { fold } from './search';
 
-/** Ένα μέλος της Παρέας, όπως το χρειάζονται οι αναφορές. */
 export type Member = { id: string; name: string };
 
-/** Πού βρίσκεται μια αναφορά μέσα στο κείμενο, και σε ποιον. */
 export type MentionSpan = {
   start: number;
   end: number;
@@ -18,12 +16,10 @@ export const MENTION_SUGGESTIONS = 6;
 
 const WORDY = /[\p{L}\p{N}_]/u;
 
-/** Είναι γράμμα, ψηφίο ή κάτω παύλα; */
 function wordy(ch: string | undefined): boolean {
   return ch !== undefined && WORDY.test(ch);
 }
 
-/** Βρίσκει όλες τις αναφορές σε ένα κείμενο, αγνοώντας τόνους και πεζά/κεφαλαία. */
 export function findMentions(text: string, members: Member[]): MentionSpan[] {
   if (text.length === 0 || members.length === 0) {
     return [];
@@ -67,7 +63,6 @@ export function findMentions(text: string, members: Member[]): MentionSpan[] {
   return found;
 }
 
-/** Τα ids όσων αναφέρονται, χωρίς επαναλήψεις. */
 export function mentionIds(text: string, members: Member[]): string[] {
   const seen: string[] = [];
   for (const span of findMentions(text, members)) {
@@ -78,17 +73,14 @@ export function mentionIds(text: string, members: Member[]): string[] {
   return seen;
 }
 
-/** Αναφέρεται εμένα αυτό το μήνυμα; */
 export function mentionsMe(text: string, members: Member[], meId: string): boolean {
   return findMentions(text, members).some(function (span) {
     return span.userId === meId;
   });
 }
 
-/** Ένα κομμάτι κειμένου· `userId` μόνο όταν είναι αναφορά. */
 export type MentionPart = { text: string; userId: string | null };
 
-/** Κόβει το κείμενο σε κομμάτια ώστε η οθόνη να τονίσει τις αναφορές. */
 export function mentionParts(text: string, members: Member[]): MentionPart[] {
   const spans = findMentions(text, members);
   if (spans.length === 0) {
@@ -113,10 +105,8 @@ export function mentionParts(text: string, members: Member[]): MentionPart[] {
   return parts;
 }
 
-/** Τι πληκτρολογείται αυτή τη στιγμή μετά από '@', και από πού ξεκινά. */
 export type MentionQuery = { at: number; query: string };
 
-/** Ανοιχτή αναφορά πίσω από τον δρομέα, ή `null` αν δεν υπάρχει. */
 export function mentionQuery(text: string, cursor: number): MentionQuery | null {
   const end = Math.max(0, Math.min(cursor, text.length));
   let spaces = 0;
@@ -143,7 +133,6 @@ export function mentionQuery(text: string, cursor: number): MentionQuery | null 
   return null;
 }
 
-/** Ποιους προτείνει ο κατάλογος — πρώτα όσοι αρχίζουν από το κείμενο, μετά όσοι το περιέχουν. */
 export function matchMembers(
   members: Member[],
   query: string,
@@ -176,10 +165,8 @@ export function matchMembers(
   });
 }
 
-/** Το κείμενο μετά την επιλογή, και πού πρέπει να πάει ο δρομέας. */
 export type MentionInsert = { text: string; cursor: number };
 
-/** Αντικαθιστά ό,τι γράφτηκε μετά το '@' με το πλήρες όνομα. */
 export function applyMention(
   text: string,
   found: MentionQuery,
@@ -192,7 +179,6 @@ export function applyMention(
   return { text: before + inserted + after, cursor: before.length + inserted.length };
 }
 
-/** Χάρτης ονομάτων σε λίστα μελών, αλφαβητικά και χωρίς τα ανώνυμα. */
 export function toMembers(names: Record<string, string>): Member[] {
   return Object.keys(names)
     .map(function (id) {

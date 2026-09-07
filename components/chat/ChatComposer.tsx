@@ -7,47 +7,21 @@ import { SquadMonogram } from './SquadPicker';
 import { paper, paperFont, radius, space } from '../../theme';
 
 type ChatComposerProps = {
-  /**
-   * Βάζει το μήνυμα στην οθόνη και αναλαμβάνει την αποστολή από εκεί και πέρα.
-   * Δεν περιμένουμε δίκτυο: ό,τι πάει στραβά φαίνεται πάνω στη φυσαλίδα.
-   */
   onSend: (text: string) => void;
   placeholder?: string;
   disabled?: boolean;
-  /**
-   * Αρχικό περιεχόμενο. Διαβάζεται ΜΟΝΟ στο πρώτο render — η αλλαγή του δεν
-   * κάνει τίποτα. Ο γονιός αλλάζει το `key` για να ξαναστήσει τον composer με
-   * νέο κείμενο· έτσι δεν χρειάζεται effect που θα πάλευε με ό,τι πληκτρολογεί
-   * ο χρήστης εκείνη τη στιγμή.
-   */
   initialText?: string;
-  /** Σε λειτουργία διόρθωσης αλλάζει η μπάρα και το εικονίδιο του κουμπιού. */
   editing?: boolean;
-  /**
-   * Σε ποιον απαντάμε. Αποκλείεται με το `editing` — διορθώνεις ή απαντάς, όχι
-   * και τα δύο· ο γονιός φροντίζει να μην είναι ταυτόχρονα ενεργά.
-   */
   replyTo?: { senderName: string; content: string; deleted: boolean } | null;
-  /** Ακύρωση της διόρθωσης. */
   onCancel?: () => void;
-  /**
-   * Ο χρήστης πληκτρολογεί. Καλείται σε ΚΑΘΕ αλλαγή — το throttle είναι ευθύνη
-   * του γονιού, που ξέρει και το κανάλι.
-   */
   onTyping?: () => void;
-  /** Τα μέλη της Παρέας — ο κατάλογος που ανοίγει με '@'. */
   members?: Member[];
-  /** Ποιος είμαι· λείπω από τον κατάλογο. */
   meId?: string;
-  /** Η φωτογραφία που περιμένει να σταλεί μαζί με το μήνυμα. */
   attachment?: LocalImage | null;
-  /** Άνοιγμα της συλλογής. Λείπει σε λειτουργία διόρθωσης. */
   onPickImage?: () => void;
-  /** Αφαίρεση της επιλεγμένης φωτογραφίας. */
   onClearImage?: () => void;
 };
 
-/** Τι έχει ήδη επιλεγεί, ώστε ο κατάλογος να μην ξανανοίξει για το ίδιο '@'. */
 type Dismissed = { at: number; query: string };
 
 export default function ChatComposer({
@@ -67,20 +41,16 @@ export default function ChatComposer({
 }: ChatComposerProps) {
   const [text, setText] = useState(initialText);
   const [focused, setFocused] = useState(false);
-  /** Πού βρίσκεται ο δρομέας — από εκεί ξεκινά η αναζήτηση αναφοράς. */
   const [cursor, setCursor] = useState(initialText.length);
-  /** Θέση δρομέα που επιβάλλουμε για ένα render, μετά από επιλογή ονόματος. */
   const [forcedCursor, setForcedCursor] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState<Dismissed | null>(null);
   const [active, setActive] = useState(0);
 
   const trimmed = text.trim();
-  // Με φωτογραφία, το κείμενο είναι προαιρετική λεζάντα.
   const canSend = (trimmed.length > 0 || attachment !== null) && !disabled;
 
   const found = disabled ? null : mentionQuery(text, cursor);
 
-  /** Έχει ήδη διαλεχθεί όνομα για αυτό το '@'; */
   const hushed =
     found !== null &&
     dismissed !== null &&
@@ -95,7 +65,6 @@ export default function ChatComposer({
   const picking = suggestions.length > 0;
   const highlighted = Math.min(active, suggestions.length - 1);
 
-  /** Βάζει το πλήρες όνομα στο κείμενο και κλείνει τον κατάλογο. */
   function pick(member: Member) {
     if (!found) {
       return;
@@ -109,7 +78,6 @@ export default function ChatComposer({
     setActive(0);
   }
 
-  /** Κλείνει τον κατάλογο χωρίς επιλογή. */
   function closeList() {
     if (found) {
       setDismissed({ at: found.at, query: found.query });
@@ -119,7 +87,6 @@ export default function ChatComposer({
   function handleSend() {
     if (!canSend) return;
 
-    // Καθαρίζει αμέσως: το μήνυμα ζει πλέον στη λίστα, όχι στο πεδίο.
     onSend(trimmed);
     setText('');
     setCursor(0);
@@ -127,14 +94,6 @@ export default function ChatComposer({
     setActive(0);
   }
 
-  /**
-   * Πληκτρολόγιο: Enter στέλνει, Shift+Enter αλλάζει γραμμή. Μόνο στο web —
-   * στο κινητό το Enter του εικονικού πληκτρολογίου πρέπει να κάνει νέα γραμμή.
-   *
-   * Το react-native-web δίνει εδώ το κανονικό keydown event του browser, οπότε
-   * έχουμε και `shiftKey` και `preventDefault()`. Το preventDefault εμποδίζει
-   * τον browser να προσθέσει το newline πριν προλάβουμε να στείλουμε.
-   */
   function handleKeyPress(event: any) {
     if (Platform.OS !== 'web') {
       return;
@@ -142,10 +101,8 @@ export default function ChatComposer({
 
     const key = event.key ?? event.nativeEvent?.key;
     const withShift = event.shiftKey ?? event.nativeEvent?.shiftKey;
-    // Όσο ένα IME συνθέτει χαρακτήρα, το Enter επιβεβαιώνει τη σύνθεση — όχι αποστολή.
     const composing = event.nativeEvent?.isComposing === true;
 
-    // Με ανοιχτό κατάλογο το Enter διαλέγει αντί να στέλνει.
     if (picking && !composing) {
       if (key === 'Enter' && !withShift) {
         event.preventDefault();
@@ -174,8 +131,6 @@ export default function ChatComposer({
       handleSend();
     }
 
-    // Escape ακυρώνει τη διόρθωση — το αναμενόμενο σε κάθε πεδίο που «άνοιξε»
-    // πάνω από κάτι άλλο.
     if (key === 'Escape' && (editing || replyTo) && onCancel) {
       event.preventDefault();
       onCancel();
@@ -271,10 +226,9 @@ export default function ChatComposer({
         </View>
       ) : null}
 
-      {/* Ένα ενιαίο κουτί: πεδίο και κουμπί ζουν μέσα στο ίδιο περίγραμμα. */}
+      {}
       <View style={[styles.box, focused && styles.boxFocused]}>
-        {/* Η διόρθωση αλλάζει μόνο κείμενο — η φωτογραφία ενός σταλμένου
-            μηνύματος είναι αμετάβλητη, το επιβάλλει και ο trigger. */}
+        {}
         {onPickImage && !editing ? (
           <Pressable
             onPress={onPickImage}
@@ -294,14 +248,10 @@ export default function ChatComposer({
           selection={forcedCursor === null ? undefined : { start: forcedCursor, end: forcedCursor }}
           onChangeText={function (next) {
             setText(next);
-            // Το onSelectionChange έρχεται ένα render αργότερα· ο κατάλογος
-            // χρειάζεται τον δρομέα τώρα.
             const moved = next.length - text.length;
             setCursor(function (prev) {
               return Math.max(0, Math.min(next.length, prev + moved));
             });
-            // Το σβήσιμο δεν είναι γράψιμο: αλλιώς κρατώντας το Backspace θα
-            // έστελνες «γράφει…» ενώ αδειάζεις το πεδίο.
             if (next.length > text.length) {
               onTyping?.();
             }
@@ -344,7 +294,6 @@ export default function ChatComposer({
 }
 
 const SEND = 36;
-/** Το ύψος του πεδίου: λίγο ψηλότερο από τα κουμπιά, όπως στο πρότυπο. */
 const FIELD = 44;
 
 const styles = StyleSheet.create({
@@ -354,8 +303,6 @@ const styles = StyleSheet.create({
     paddingBottom: space.md,
     backgroundColor: paper.bg,
   },
-  // Χωρίς δικό του περίγραμμα: το πεδίο και τα κουμπιά είναι ξεχωριστά σχήματα
-  // που κάθονται δίπλα-δίπλα, όπως στο πρότυπο.
   box: {
     flexDirection: 'row',
     alignItems: 'flex-end',

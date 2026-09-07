@@ -14,18 +14,11 @@ import {
 import type { ChatMessage } from '../../services/serviceGroup';
 import { layout, paper, paperFont, radius, space } from '../../theme';
 
-/**
- * Η γρήγορη σειρά. Δεν είναι η μόνη επιλογή — από κάτω υπάρχει πεδίο για
- * οποιοδήποτε emoji — αλλά καλύπτει τη συντριπτική πλειοψηφία με ένα πάτημα.
- */
 const QUICK = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉'];
 
 type MessageMenuProps = {
-  /** Το μήνυμα στο οποίο ενεργούμε· `null` κρατά το μενού κλειστό. */
   message: ChatMessage | null;
-  /** Η δική μου αντίδραση σε αυτό το μήνυμα, αν υπάρχει. */
   myEmoji?: string | null;
-  /** `true` μόνο για τα δικά μου μηνύματα — αλλιώς κρύβονται Edit και Delete. */
   canEdit?: boolean;
   onClose: () => void;
   onEdit: (message: ChatMessage) => void;
@@ -34,16 +27,6 @@ type MessageMenuProps = {
   onReply: (message: ChatMessage) => void;
 };
 
-/**
- * Τι μπορείς να κάνεις σε ένα δικό σου μήνυμα.
- *
- * Modal και όχι φύλλο μέσα στη λίστα: πρέπει να σκεπάσει και τον composer, και
- * να κλείνει με το πίσω κουμπί στο Android.
- *
- * Το component δεν αποφασίζει ΑΝ επιτρέπεται η επεξεργασία — αυτό το κρίνει ο
- * γονιός, που ξέρει ποιανού είναι το μήνυμα και αν έχει φτάσει στη βάση. Εδώ
- * φτάνουν μόνο μηνύματα που ήδη πέρασαν αυτόν τον έλεγχο.
- */
 export default function MessageMenu({
   message,
   myEmoji = null,
@@ -54,8 +37,6 @@ export default function MessageMenu({
   onReact,
   onReply,
 }: MessageMenuProps) {
-  // Το πεδίο για «οτιδήποτε άλλο» ξεκινά κλειστό: είναι η σπάνια περίπτωση, και
-  // ανοιχτό θα τραβούσε αμέσως το πληκτρολόγιο πάνω από το μενού.
   const [custom, setCustom] = useState('');
   const [customOpen, setCustomOpen] = useState(false);
 
@@ -63,8 +44,6 @@ export default function MessageMenu({
     return null;
   }
 
-  // Τοπικό αντίγραφο: μέσα στους χειριστές το `message` είναι σίγουρα non-null,
-  // αλλά η TypeScript δεν το κρατά μέσα σε συναρτήσεις που ορίζονται εδώ.
   const target = message;
 
   return (
@@ -75,17 +54,15 @@ export default function MessageMenu({
       onRequestClose={onClose}
       accessibilityViewIsModal
     >
-      {/* Το πάτημα εκτός του φύλλου κλείνει — το αναμενόμενο σε action sheet. */}
+      {}
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close menu">
-        {/* Δεύτερο Pressable χωρίς onPress: σταματά το πάτημα ώστε να μην
-            κλείνει το μενού όταν πατάς μέσα του. */}
+        {}
         <Pressable style={styles.sheet}>
           <Text style={styles.preview} numberOfLines={2}>
             {target.content}
           </Text>
 
-          {/* Οριζόντιο σκρολ: σε στενή οθόνη τα οκτώ δεν χωράνε, και το wrap θα
-              διπλασίαζε το ύψος του φύλλου. */}
+          {}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -109,8 +86,7 @@ export default function MessageMenu({
               );
             })}
 
-            {/* Η ελεύθερη επιλογή. Το πληκτρολόγιο του συστήματος έχει ήδη όλα
-                τα emoji — δεν χρειάζεται δικό μας grid ούτε βιβλιοθήκη. */}
+            {}
             <Pressable
               onPress={function () {
                 setCustomOpen(function (open) {
@@ -160,7 +136,7 @@ export default function MessageMenu({
 
           <View style={styles.divider} />
 
-          {/* Η απάντηση επιτρέπεται σε κάθε μήνυμα, δικό μου ή ξένο. */}
+          {}
           <Pressable
             onPress={function () {
               onReply(target);
@@ -172,8 +148,7 @@ export default function MessageMenu({
             <Text style={styles.text}>Reply</Text>
           </Pressable>
 
-          {/* Edit και Delete μόνο στα δικά μου. Σε ξένο μήνυμα το μενού
-              υπάρχει μόνο για τις αντιδράσεις. */}
+          {}
           {canEdit ? (
             <>
               <View style={styles.divider} />
@@ -217,7 +192,6 @@ function itemStyle({ pressed }: { pressed: boolean }): StyleProp<ViewStyle> {
 }
 
 const styles = StyleSheet.create({
-  // Φύλλο στο κάτω μέρος, όπως τα action sheets του συστήματος.
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -233,7 +207,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
   },
-  // Το κείμενο του μηνύματος στην κορυφή, ώστε να ξέρεις σε ποιο ενεργείς.
   preview: {
     paddingHorizontal: space.md,
     paddingTop: space.sm,
