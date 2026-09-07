@@ -31,13 +31,16 @@ export const tint = {
 
 export const brand = ['#2145E6', '#2145E6'] as const;
 
+// Μπλε προς μωβ, σε πέντε βήματα φωτεινότητας (L* 20 · 26 · 31 · 38 · 45).
+// Πέντε και όχι έξι: τα γράμματα από πάνω είναι λευκά, άρα κάθε απόχρωση πρέπει
+// να μείνει σκούρα, και το μπλε-μωβ είναι στενή ζώνη. Ένα έκτο θα έπεφτε κάτω
+// από 4.5:1 και δεν θα διαβαζόταν.
 export const avatarGradients: readonly (readonly [string, string])[] = [
+  ['#152C6B', '#152C6B'],
   ['#2145E6', '#2145E6'],
-  ['#1F7A57', '#1F7A57'],
-  ['#D5442F', '#D5442F'],
-  ['#0C1926', '#0C1926'],
-  ['#5A6B7D', '#5A6B7D'],
-  ['#A8601F', '#A8601F'],
+  ['#3D2C8D', '#3D2C8D'],
+  ['#5B21B6', '#5B21B6'],
+  ['#9333EA', '#9333EA'],
 ];
 
 export function gradientFor(name: string): readonly [string, string] {
@@ -131,9 +134,9 @@ export const paper = {
 };
 
 export const paperFont = {
-  regular: 'Inter_400Regular',
-  medium: 'Inter_500Medium',
-  semi: 'Inter_600SemiBold',
-  serif: 'SourceSerif4_400Regular',
-  serifSemi: 'SourceSerif4_600SemiBold',
+  regular: 'Commissioner_400Regular',
+  medium: 'Commissioner_500Medium',
+  semi: 'Commissioner_600SemiBold',
+  display: 'AlegreyaSans_700Bold',
+  mono: 'DMMono_400Regular',
 };

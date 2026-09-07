@@ -4,14 +4,16 @@ import type { ReplyQuote } from '../../services/serviceGroup';
 import { bubbleSize } from './media';
 import { mentionParts, type Member } from './mentions';
 import type { ReactionCount } from './reactions';
-import { paper, paperFont, space } from '../../theme';
+import { paper, paperFont, shadow, space } from '../../theme';
 import { SquadMonogram } from './SquadPicker';
 
-const AVATAR = 26;
+const AVATAR = 24;
 /** Στρογγυλή εξωτερική γωνία φυσαλίδας. */
-const ROUND = 16;
+const ROUND = 18;
 /** Οι "εσωτερικές" γωνίες μέσα σε μια σερί μηνυμάτων. */
 const TIGHT = 6;
+/** Η μύτη στο τελευταίο μήνυμα της σερί. */
+const TAIL = 5;
 
 function timeLabel(iso: string) {
   const date = new Date(iso);
@@ -167,15 +169,17 @@ export default function MessageBubble({
   // για το μενού επεξεργασίας. Ένα σβησμένο μήνυμα δεν πατιέται καθόλου.
   const bubblePress = !deleted && ((status === 'failed' && onRetry) || onLongPress);
 
-  // Στρογγυλή γωνία μόνο στις εξωτερικές άκρες, ώστε η σερί να διαβάζεται σαν μία στήλη.
+  // Στρογγυλή γωνία μόνο στις εξωτερικές άκρες, ώστε η σερί να διαβάζεται σαν μία
+  // στήλη. Στο τελευταίο της σερί η κάτω γωνία κόβεται σε μύτη — η ουρά που
+  // δείχνει ποιος μιλάει.
   const shape = mine
     ? {
         borderTopRightRadius: isFirst ? ROUND : TIGHT,
-        borderBottomRightRadius: isLast ? ROUND : TIGHT,
+        borderBottomRightRadius: isLast ? TAIL : TIGHT,
       }
     : {
         borderTopLeftRadius: isFirst ? ROUND : TIGHT,
-        borderBottomLeftRadius: isLast ? ROUND : TIGHT,
+        borderBottomLeftRadius: isLast ? TAIL : TIGHT,
       };
 
   return (
@@ -327,13 +331,11 @@ export default function MessageBubble({
   );
 }
 
-/** Διαχωριστικό ημέρας — μια λεπτή γραμμή με την ημερομηνία στη μέση. */
+/** Διαχωριστικό ημέρας — ένα μικρό χάπι στο κέντρο, χωρίς γραμμές εκατέρωθεν. */
 export function DateSeparator({ label }: { label: string }) {
   return (
     <View style={styles.separator}>
-      <View style={styles.separatorLine} />
       <Text style={styles.separatorText}>{label}</Text>
-      <View style={styles.separatorLine} />
     </View>
   );
 }
@@ -344,7 +346,7 @@ const styles = StyleSheet.create({
   rowMine: { justifyContent: 'flex-end' },
   rowOther: { justifyContent: 'flex-start' },
   avatarSpacer: { width: AVATAR },
-  column: { maxWidth: '76%' },
+  column: { maxWidth: '80%' },
   columnMine: { alignItems: 'flex-end' },
   columnOther: { alignItems: 'flex-start' },
 
@@ -356,11 +358,7 @@ const styles = StyleSheet.create({
   photo: { borderRadius: ROUND - 4, backgroundColor: paper.surfaceAlt },
   caption: { paddingHorizontal: 10, paddingTop: 7, paddingBottom: 3 },
   bubbleMine: { backgroundColor: paper.mine },
-  bubbleOther: {
-    backgroundColor: paper.surface,
-    borderWidth: 1,
-    borderColor: paper.line,
-  },
+  bubbleOther: { backgroundColor: paper.surface, ...shadow.bubble },
   // Ξεθωριασμένο όσο ταξιδεύει — αρκετά για να φανεί, όχι τόσο ώστε να μη διαβάζεται.
   bubblePending: { opacity: 0.55 },
   bubbleFailed: { backgroundColor: paper.danger },
@@ -415,11 +413,13 @@ const styles = StyleSheet.create({
   sender: {
     marginBottom: 4,
     marginLeft: 2,
-    color: paper.inkSoft,
-    fontFamily: paperFont.semi,
-    fontSize: 12,
+    color: paper.inkFaint,
+    fontFamily: paperFont.mono,
+    fontSize: 9.5,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
-  text: { color: paper.ink, fontFamily: paperFont.regular, fontSize: 15, lineHeight: 22 },
+  text: { color: paper.ink, fontFamily: paperFont.regular, fontSize: 14, lineHeight: 20 },
   textMine: { color: paper.onMine },
 
   mention: { color: paper.accent, fontFamily: paperFont.semi },
@@ -430,8 +430,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginHorizontal: 2,
     color: paper.inkFaint,
-    fontFamily: paperFont.regular,
-    fontSize: 11,
+    fontFamily: paperFont.mono,
+    fontSize: 10.5,
   },
   pendingNote: {
     marginTop: 4,
@@ -449,17 +449,20 @@ const styles = StyleSheet.create({
   },
 
   separator: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: space.sm,
     marginTop: space.lg,
     marginBottom: space.xs,
   },
-  separatorLine: { flex: 1, height: 1, backgroundColor: paper.line },
   separatorText: {
     color: paper.inkFaint,
-    fontFamily: paperFont.medium,
-    fontSize: 11,
-    letterSpacing: 0.4,
+    fontFamily: paperFont.mono,
+    fontSize: 9.5,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    backgroundColor: 'rgba(12, 25, 38, 0.05)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 9,
+    overflow: 'hidden',
   },
 });

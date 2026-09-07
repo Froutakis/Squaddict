@@ -30,6 +30,9 @@
     "send": "tsx --env-file=.env debug/send.ts"
   },
   "dependencies": {
+    "@expo-google-fonts/alegreya-sans": "^0.4.2",
+    "@expo-google-fonts/commissioner": "^0.4.1",
+    "@expo-google-fonts/dm-mono": "^0.4.2",
     "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/poppins": "^0.4.1",
     "@expo-google-fonts/source-serif-4": "^0.4.1",

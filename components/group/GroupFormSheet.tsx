@@ -28,10 +28,17 @@ type GroupFormSheetProps = {
   visible: boolean;
   onClose: () => void;
   onDone: (group: Group) => void | Promise<void>;
+  /** Σε ποια καρτέλα ανοίγει. Οι δύο μπορούν πάντα να εναλλαχθούν από μέσα. */
+  initialMode?: Mode;
 };
 
-export default function GroupFormSheet({ visible, onClose, onDone }: GroupFormSheetProps) {
-  const [mode, setMode] = useState<Mode>('create');
+export default function GroupFormSheet({
+  visible,
+  onClose,
+  onDone,
+  initialMode = 'create',
+}: GroupFormSheetProps) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [name, setName] = useState('');
   const [handle, setHandle] = useState('');
   const [code, setCode] = useState('');
@@ -41,13 +48,13 @@ export default function GroupFormSheet({ visible, onClose, onDone }: GroupFormSh
   useEffect(() => {
     if (!visible) return;
 
-    setMode('create');
+    setMode(initialMode);
     setName('');
     setHandle('');
     setCode('');
     setSaving(false);
     setFormError(null);
-  }, [visible]);
+  }, [visible, initialMode]);
 
   function switchMode(next: Mode) {
     setMode(next);

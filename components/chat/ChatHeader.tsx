@@ -99,5 +99,12 @@ const styles = StyleSheet.create({
   pressed: { backgroundColor: paper.surfaceAlt },
   text: { flex: 1 },
   title: { color: paper.ink, fontFamily: paperFont.semi, fontSize: 16 },
-  subtitle: { marginTop: 1, color: paper.inkFaint, fontFamily: paperFont.regular, fontSize: 12 },
+  subtitle: {
+    marginTop: 2,
+    color: paper.inkFaint,
+    fontFamily: paperFont.mono,
+    fontSize: 9.5,
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+  },
 });

@@ -35,6 +35,7 @@ import {
 } from '../components/chat/replies';
 import SearchOverlay from '../components/chat/SearchOverlay';
 import SquadPicker from '../components/chat/SquadPicker';
+import GroupFormSheet from '../components/group/GroupFormSheet';
 import { mentionIds, toMembers, type Member } from '../components/chat/mentions';
 import { dropMissingImages, restoreOutbox } from '../components/chat/cache';
 import { attachmentPath, mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
@@ -127,6 +128,8 @@ export default function GroupChatScreen({
   // null = κανένα ανοιχτό chat, δηλαδή δείχνουμε τη λίστα με τις παρέες.
   const [activeId, setActiveId] = useState<string | null>(initialGroupId);
   const [previews, setPreviews] = useState<Record<string, GroupPreview>>({});
+  /** Ποια καρτέλα του φύλλου είναι ανοιχτή· null = κλειστό. */
+  const [squadForm, setSquadForm] = useState<'create' | 'join' | null>(null);
   // Αδιάβαστα ανά παρέα. Μόνο όσες έχουν αδιάβαστα υπάρχουν στον χάρτη.
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [mentionCounts, setMentionCounts] = useState<Record<string, number>>({});
@@ -1260,6 +1263,30 @@ export default function GroupChatScreen({
           displayName={displayName}
           onSelect={openGroup}
           onBack={onBack}
+          onCreateSquad={function () {
+            setSquadForm('create');
+          }}
+          onEnterCode={function () {
+            setSquadForm('join');
+          }}
+        />
+
+        <GroupFormSheet
+          visible={squadForm !== null}
+          initialMode={squadForm ?? 'create'}
+          onClose={function () {
+            setSquadForm(null);
+          }}
+          onDone={function (group) {
+            // Η νέα παρέα μπαίνει στη λίστα από την απάντηση και όχι με νέο
+            // ερώτημα: το φύλλο μας τη γυρίζει ολόκληρη.
+            setGroups(function (current) {
+              if (current.some((one) => one.id === group.id)) return current;
+              return [...current, group];
+            });
+            setSquadForm(null);
+            openGroup(group.id);
+          }}
         />
       </SafeAreaView>
     );
@@ -1448,7 +1475,7 @@ const styles = StyleSheet.create({
   olderSpinner: { paddingVertical: space.md, alignItems: 'center' },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: space.lg },
-  emptyTitle: { color: paper.ink, fontFamily: paperFont.serifSemi, fontSize: 20 },
+  emptyTitle: { color: paper.ink, fontFamily: paperFont.display, fontSize: 21 },
   emptyText: {
     color: paper.inkSoft,
     fontFamily: paperFont.regular,

@@ -14,7 +14,7 @@ import { Group } from '../../services/serviceGroup';
 import type { GroupPreview } from '../../services/serviceGroup';
 import { initialsFor } from '../general/GradientAvatar';
 import { unreadLabel } from './unread';
-import { layout, paper, paperFont, radius, solidFor, space } from '../../theme';
+import { layout, paper, paperFont, radius, shadow, solidFor, space } from '../../theme';
 
 /**
  * Τετράγωνο μονόγραμμα παρέας — επίπεδο πλακίδιο σε απαλή απόχρωση του
@@ -31,13 +31,17 @@ export function SquadMonogram({ name, size = 44 }: { name: string; size?: number
         {
           width: size,
           height: size,
-          borderRadius: Math.round(size * 0.3),
-          // Το ίδιο χρώμα με χαμηλή αδιαφάνεια (τα 2 τελευταία ψηφία = alpha).
-          backgroundColor: color + '1F',
+          borderRadius: size / 2,
+          backgroundColor: color,
         },
       ]}
     >
-      <Text style={[styles.monogramText, { color, fontSize: Math.round(size * 0.34) }]}>
+      <Text
+        style={[
+          styles.monogramText,
+          { color: paper.onMine, fontSize: Math.round(size * 0.36) },
+        ]}
+      >
         {initialsFor(name)}
       </Text>
     </View>
@@ -116,6 +120,8 @@ type SquadPickerProps = {
   displayName?: string;
   /** Προαιρετικό βελάκι πίσω — μπαίνει μόνο όταν η οθόνη ανοίγει από αλλού. */
   onBack?: () => void;
+  onCreateSquad?: () => void;
+  onEnterCode?: () => void;
 };
 
 /**
@@ -130,6 +136,8 @@ export default function SquadPicker({
   onSelect,
   onBack,
   displayName = '',
+  onCreateSquad,
+  onEnterCode,
 }: SquadPickerProps) {
   // Όσο φορτώνει το προφίλ δεν έχουμε όνομα — δείχνουμε μια ουδέτερη προσφώνηση
   // αντί για κενό, ώστε να μην "πηδάει" η γραμμή όταν έρθει το όνομα.
@@ -206,7 +214,7 @@ export default function SquadPicker({
           </Text>
           <Text style={styles.blankText}>
             {groups.length === 0
-              ? 'Join a squad from Home and it will show up here.'
+              ? 'Make one below, or use a code somebody sent you.'
               : `No squad called "${query.trim()}".`}
           </Text>
         </View>
@@ -283,8 +291,50 @@ export default function SquadPicker({
           })}
         </View>
       )}
+
+      {onCreateSquad || onEnterCode ? (
+        <View>
+          <Text style={styles.section}>Start something</Text>
+          <View style={styles.startRow}>
+            {onCreateSquad ? (
+              <Pressable
+                onPress={onCreateSquad}
+                accessibilityRole="button"
+                accessibilityLabel="Make a squad"
+                style={startTileStyle}
+              >
+                <Ionicons name="people-outline" size={22} color={paper.accent} />
+                <Text style={styles.startTitle}>Make a squad</Text>
+                <Text style={styles.startBody}>
+                  Pick a handle, invite four people, post a night.
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {onEnterCode ? (
+              <Pressable
+                onPress={onEnterCode}
+                accessibilityRole="button"
+                accessibilityLabel="Enter a code"
+                style={startTileStyle}
+              >
+                <Ionicons name="ticket-outline" size={22} color={paper.accent} />
+                <Text style={styles.startTitle}>Enter a code</Text>
+                <Text style={styles.startBody}>
+                  Somebody texted you six characters. Use them.
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
     </ScrollView>
   );
+}
+
+function startTileStyle({ pressed }: { pressed: boolean }): StyleProp<ViewStyle> {
+  if (pressed) return [styles.startTile, styles.rowPressed];
+  return styles.startTile;
 }
 
 const styles = StyleSheet.create({
@@ -317,7 +367,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: paper.ink,
-    fontFamily: paperFont.serifSemi,
+    fontFamily: paperFont.display,
     fontSize: 30,
     letterSpacing: -0.4,
     textAlign: 'center',
@@ -369,6 +419,23 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     overflow: 'hidden',
   },
+  startRow: { flexDirection: 'row', gap: 9 },
+  // Ίσα κουτιά με flex, ώστε το ένα να μη μεγαλώνει από το κείμενό του.
+  startTile: {
+    flex: 1,
+    gap: 6,
+    padding: 15,
+    backgroundColor: paper.surface,
+    borderRadius: radius.lg,
+    ...shadow.card,
+  },
+  startTitle: { color: paper.ink, fontFamily: paperFont.semi, fontSize: 14.5 },
+  startBody: {
+    color: paper.inkFaint,
+    fontFamily: paperFont.regular,
+    fontSize: 11.5,
+    lineHeight: 16,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -393,7 +460,7 @@ const styles = StyleSheet.create({
   // κεραμιδί το κρατάμε αποκλειστικά για το badge, ώστε να τραβάει αυτό το μάτι.
   previewUnread: { color: paper.ink, fontFamily: paperFont.medium },
   rowEnd: { alignItems: 'flex-end', gap: 4 },
-  stamp: { color: paper.inkFaint, fontFamily: paperFont.regular, fontSize: 11 },
+  stamp: { color: paper.inkFaint, fontFamily: paperFont.mono, fontSize: 10.5 },
   stampUnread: { color: paper.accent, fontFamily: paperFont.medium },
 
   // minWidth αντί για σταθερό πλάτος: το "3" μένει κύκλος, το "99+" απλώνει.

@@ -343,7 +343,9 @@ export default function ChatComposer({
   );
 }
 
-const SEND = 30;
+const SEND = 36;
+/** Το ύψος του πεδίου: λίγο ψηλότερο από τα κουμπιά, όπως στο πρότυπο. */
+const FIELD = 44;
 
 const styles = StyleSheet.create({
   bar: {
@@ -352,20 +354,14 @@ const styles = StyleSheet.create({
     paddingBottom: space.md,
     backgroundColor: paper.bg,
   },
+  // Χωρίς δικό του περίγραμμα: το πεδίο και τα κουμπιά είναι ξεχωριστά σχήματα
+  // που κάθονται δίπλα-δίπλα, όπως στο πρότυπο.
   box: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: space.sm,
-    paddingLeft: 14,
-    paddingRight: 7,
-    paddingVertical: 7,
-    backgroundColor: paper.surface,
-    borderWidth: 1,
-    borderColor: paper.line,
-    borderRadius: radius.xl,
+    gap: space.xs + 2,
   },
-  // Στο focus σκουραίνει μόνο το περίγραμμα — καμία σκιά, κανένα glow.
-  boxFocused: { borderColor: paper.inkFaint },
+  boxFocused: {},
   editBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -385,6 +381,10 @@ const styles = StyleSheet.create({
   attach: {
     width: SEND,
     height: SEND,
+    borderRadius: SEND / 2,
+    backgroundColor: paper.surface,
+    borderWidth: 1,
+    borderColor: paper.line,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -429,13 +429,18 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     maxHeight: 120,
-    minHeight: SEND,
-    paddingTop: 5,
-    paddingBottom: 5,
+    minHeight: FIELD,
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingHorizontal: 15,
+    backgroundColor: paper.surface,
+    borderWidth: 1,
+    borderColor: paper.line,
+    borderRadius: FIELD / 2,
     color: paper.ink,
     fontFamily: paperFont.regular,
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 14.5,
+    lineHeight: 20,
   },
   send: {
     width: SEND,
