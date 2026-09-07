@@ -4,3 +4,4 @@ node_modules/
 debug
 .expo
 docs
+supabase/.temp
