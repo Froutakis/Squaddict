@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { Attendee, MyEvent, RsvpStatus } from '../../services/serviceEvents';
+import type { Attendee, RsvpStatus } from '../../services/serviceEvents';
 import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/serviceEvents';
 import { getMemberNames } from '../../services/serviceGroup';
 import { colors, font, radius, space, textSize } from '../../theme';
@@ -27,12 +27,30 @@ async function openMaps(lat: number, lng: number, label?: string): Promise<void>
   }
 }
 
+export type SheetEvent = {
+  id: string;
+  groupId: string;
+  groupName: string;
+  title: string;
+  date: string;
+  startTime?: string;
+  location?: string;
+  description?: string;
+  placeLabel?: string;
+  lat?: number;
+  lng?: number;
+  createdBy?: string;
+  isMember?: boolean;
+  myStatus?: RsvpStatus;
+  going?: { id: string; name: string }[];
+};
+
 type EventSheetProps = {
-  event: MyEvent | null;
+  event: SheetEvent | null;
   currentUserId: string;
   onClose: () => void;
   onChanged: () => void | Promise<void>;
-  onEdit?: (event: MyEvent) => void;
+  onEdit?: (event: SheetEvent) => void;
   onPhotosChanged?: () => void;
 };
 
@@ -59,7 +77,9 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
       try {
         const [rows, names] = await Promise.all([
           getAttendees(open!.id),
-          getMemberNames(open!.groupId),
+          open!.isMember === false
+            ? Promise.resolve<Record<string, string>>({})
+            : getMemberNames(open!.groupId),
         ]);
         if (cancelled) return;
         setAttendees(rows);
@@ -123,7 +143,8 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
     .map(([id, name]) => ({ userId: id, name }));
 
   const myStatus = attendees.find((a) => a.userId === currentUserId)?.status;
-  const isOwner = event?.createdBy === currentUserId;
+  const canSeeRoster = event?.isMember !== false;
+  const isOwner = event?.createdBy !== undefined && event.createdBy === currentUserId;
   const hasHappened = event ? event.date <= keyOf(new Date()) : false;
 
   return (
@@ -197,7 +218,7 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
                   <ActivityIndicator color={colors.primary} style={styles.loader} />
                 ) : (
                   <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-                    {hasHappened ? (
+                    {hasHappened && canSeeRoster ? (
                       <EventPhotos
                         eventId={event.id}
                         groupId={event.groupId}
@@ -207,24 +228,40 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
                       />
                     ) : null}
 
-                    <Section
-                      title="Going"
-                      people={going}
-                      dot={colors.success}
-                      empty="Nobody so far"
-                    />
-                    <Section
-                      title="Can't make it"
-                      people={notGoing}
-                      dot={colors.danger}
-                      empty="Nobody so far"
-                    />
-                    <Section
-                      title="Still deciding"
-                      people={noAnswer}
-                      dot={colors.borderStrong}
-                      empty="Everyone answered"
-                    />
+                    {canSeeRoster ? (
+                      <>
+                        <Section
+                          title="Going"
+                          people={going}
+                          dot={colors.success}
+                          empty="Nobody so far"
+                        />
+                        <Section
+                          title="Can't make it"
+                          people={notGoing}
+                          dot={colors.danger}
+                          empty="Nobody so far"
+                        />
+                        <Section
+                          title="Still deciding"
+                          people={noAnswer}
+                          dot={colors.borderStrong}
+                          empty="Everyone answered"
+                        />
+                      </>
+                    ) : (
+                      <View style={styles.section}>
+                        <View style={styles.sectionHead}>
+                          <View style={[styles.sectionDot, { backgroundColor: colors.success }]} />
+                          <Text style={styles.sectionTitle}>
+                            {going.length} going · {notGoing.length} passed
+                          </Text>
+                        </View>
+                        <Text style={styles.empty}>
+                          You are not in this squad. You can still answer.
+                        </Text>
+                      </View>
+                    )}
                   </ScrollView>
                 )}
 

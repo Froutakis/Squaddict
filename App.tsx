@@ -73,6 +73,11 @@ export default function App() {
     setCreateNonce((n) => n + 1);
   }
 
+  function navigate(tab: NavTab) {
+    setCreateNonce(0);
+    setScreen(tab);
+  }
+
   const navHidden = screen === 'squads' && threadOpen;
 
   return (
@@ -88,7 +93,7 @@ export default function App() {
       </View>
 
       {navHidden ? null : (
-        <BottomNav active={screen} onNavigate={setScreen} onCreate={requestCreate} />
+        <BottomNav active={screen} onNavigate={navigate} onCreate={requestCreate} />
       )}
       <StatusBar style="dark" />
     </View>

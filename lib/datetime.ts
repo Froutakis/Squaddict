@@ -47,6 +47,11 @@ export function dateParts(dateStr: string) {
   return { month, day: d.getDate() };
 }
 
+export function weekdayShort(dateStr: string) {
+  const d = parseDateKey(dateStr);
+  return d ? d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase() : '';
+}
+
 export function formatDateTime(dateStr: string, time?: string) {
   const d = parseLocal(dateStr);
   const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
@@ -91,6 +96,71 @@ const PHOTO_WINDOW_HOURS = 12;
 function atTime(day: Date, time: string, dayOffset = 0) {
   const [h, m] = time.split(':').map(Number);
   return new Date(day.getFullYear(), day.getMonth(), day.getDate() + dayOffset, h, m);
+}
+
+const DEFAULT_LENGTH_HOURS = 3;
+
+function readTime(time?: string) {
+  const clean = time?.trim();
+  return clean !== undefined && /^\d{1,2}:\d{2}$/.test(clean) ? clean : undefined;
+}
+
+export function eventWindow(dateStr: string, rawStart?: string, rawEnd?: string) {
+  const day = parseLocal(dateStr);
+  const startTime = readTime(rawStart);
+  const endTime = readTime(rawEnd);
+  const startsAt = startTime
+    ? atTime(day, startTime)
+    : new Date(day.getFullYear(), day.getMonth(), day.getDate());
+
+  let endsAt: Date;
+  if (endTime) {
+    const pastMidnight = startTime !== undefined && endTime < startTime;
+    endsAt = atTime(day, endTime, pastMidnight ? 1 : 0);
+  } else if (startTime) {
+    endsAt = new Date(startsAt.getTime() + DEFAULT_LENGTH_HOURS * 3600000);
+  } else {
+    endsAt = atTime(day, '23:59');
+  }
+
+  return { startsAt, endsAt };
+}
+
+export function isHappeningNow(
+  dateStr: string,
+  startTime?: string,
+  endTime?: string,
+  now: Date = new Date(),
+) {
+  const { startsAt, endsAt } = eventWindow(dateStr, startTime, endTime);
+  return now >= startsAt && now < endsAt;
+}
+
+export function liveLabel(
+  dateStr: string,
+  rawStart?: string,
+  rawEnd?: string,
+  now: Date = new Date(),
+) {
+  const startTime = readTime(rawStart);
+  const endTime = readTime(rawEnd);
+  if (!startTime) return 'TODAY';
+
+  const { startsAt, endsAt } = eventWindow(dateStr, startTime, endTime);
+
+  if (endTime) {
+    const left = Math.round((endsAt.getTime() - now.getTime()) / 60000);
+    if (left <= 5) return 'ENDING NOW';
+
+    const hours = Math.floor(left / 60);
+    return hours > 0 ? `ENDS IN ${hours}H ${left % 60}M` : `ENDS IN ${left}M`;
+  }
+
+  const since = Math.max(0, Math.round((now.getTime() - startsAt.getTime()) / 60000));
+  if (since < 1) return 'STARTING NOW';
+
+  const hours = Math.floor(since / 60);
+  return hours > 0 ? `STARTED ${hours}H ${since % 60}M AGO` : `STARTED ${since}M AGO`;
 }
 
 export function photoWindow(dateStr: string, startTime?: string, endTime?: string) {

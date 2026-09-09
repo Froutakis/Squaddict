@@ -20,9 +20,20 @@ type UpNextProps = {
   onPress?: () => void;
   onRsvp: (status: RsvpStatus | null) => void;
   saving?: boolean;
+  live?: boolean;
+  liveText?: string;
+  onAddPhoto?: () => void;
 };
 
-export default function UpNext({ event, onPress, onRsvp, saving = false }: UpNextProps) {
+export default function UpNext({
+  event,
+  onPress,
+  onRsvp,
+  saving = false,
+  live = false,
+  liveText,
+  onAddPhoto,
+}: UpNextProps) {
   const place = placeLines(event.location, event.placeLabel);
   const answered = event.myStatus === 'in' || event.myStatus === 'out';
 
@@ -51,13 +62,24 @@ export default function UpNext({ event, onPress, onRsvp, saving = false }: UpNex
         <AttendeeStack people={event.going} size={24} max={3} onDark />
         <Text style={styles.count}>{event.going.length} IN</Text>
       </View>
+
+      {onAddPhoto ? (
+        <Pressable
+          onPress={onAddPhoto}
+          accessibilityRole="button"
+          accessibilityLabel="Add a photo from this night"
+          style={({ pressed }) => [styles.camera, pressed && styles.cameraPressed]}
+        >
+          <Ionicons name="camera" size={19} color={colors.text} />
+        </Pressable>
+      ) : null}
     </View>
   ) : (
     <RsvpButtons status={event.myStatus} saving={saving} onChange={onRsvp} onDark compact stretch />
   );
 
   return (
-    <Ticket tone="ink" onPress={onPress} accessibilityLabel={event.title} stub={stub}>
+    <Ticket tone="ink" torn={live} onPress={onPress} accessibilityLabel={event.title} stub={stub}>
       <View style={styles.topRow}>
         <View style={styles.squadPill}>
           <Text style={styles.squadText} numberOfLines={1}>
@@ -65,9 +87,12 @@ export default function UpNext({ event, onPress, onRsvp, saving = false }: UpNex
           </Text>
         </View>
         <View style={styles.spacer} />
-        <Text style={styles.code}>
-          {countdownLabel(event.date)} · № {ticketCode(event.id)}
-        </Text>
+        <View style={styles.codeRow}>
+          {live ? <View style={styles.liveDot} /> : null}
+          <Text style={live ? styles.codeLive : styles.code}>
+            {live && liveText ? liveText : countdownLabel(event.date)} · № {ticketCode(event.id)}
+          </Text>
+        </View>
       </View>
 
       <Text style={styles.title} numberOfLines={2}>
@@ -112,7 +137,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
   squadText: { color: WHITE, fontFamily: font.semi, fontSize: textSize.caption },
+  codeRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   code: { color: FAINT, fontFamily: font.mono, fontSize: 10, letterSpacing: 1 },
+  codeLive: { color: WHITE, fontFamily: font.mono, fontSize: 10, letterSpacing: 1 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success },
 
   title: {
     marginTop: space.sm,
@@ -134,5 +162,14 @@ const styles = StyleSheet.create({
   stubTitle: { color: WHITE, fontFamily: font.semi, fontSize: textSize.body },
   change: { color: FAINT, fontFamily: font.medium, fontSize: textSize.caption },
   stubRight: { alignItems: 'flex-end', gap: 3 },
+  camera: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: WHITE,
+  },
+  cameraPressed: { opacity: 0.75 },
   count: { color: FAINT, fontFamily: font.mono, fontSize: 9.5, letterSpacing: 1 },
 });

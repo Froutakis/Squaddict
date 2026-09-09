@@ -15,9 +15,9 @@ import { colors, font, radius, solidFor, space, textSize } from '../../theme';
 
 const TILE = 72;
 
-type PhotoSource = 'camera' | 'library';
+export type PhotoSource = 'camera' | 'library';
 
-async function capture(source: PhotoSource, event: { id: string; groupId: string }) {
+export async function capture(source: PhotoSource, event: { id: string; groupId: string }) {
   const picked = source === 'camera' ? await takePhoto() : await pickImage();
   if (!picked) return null;
 
@@ -28,7 +28,7 @@ async function capture(source: PhotoSource, event: { id: string; groupId: string
   return { photo, signed: fresh };
 }
 
-function messageFor(problem: unknown) {
+export function messageFor(problem: unknown) {
   if (typeof problem === 'string' && problem.length > 0) return problem;
 
   if (problem !== null && typeof problem === 'object') {
@@ -49,7 +49,7 @@ type PhotoSourceSheetProps = {
   onPick: (source: PhotoSource) => void;
 };
 
-function PhotoSourceSheet({ visible, onClose, onPick }: PhotoSourceSheetProps) {
+export function PhotoSourceSheet({ visible, onClose, onPick }: PhotoSourceSheetProps) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>

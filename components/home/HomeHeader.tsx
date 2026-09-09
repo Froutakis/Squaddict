@@ -1,10 +1,12 @@
-import { StyleSheet, Text, View } from 'react-native';
-import { colors, font, space, textSize } from '../../theme';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, font, radius, space, textSize } from '../../theme';
 import { todayLabel } from '../../lib/datetime';
 import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 
 type HomeHeaderProps = {
   displayName: string;
+  onSignOut: () => void;
 };
 
 function firstName(displayName: string) {
@@ -15,7 +17,8 @@ function firstName(displayName: string) {
   return trimmed.split(/\s+/)[0];
 }
 
-export default function HomeHeader({ displayName }: HomeHeaderProps) {
+export default function HomeHeader({ displayName, onSignOut }: HomeHeaderProps) {
+  const [open, setOpen] = useState(false);
   const name = firstName(displayName);
 
   let greeting = 'Hey';
@@ -24,20 +27,43 @@ export default function HomeHeader({ displayName }: HomeHeaderProps) {
   }
 
   return (
-    <View style={styles.header}>
-      <View style={styles.text}>
-        <Text style={styles.date}>{todayLabel()}</Text>
-        <Text style={styles.greeting} numberOfLines={1}>
-          {greeting}
-        </Text>
+    <View>
+      <View style={styles.header}>
+        <View style={styles.text}>
+          <Text style={styles.date}>{todayLabel()}</Text>
+          <Text style={styles.greeting} numberOfLines={1}>
+            {greeting}
+          </Text>
+        </View>
+
+        {displayName.trim() !== '' ? (
+          <Pressable
+            onPress={() => setOpen((was) => !was)}
+            accessibilityRole="button"
+            accessibilityLabel="Account"
+            accessibilityState={{ expanded: open }}
+            style={({ pressed }) => (pressed ? styles.pressed : null)}
+          >
+            <GradientAvatar
+              label={displayName}
+              initials={initialsFor(displayName)}
+              size={40}
+            />
+          </Pressable>
+        ) : null}
       </View>
 
-      {displayName.trim() !== '' ? (
-        <GradientAvatar
-          label={displayName}
-          initials={initialsFor(displayName)}
-          size={40}
-        />
+      {open ? (
+        <View style={styles.menu}>
+          <Pressable
+            onPress={onSignOut}
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+            style={({ pressed }) => [styles.signOut, pressed && styles.pressed]}
+          >
+            <Text style={styles.signOutText}>Sign out</Text>
+          </Pressable>
+        </View>
       ) : null}
     </View>
   );
@@ -60,6 +86,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
+  pressed: { opacity: 0.7 },
+  menu: { alignItems: 'flex-end', paddingHorizontal: space.lg, paddingTop: space.xs },
+  signOut: {
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  signOutText: { color: colors.danger, fontFamily: font.semi, fontSize: textSize.base },
   greeting: {
     marginTop: 3,
     color: colors.text,

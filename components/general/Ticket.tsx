@@ -9,6 +9,7 @@ type TicketProps = {
   stub?: ReactNode;
   tone?: 'light' | 'ink';
   notches?: boolean;
+  torn?: boolean;
   cutColor?: string;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -20,6 +21,7 @@ export default function Ticket({
   stub,
   tone = 'light',
   notches = true,
+  torn = false,
   cutColor = colors.bg,
   onPress,
   style,
@@ -33,9 +35,11 @@ export default function Ticket({
 
       {stub ? (
         <>
-          <View style={styles.perf}>
-            <Dashes color={ink ? 'rgba(255,255,255,0.32)' : colors.borderStrong} />
-            {notches ? (
+          <View style={[styles.perf, torn && { height: 5, marginHorizontal: 0, backgroundColor: cutColor }]}>
+            {torn ? null : (
+              <Dashes color={ink ? 'rgba(255,255,255,0.32)' : colors.borderStrong} />
+            )}
+            {notches && !torn ? (
               <>
                 <View style={[styles.notch, styles.notchLeft, { backgroundColor: cutColor }]} />
                 <View style={[styles.notch, styles.notchRight, { backgroundColor: cutColor }]} />

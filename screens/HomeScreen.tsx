@@ -1,15 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { User as AuthUser } from '@supabase/supabase-js';
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Group } from '../services/serviceGroup';
-import type { MyEvent, RsvpStatus } from '../services/serviceEvents';
+import type { EventPhoto, MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getUserById } from '../services/serviceUser';
+import { logout } from '../services/serviceAuth';
 import { getGroupsForUser } from '../services/serviceGroup';
 import { clearRsvp, getEventCovers, getMyEvents, setRsvp } from '../services/serviceEvents';
 import { signImages } from '../services/serviceMedia';
+import { mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
 import { colors, font, layout, space } from '../theme';
-import { dayFilterLabel, inPhotoWindow, keyOf } from '../lib/datetime';
+import { dayFilterLabel, inPhotoWindow, isHappeningNow, keyOf, liveLabel } from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
+import MemoriesBar from '../components/home/MemoriesBar';
+import { useNow } from '../components/home/useNow';
+import OutThereRow from '../components/home/OutThereRow';
+import { MEMORY_LIMIT, toMemoryNights } from '../components/home/memories';
 import DayFilterRow from '../components/home/DayFilterRow';
 import ListEmpty from '../components/home/ListEmpty';
 import SectionLabel from '../components/general/SectionLabel';
@@ -18,10 +24,17 @@ import CalendarCard from '../components/events/CalendarCard';
 import EventCard, { type EventCardData } from '../components/events/EventCard';
 import UpNext from '../components/events/UpNext';
 import EventOfTheWeek, { bestOfWeek } from '../components/events/EventOfTheWeek';
-import { PhotoPrompt } from '../components/events/EventPhotos';
-import EventSheet from '../components/events/EventSheet';
+import {
+  capture,
+  messageFor,
+  PhotoSourceSheet,
+  type PhotoSource,
+} from '../components/events/EventPhotos';
+import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import EventFormSheet from '../components/events/EventFormSheet';
 import GroupFormSheet from '../components/group/GroupFormSheet';
+
+const RENEW_TICK_MS = 5 * 60 * 1000;
 
 type HomeScreenProps = {
   user: AuthUser;
@@ -55,11 +68,19 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [showSquadForm, setShowSquadForm] = useState(false);
   const [formDate, setFormDate] = useState<string | null>(null);
-  const [openEvent, setOpenEvent] = useState<MyEvent | null>(null);
+  const [openEvent, setOpenEvent] = useState<SheetEvent | null>(null);
   const [editEvent, setEditEvent] = useState<MyEvent | null>(null);
   const [rsvpError, setRsvpError] = useState<string | null>(null);
-  const [covers, setCovers] = useState<Record<string, string>>({});
+  const [addingPhoto, setAddingPhoto] = useState<MyEvent | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [coverPhotos, setCoverPhotos] = useState<Record<string, EventPhoto>>({});
+  const [signed, setSigned] = useState<SignedMap>({});
+  const [clock, setClock] = useState(0);
   const [photoNonce, setPhotoNonce] = useState(0);
+  const [feedNonce, setFeedNonce] = useState(0);
+
+  const signedRef = useRef<SignedMap>({});
 
   const load = useCallback(
     async function load() {
@@ -125,24 +146,51 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     if (createNonce > 0) openNewEvent(selectedDate);
   }, [createNonce]);
 
+  async function pickPhoto(source: PhotoSource) {
+    const target = addingPhoto;
+    if (!target || photoBusy) return;
+
+    setPhotoBusy(true);
+    setPhotoError(null);
+
+    try {
+      const result = await capture(source, { id: target.id, groupId: target.groupId });
+      setAddingPhoto(null);
+      if (result) setPhotoNonce((n) => n + 1);
+    } catch (problem) {
+      setPhotoError(messageFor(problem));
+      setAddingPhoto(null);
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
   function openNewEvent(date: string | null) {
     setEditEvent(null);
     setFormDate(date);
     setShowCreate(true);
   }
 
+  const now = useNow();
   const today = keyOf(new Date());
   const dayMode = selectedDate !== null;
   const visible = squadId ? events.filter((e) => e.groupId === squadId) : events;
   const upcoming = visible.filter((e) => e.date >= today);
   const upNextEvent = dayMode ? undefined : upcoming[0];
-  const pool = dayMode ? visible.filter((e) => e.date === selectedDate) : upcoming.slice(1);
+  const liveEvent = dayMode
+    ? undefined
+    : visible.find((e) => isHappeningNow(e.date, e.startTime, e.endTime, now));
+  const heroEvent = liveEvent ?? upNextEvent;
+  const pool = dayMode
+    ? visible.filter((e) => e.date === selectedDate)
+    : upcoming.filter((e) => e.id !== heroEvent?.id);
   const waiting = pool.filter((e) => e.myStatus === undefined);
   const later = pool.filter((e) => e.myStatus !== undefined);
   const weekBest = dayMode ? null : bestOfWeek(visible, new Date());
-  const wantsPhoto = visible.find(
-    (e) => e.myStatus === 'in' && inPhotoWindow(e.date, e.startTime, e.endTime),
-  );
+  const heroWantsPhoto =
+    heroEvent !== undefined &&
+    heroEvent.myStatus === 'in' &&
+    inPhotoWindow(heroEvent.date, heroEvent.startTime, heroEvent.endTime, now);
 
   const pastIds = events
     .filter((e) => e.date < today)
@@ -151,42 +199,93 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     .join(',');
 
   useEffect(() => {
+    signedRef.current = signed;
+  }, [signed]);
+
+  useEffect(() => {
+    const tick = setInterval(() => setClock((c) => c + 1), RENEW_TICK_MS);
+    return () => clearInterval(tick);
+  }, []);
+
+  const signPaths = useCallback(function sign(paths: string[]) {
+    const missing = pathsToSign(paths, signedRef.current, Date.now());
+    if (missing.length === 0) return;
+
+    signImages(missing)
+      .then((fresh) => setSigned((prev) => mergeSigned(prev, fresh)))
+      .catch(() => {});
+  }, []);
+
+  const forgetSigned = useCallback(function forget(path: string) {
+    setSigned((prev) => {
+      if (!prev[path]) return prev;
+      const next = { ...prev };
+      delete next[path];
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
     if (pastIds === '') {
-      setCovers({});
+      setCoverPhotos({});
       return;
     }
 
     let cancelled = false;
 
-    async function loadCovers() {
-      try {
-        const byEvent = await getEventCovers(pastIds.split(','));
-        const paths = Object.values(byEvent).map((photo) => photo.path);
-        if (paths.length === 0) {
-          if (!cancelled) setCovers({});
-          return;
-        }
+    getEventCovers(pastIds.split(','))
+      .then((byEvent) => {
+        if (!cancelled) setCoverPhotos(byEvent);
+      })
+      .catch(() => {
+        if (!cancelled) setCoverPhotos({});
+      });
 
-        const signed = await signImages(paths);
-        if (cancelled) return;
-
-        const byDate: Record<string, string> = {};
-        for (const event of events) {
-          const photo = byEvent[event.id];
-          const url = photo ? signed[photo.path]?.url : undefined;
-          if (url && !byDate[event.date]) byDate[event.date] = url;
-        }
-        setCovers(byDate);
-      } catch {
-        if (!cancelled) setCovers({});
-      }
-    }
-
-    loadCovers();
     return () => {
       cancelled = true;
     };
   }, [pastIds, photoNonce]);
+
+  useEffect(() => {
+    const paths = Object.values(coverPhotos).map((photo) => photo.path);
+    const missing = pathsToSign(paths, signed, Date.now());
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+
+    signImages(missing)
+      .then((fresh) => {
+        if (!cancelled) setSigned((prev) => mergeSigned(prev, fresh));
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [coverPhotos, signed, clock]);
+
+  const covers = useMemo(() => {
+    const byDate: Record<string, string> = {};
+
+    for (const event of events) {
+      const photo = coverPhotos[event.id];
+      const url = photo ? signed[photo.path]?.url : undefined;
+      if (url && !byDate[event.date]) byDate[event.date] = url;
+    }
+
+    return byDate;
+  }, [events, coverPhotos, signed]);
+
+  const nights = useMemo(
+    () => toMemoryNights(visible, coverPhotos, today).slice(0, MEMORY_LIMIT),
+    [visible, coverPhotos, today],
+  );
+
+  const squadSizes = useMemo(() => {
+    const sizes: Record<string, number> = {};
+    for (const group of groups) sizes[group.id] = group.memberCount;
+    return sizes;
+  }, [groups]);
 
   function renderBody() {
     if (loading) {
@@ -240,25 +339,34 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     return (
       <>
 
-        {upNextEvent ? (
+        {heroEvent ? (
           <View style={styles.body}>
-            <SectionLabel>Up next</SectionLabel>
+            <SectionLabel>{liveEvent ? 'Happening now' : 'Up next'}</SectionLabel>
             <UpNext
-              event={upNextEvent}
-              onPress={() => setOpenEvent(upNextEvent)}
-              onRsvp={(status) => handleRsvp(upNextEvent.id, status)}
+              event={heroEvent}
+              live={liveEvent !== undefined}
+              liveText={
+                liveEvent
+                  ? liveLabel(liveEvent.date, liveEvent.startTime, liveEvent.endTime, now)
+                  : undefined
+              }
+              onAddPhoto={heroWantsPhoto ? () => setAddingPhoto(heroEvent) : undefined}
+              onPress={() => setOpenEvent(heroEvent)}
+              onRsvp={(status) => handleRsvp(heroEvent.id, status)}
             />
+            {photoError ? <Text style={styles.error}>{photoError}</Text> : null}
           </View>
         ) : null}
 
-        {wantsPhoto ? (
-          <View style={styles.body}>
-            <PhotoPrompt
-              event={wantsPhoto}
-              onChanged={() => setPhotoNonce((n) => n + 1)}
-            />
-          </View>
-        ) : null}
+        <MemoriesBar
+          userId={user.id}
+          nights={nights}
+          squadSizes={squadSizes}
+          signed={signed}
+          signPaths={signPaths}
+          onImageError={forgetSigned}
+          onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
+        />
 
         <View style={styles.body}>
           <CalendarCard
@@ -340,8 +448,9 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <HomeHeader displayName={displayName} />
+        <HomeHeader displayName={displayName} onSignOut={() => logout().catch(() => {})} />
         {renderBody()}
+        <OutThereRow refreshNonce={feedNonce} onOpen={(event) => setOpenEvent(event)} />
       </ScrollView>
 
       <EventFormSheet
@@ -357,6 +466,14 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
         onSaved={async () => setEvents(await getMyEvents(user.id))}
       />
 
+      <PhotoSourceSheet
+        visible={addingPhoto !== null}
+        onClose={() => {
+          if (!photoBusy) setAddingPhoto(null);
+        }}
+        onPick={pickPhoto}
+      />
+
       <GroupFormSheet
         visible={showSquadForm}
         onClose={() => setShowSquadForm(false)}
@@ -369,12 +486,18 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
         event={openEvent}
         currentUserId={user.id}
         onClose={() => setOpenEvent(null)}
-        onChanged={async () => setEvents(await getMyEvents(user.id))}
+        onChanged={async () => {
+          setEvents(await getMyEvents(user.id));
+          setFeedNonce((n) => n + 1);
+        }}
         onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
         onEdit={(e) => {
+          const mine = events.find((one) => one.id === e.id);
+          if (!mine) return;
+
           setOpenEvent(null);
-          setEditEvent(e);
-          setFormDate(e.date);
+          setEditEvent(mine);
+          setFormDate(mine.date);
           setShowCreate(true);
         }}
       />
