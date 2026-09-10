@@ -34,9 +34,10 @@ import {
   resolveQuotes,
 } from '../components/chat/replies';
 import SearchOverlay from '../components/chat/SearchOverlay';
-import SquadPicker from '../components/chat/SquadPicker';
+import GroupPicker from '../components/chat/GroupPicker';
 import GroupFormSheet from '../components/group/GroupFormSheet';
-import { mentionIds, toMembers, type Member } from '../components/chat/mentions';
+import { mentionIds, toMembers } from '../components/chat/mentions';
+import type { Person } from '../lib/people';
 import { dropMissingImages, restoreOutbox } from '../components/chat/cache';
 import { attachmentPath, mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
 import { buildRows, type LocalImage, type OutgoingMessage, type Row } from '../components/chat/messageRows';
@@ -59,33 +60,32 @@ import {
   referencedImages,
   readMessages as readCachedMessages,
   readOutbox as readCachedOutbox,
-  readSquads as readCachedSquads,
+  readGroups as readCachedGroups,
   writeMessages as writeCachedMessages,
   writeOutbox as writeCachedOutbox,
-  writeSquads as writeCachedSquads,
+  writeGroups as writeCachedGroups,
 } from '../services/serviceCache';
 import type { Group } from '../services/serviceGroup';
+import { getGroupsForUser, getMemberNames } from '../services/serviceGroup';
 import {
+  clearReaction,
   deleteMessage,
   editMessage,
   getGroupPreviews,
-  getGroupsForUser,
-  getMemberNames,
   getMentionCounts,
-  setMentions,
   getMessages,
   getMessagesAfter,
+  getReactions,
   getUnreadCounts,
   markGroupRead,
-  clearReaction,
-  getReactions,
-  setReaction,
-  toReaction,
   sendMessage,
+  setMentions,
+  setReaction,
   toChatMessage,
+  toReaction,
   type ChatMessage,
   type GroupPreview,
-} from '../services/serviceGroup';
+} from '../services/serviceChat';
 import {
   discardImage,
   imageExists,
@@ -120,14 +120,14 @@ export default function GroupChatScreen({
   const [groups, setGroups] = useState<Group[]>([]);
   const [activeId, setActiveId] = useState<string | null>(initialGroupId);
   const [previews, setPreviews] = useState<Record<string, GroupPreview>>({});
-  const [squadForm, setSquadForm] = useState<'create' | 'join' | null>(null);
+  const [groupForm, setGroupForm] = useState<'create' | 'join' | null>(null);
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [mentionCounts, setMentionCounts] = useState<Record<string, number>>({});
   const [displayName, setDisplayName] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [outbox, setOutbox] = useState<OutgoingMessage[]>([]);
   const [memberCount, setMemberCount] = useState(0);
-  const [members, setMembers] = useState<Member[]>([]);
+  const [members, setMembers] = useState<Person[]>([]);
   const [messagesFor, setMessagesFor] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<LocalImage | null>(null);
   const [signed, setSigned] = useState<SignedMap>({});
@@ -148,7 +148,7 @@ export default function GroupChatScreen({
   const [groupScreen, setGroupScreen] = useState(false);
 
   const namesRef = useRef<Record<string, string>>({});
-  const membersRef = useRef<Member[]>([]);
+  const membersRef = useRef<Person[]>([]);
   const loadingOlderRef = useRef(false);
   const outboxRef = useRef<OutgoingMessage[]>([]);
   outboxRef.current = outbox;
@@ -246,7 +246,7 @@ export default function GroupChatScreen({
     let cancelled = false;
 
     async function loadCached() {
-      const cached = await readCachedSquads(user.id);
+      const cached = await readCachedGroups(user.id);
       if (cancelled || !cached || cached.groups.length === 0) {
         return;
       }
@@ -294,7 +294,7 @@ export default function GroupChatScreen({
     if (groups.length === 0) {
       return;
     }
-    writeCachedSquads(user.id, { groups, previews });
+    writeCachedGroups(user.id, { groups, previews });
   }, [user.id, groups, previews]);
 
   useEffect(() => {
@@ -1024,7 +1024,7 @@ export default function GroupChatScreen({
     return (
       <SafeAreaView style={styles.screen}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <SquadPicker
+        <GroupPicker
           groups={groups}
           previews={previews}
           unread={unread}
@@ -1032,26 +1032,26 @@ export default function GroupChatScreen({
           displayName={displayName}
           onSelect={openGroup}
           onBack={onBack}
-          onCreateSquad={function () {
-            setSquadForm('create');
+          onCreateGroup={function () {
+            setGroupForm('create');
           }}
           onEnterCode={function () {
-            setSquadForm('join');
+            setGroupForm('join');
           }}
         />
 
         <GroupFormSheet
-          visible={squadForm !== null}
-          initialMode={squadForm ?? 'create'}
+          visible={groupForm !== null}
+          initialMode={groupForm ?? 'create'}
           onClose={function () {
-            setSquadForm(null);
+            setGroupForm(null);
           }}
           onDone={function (group) {
             setGroups(function (current) {
               if (current.some((one) => one.id === group.id)) return current;
               return [...current, group];
             });
-            setSquadForm(null);
+            setGroupForm(null);
             openGroup(group.id);
           }}
         />

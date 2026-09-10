@@ -27,7 +27,7 @@ import ListEmpty from '../components/home/ListEmpty';
 import SectionLabel from '../components/general/SectionLabel';
 import Button from '../components/general/Button';
 import CalendarCard from '../components/events/CalendarCard';
-import EventCard, { type EventCardData } from '../components/events/EventCard';
+import EventCard, { type CardEvent } from '../components/events/EventCard';
 import UpNext from '../components/events/UpNext';
 import {
   capture,
@@ -38,7 +38,7 @@ import {
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import EventFormSheet from '../components/events/EventFormSheet';
 import GroupFormSheet from '../components/group/GroupFormSheet';
-import GroupCard, { type CardSquad } from '../components/group/GroupCard';
+import GroupCard, { type CardGroup } from '../components/group/GroupCard';
 
 const RENEW_TICK_MS = 5 * 60 * 1000;
 
@@ -47,7 +47,7 @@ type HomeScreenProps = {
   createNonce?: number;
 };
 
-function toCardData(event: MyEvent): EventCardData {
+function toCardData(event: MyEvent): CardEvent {
   return {
     id: event.id,
     title: event.title,
@@ -55,7 +55,7 @@ function toCardData(event: MyEvent): EventCardData {
     startTime: event.startTime,
     location: event.location,
     placeLabel: event.placeLabel,
-    squadName: event.groupName,
+    groupName: event.groupName,
     myStatus: event.myStatus,
     going: event.going,
     goingCount: event.going.length,
@@ -70,9 +70,9 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const [error, setError] = useState<string | null>(null);
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [squadId, setSquadId] = useState<string | null>(null);
+  const [groupId, setGroupId] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [showSquadForm, setShowSquadForm] = useState(false);
+  const [showGroupForm, setShowGroupForm] = useState(false);
   const [formDate, setFormDate] = useState<string | null>(null);
   const [openEvent, setOpenEvent] = useState<SheetEvent | null>(null);
   const [editEvent, setEditEvent] = useState<MyEvent | null>(null);
@@ -85,7 +85,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const [addingPhoto, setAddingPhoto] = useState<MyEvent | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
-  const [feedSquads, setFeedSquads] = useState<CardSquad[]>([]);
+  const [feedGroups, setFeedGroups] = useState<CardGroup[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,7 +96,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
 
     getFeed()
       .then((page) => {
-        if (!cancelled) setFeedSquads(page.squads);
+        if (!cancelled) setFeedGroups(page.groups);
       })
       .catch(() => {});
 
@@ -203,7 +203,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const now = useNow();
   const today = keyOf(new Date());
   const dayMode = selectedDate !== null;
-  const visible = squadId ? events.filter((e) => e.groupId === squadId) : events;
+  const visible = groupId ? events.filter((e) => e.groupId === groupId) : events;
   const upcoming = visible.filter((e) => e.date >= today);
   const upNextEvent = dayMode ? undefined : upcoming[0];
   const liveEvent = dayMode
@@ -310,7 +310,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
             Start one and send the code to your people, or paste a code somebody sent you.
           </Text>
           <View style={styles.stateButton}>
-            <Button title="Start a squad" onPress={() => setShowSquadForm(true)} />
+            <Button title="Start a squad" onPress={() => setShowGroupForm(true)} />
           </View>
         </View>
       );
@@ -423,7 +423,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
           )}
         </View>
 
-        {feedSquads.length > 0 ? (
+        {feedGroups.length > 0 ? (
           <View>
             <View style={styles.body}>
               <SectionLabel>Pareas you crossed</SectionLabel>
@@ -433,8 +433,8 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.row}
             >
-              {feedSquads.map((squad) => (
-                <GroupCard key={squad.id} squad={squad} />
+              {feedGroups.map((group) => (
+                <GroupCard key={group.id} group={group} />
               ))}
             </ScrollView>
           </View>
@@ -449,9 +449,9 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
       <ScrollView contentContainerStyle={styles.content}>
         <HomeHeader
           displayName={displayName}
-          squads={groups}
-          squadId={squadId}
-          onSquadSelect={setSquadId}
+          groups={groups}
+          groupId={groupId}
+          onGroupSelect={setGroupId}
           onSignOut={() => logout().catch(() => {})}
         />
         {renderBody()}
@@ -479,8 +479,8 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
       />
 
       <GroupFormSheet
-        visible={showSquadForm}
-        onClose={() => setShowSquadForm(false)}
+        visible={showGroupForm}
+        onClose={() => setShowGroupForm(false)}
         onDone={async () => {
           setGroups(await getGroupsForUser(user.id));
         }}

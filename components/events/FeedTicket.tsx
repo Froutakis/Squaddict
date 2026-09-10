@@ -84,7 +84,7 @@ export default function FeedTicket({ event, saving = false, onPress, onRsvp }: F
         </Text>
       ) : null}
 
-      <View style={styles.squadRow}>
+      <View style={styles.groupRow}>
         <View style={[styles.monogram, { backgroundColor: solidFor(event.groupName) }]}>
           <Text style={styles.monogramText}>{initialsFor(event.groupName)}</Text>
         </View>
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     fontSize: textSize.caption,
   },
 
-  squadRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: space.sm },
+  groupRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: space.sm },
   monogram: {
     width: 20,
     height: 20,

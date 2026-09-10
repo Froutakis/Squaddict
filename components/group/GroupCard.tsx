@@ -4,7 +4,7 @@ import { initialsFor } from '../general/GradientAvatar';
 
 export const GROUP_CARD_WIDTH = 232;
 
-export type CardSquad = {
+export type CardGroup = {
   id: string;
   handle: string;
   name: string;
@@ -14,7 +14,7 @@ export type CardSquad = {
 };
 
 type GroupCardProps = {
-  squad: CardSquad;
+  group: CardGroup;
   following?: boolean;
   saving?: boolean;
   reason?: string;
@@ -28,7 +28,7 @@ function plural(count: number, one: string, many: string) {
 }
 
 export default function GroupCard({
-  squad,
+  group,
   following = false,
   saving = false,
   reason,
@@ -36,12 +36,12 @@ export default function GroupCard({
   onFollow,
   style,
 }: GroupCardProps) {
-  const stats = [plural(squad.memberCount, 'member', 'members')];
-  if (squad.openEvents !== undefined && squad.openEvents > 0) {
-    stats.push(plural(squad.openEvents, 'plan up', 'plans up'));
+  const stats = [plural(group.memberCount, 'member', 'members')];
+  if (group.openEvents !== undefined && group.openEvents > 0) {
+    stats.push(plural(group.openEvents, 'plan up', 'plans up'));
   }
 
-  const label = `${squad.name}, @${squad.handle}, ${stats.join(', ')}`;
+  const label = `${group.name}, @${group.handle}, ${stats.join(', ')}`;
 
   return (
     <Pressable
@@ -52,16 +52,16 @@ export default function GroupCard({
       style={({ pressed }) => [styles.card, pressed && onPress ? styles.pressed : null, style]}
     >
       <View style={styles.head}>
-        <View style={[styles.monogram, { backgroundColor: solidFor(squad.name) }]}>
-          <Text style={styles.monogramText}>{initialsFor(squad.name)}</Text>
+        <View style={[styles.monogram, { backgroundColor: solidFor(group.name) }]}>
+          <Text style={styles.monogramText}>{initialsFor(group.name)}</Text>
         </View>
 
         <View style={styles.headText}>
           <Text style={styles.name} numberOfLines={1}>
-            {squad.name}
+            {group.name}
           </Text>
           <Text style={styles.handle} numberOfLines={1}>
-            @{squad.handle}
+            @{group.handle}
           </Text>
         </View>
       </View>
@@ -72,9 +72,9 @@ export default function GroupCard({
         </Text>
       ) : null}
 
-      {squad.bio ? (
+      {group.bio ? (
         <Text style={styles.bio} numberOfLines={2}>
-          {squad.bio}
+          {group.bio}
         </Text>
       ) : null}
 
@@ -91,7 +91,7 @@ export default function GroupCard({
             disabled={saving}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={following ? `Unfollow ${squad.name}` : `Follow ${squad.name}`}
+            accessibilityLabel={following ? `Unfollow ${group.name}` : `Follow ${group.name}`}
             accessibilityState={{ selected: following, disabled: saving }}
             style={({ pressed }) => (pressed ? styles.pressed : null)}
           >

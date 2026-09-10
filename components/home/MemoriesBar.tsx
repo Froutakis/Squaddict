@@ -23,7 +23,7 @@ const BUBBLE = 66;
 type MemoriesBarProps = {
   userId: string;
   nights: MemoryNight[];
-  squadSizes: Record<string, number>;
+  groupSizes: Record<string, number>;
   signed: SignedMap;
   signPaths: (paths: string[]) => void;
   onImageError: (path: string) => void;
@@ -33,7 +33,7 @@ type MemoriesBarProps = {
 export default function MemoriesBar({
   userId,
   nights,
-  squadSizes,
+  groupSizes,
   signed,
   signPaths,
   onImageError,
@@ -167,7 +167,7 @@ export default function MemoriesBar({
         visible={open !== null}
         nights={nights}
         startIndex={open ?? 0}
-        squadSizes={squadSizes}
+        groupSizes={groupSizes}
         signed={signed}
         signPaths={signPaths}
         onImageError={onImageError}

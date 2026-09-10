@@ -1,5 +1,5 @@
 
-import type { ChatMessage, ReplyQuote } from '../../services/serviceGroup';
+import type { ChatMessage, ReplyQuote } from '../../services/serviceChat';
 
 export function quoteOf(message: ChatMessage): ReplyQuote {
   const deleted = message.deletedAt !== null;

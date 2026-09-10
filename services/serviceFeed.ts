@@ -1,3 +1,4 @@
+import type { Coords } from "./serviceLocation";
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
 import { daysUntil, keyOf } from "../lib/datetime";
@@ -23,7 +24,7 @@ export type FeedEvent = {
   isMember: boolean;
 };
 
-export type FeedSquad = {
+export type FeedGroup = {
   id: string;
   handle: string;
   name: string;
@@ -32,20 +33,15 @@ export type FeedSquad = {
   openEvents: number;
 };
 
-export type Center = {
-  lat: number;
-  lng: number;
-};
-
 export type FeedFilters = {
-  center?: Center | null;
+  center?: Coords | null;
   radiusKm?: number;
   tags?: EventTag[];
 };
 
 export type FeedPage = {
   events: FeedEvent[];
-  squads: FeedSquad[];
+  groups: FeedGroup[];
   hasMore: boolean;
 };
 
@@ -59,7 +55,7 @@ function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }
 
-export function distanceKm(a: Center, b: Center): number {
+export function distanceKm(a: Coords, b: Coords): number {
   const dLat = toRad(b.lat - a.lat);
   const dLng = toRad(b.lng - a.lng);
 
@@ -158,18 +154,18 @@ export async function getFeed(filters: FeedFilters = {}, page = 0): Promise<Feed
   near.sort((a, b) => score(b, radiusKm, preferred) - score(a, radiusKm, preferred));
 
   const byId = new Map(pageRows.map((r) => [r.id, r]));
-  const squads = new Map<string, FeedSquad>();
+  const groups = new Map<string, FeedGroup>();
 
   near.forEach(function (event) {
     if (event.isMember) return;
 
-    const seen = squads.get(event.groupId);
+    const seen = groups.get(event.groupId);
     if (seen) {
       seen.openEvents += 1;
       return;
     }
 
-    squads.set(event.groupId, {
+    groups.set(event.groupId, {
       id: event.groupId,
       handle: event.groupHandle,
       name: event.groupName,
@@ -179,5 +175,5 @@ export async function getFeed(filters: FeedFilters = {}, page = 0): Promise<Feed
     });
   });
 
-  return { events: near, squads: [...squads.values()], hasMore };
+  return { events: near, groups: [...groups.values()], hasMore };
 }

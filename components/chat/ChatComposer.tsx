@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { LocalImage } from './messageRows';
-import { applyMention, matchMembers, mentionQuery, type Member } from './mentions';
-import { SquadMonogram } from './SquadPicker';
+import { applyMention, matchMembers, mentionQuery } from './mentions';
+import type { Person } from '../../lib/people';
+import { GroupMonogram } from './GroupPicker';
 import { paper, paperFont, radius, space } from '../../theme';
 
 type ChatComposerProps = {
@@ -15,7 +16,7 @@ type ChatComposerProps = {
   replyTo?: { senderName: string; content: string; deleted: boolean } | null;
   onCancel?: () => void;
   onTyping?: () => void;
-  members?: Member[];
+  members?: Person[];
   meId?: string;
   attachment?: LocalImage | null;
   onPickImage?: () => void;
@@ -65,7 +66,7 @@ export default function ChatComposer({
   const picking = suggestions.length > 0;
   const highlighted = Math.min(active, suggestions.length - 1);
 
-  function pick(member: Member) {
+  function pick(member: Person) {
     if (!found) {
       return;
     }
@@ -163,7 +164,7 @@ export default function ChatComposer({
                     ];
                   }}
                 >
-                  <SquadMonogram name={member.name} size={24} />
+                  <GroupMonogram name={member.name} size={24} />
                   <Text style={styles.suggestionName} numberOfLines={1}>
                     {member.name}
                   </Text>

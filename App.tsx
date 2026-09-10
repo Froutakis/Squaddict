@@ -78,12 +78,12 @@ export default function App() {
     setScreen(tab);
   }
 
-  const navHidden = screen === 'squads' && threadOpen;
+  const navHidden = screen === 'groups' && threadOpen;
 
   return (
     <View style={styles.app}>
       <View style={styles.body}>
-        {screen === 'squads' ? (
+        {screen === 'groups' ? (
           <GroupChatScreen user={user} onThreadChange={setThreadOpen} />
         ) : screen === 'explore' ? (
           <ExploreScreen />

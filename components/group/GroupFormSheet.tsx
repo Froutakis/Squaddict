@@ -61,15 +61,15 @@ export default function GroupFormSheet({
   }
 
   async function handleSave() {
-    const squadName = name.trim();
-    const squadHandle = normalizeHandle(handle);
+    const groupName = name.trim();
+    const cleanHandle = normalizeHandle(handle);
     const inviteCode = code.trim();
 
-    if (mode === 'create' && !squadName) {
+    if (mode === 'create' && !groupName) {
       setFormError('Give your squad a name.');
       return;
     }
-    if (mode === 'create' && !HANDLE_PATTERN.test(squadHandle)) {
+    if (mode === 'create' && !HANDLE_PATTERN.test(cleanHandle)) {
       setFormError('A handle is 3-30 characters: a-z, 0-9 and _ only.');
       return;
     }
@@ -82,7 +82,7 @@ export default function GroupFormSheet({
     setFormError(null);
     try {
       const group = mode === 'create'
-        ? await createGroup(squadHandle, squadName)
+        ? await createGroup(cleanHandle, groupName)
         : await joinByInviteCode(inviteCode);
 
       await onDone(group);

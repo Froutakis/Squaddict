@@ -35,7 +35,7 @@ type StoryViewerProps = {
   visible: boolean;
   nights: MemoryNight[];
   startIndex: number;
-  squadSizes: Record<string, number>;
+  groupSizes: Record<string, number>;
   signed: SignedMap;
   signPaths: (paths: string[]) => void;
   onImageError: (path: string) => void;
@@ -48,7 +48,7 @@ export default function StoryViewer({
   visible,
   nights,
   startIndex,
-  squadSizes,
+  groupSizes,
   signed,
   signPaths,
   onImageError,
@@ -246,7 +246,7 @@ export default function StoryViewer({
 
   const event = current.event;
   const place = placeLines(event.location, event.placeLabel);
-  const size = squadSizes[event.groupId] ?? 0;
+  const size = groupSizes[event.groupId] ?? 0;
   const going = event.going ?? [];
   const wereIn = size > 0 ? `${going.length} of ${size} were in` : `${going.length} were in`;
   const tint = solidFor(event.groupName);
@@ -354,7 +354,7 @@ export default function StoryViewer({
               size={30}
             />
             <View style={styles.headText}>
-              <Text style={styles.squad} numberOfLines={1}>
+              <Text style={styles.group} numberOfLines={1}>
                 {event.groupName}
               </Text>
               <Text style={styles.when} numberOfLines={1}>
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: 13 },
   headText: { flex: 1 },
-  squad: { color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.base },
+  group: { color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.base },
   when: {
     marginTop: 1,
     color: 'rgba(255,255,255,0.62)',

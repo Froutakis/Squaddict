@@ -1,6 +1,5 @@
+import type { Person } from "../../lib/people";
 import { fold } from './search';
-
-export type Member = { id: string; name: string };
 
 export type MentionSpan = {
   start: number;
@@ -20,7 +19,7 @@ function wordy(ch: string | undefined): boolean {
   return ch !== undefined && WORDY.test(ch);
 }
 
-export function findMentions(text: string, members: Member[]): MentionSpan[] {
+export function findMentions(text: string, members: Person[]): MentionSpan[] {
   if (text.length === 0 || members.length === 0) {
     return [];
   }
@@ -63,7 +62,7 @@ export function findMentions(text: string, members: Member[]): MentionSpan[] {
   return found;
 }
 
-export function mentionIds(text: string, members: Member[]): string[] {
+export function mentionIds(text: string, members: Person[]): string[] {
   const seen: string[] = [];
   for (const span of findMentions(text, members)) {
     if (!seen.includes(span.userId)) {
@@ -73,7 +72,7 @@ export function mentionIds(text: string, members: Member[]): string[] {
   return seen;
 }
 
-export function mentionsMe(text: string, members: Member[], meId: string): boolean {
+export function mentionsMe(text: string, members: Person[], meId: string): boolean {
   return findMentions(text, members).some(function (span) {
     return span.userId === meId;
   });
@@ -81,7 +80,7 @@ export function mentionsMe(text: string, members: Member[], meId: string): boole
 
 export type MentionPart = { text: string; userId: string | null };
 
-export function mentionParts(text: string, members: Member[]): MentionPart[] {
+export function mentionParts(text: string, members: Person[]): MentionPart[] {
   const spans = findMentions(text, members);
   if (spans.length === 0) {
     return [{ text, userId: null }];
@@ -134,13 +133,13 @@ export function mentionQuery(text: string, cursor: number): MentionQuery | null 
 }
 
 export function matchMembers(
-  members: Member[],
+  members: Person[],
   query: string,
   exclude?: string,
   limit: number = MENTION_SUGGESTIONS,
-): Member[] {
+): Person[] {
   const needle = fold(query.trim());
-  const scored: Array<{ member: Member; rank: number }> = [];
+  const scored: Array<{ member: Person; rank: number }> = [];
 
   for (const member of members) {
     if (member.id === exclude || member.name.trim().length === 0) {
@@ -170,7 +169,7 @@ export type MentionInsert = { text: string; cursor: number };
 export function applyMention(
   text: string,
   found: MentionQuery,
-  member: Member,
+  member: Person,
 ): MentionInsert {
   const before = text.slice(0, found.at);
   const after = text.slice(found.at + 1 + found.query.length);
@@ -179,7 +178,7 @@ export function applyMention(
   return { text: before + inserted + after, cursor: before.length + inserted.length };
 }
 
-export function toMembers(names: Record<string, string>): Member[] {
+export function toMembers(names: Record<string, string>): Person[] {
   return Object.keys(names)
     .map(function (id) {
       return { id, name: names[id] ?? '' };

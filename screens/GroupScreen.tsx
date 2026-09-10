@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { SquadMonogram } from '../components/chat/SquadPicker';
+import { GroupMonogram } from '../components/chat/GroupPicker';
 import type { Group } from '../services/serviceGroup';
 import { layout, paper, paperFont, radius, space } from '../theme';
 
@@ -23,7 +23,7 @@ export default function GroupScreen({ group, onBack }: GroupScreenProps) {
             <Ionicons name="chevron-back" size={20} color={paper.ink} />
           </Pressable>
 
-          <SquadMonogram name={group.name} size={32} />
+          <GroupMonogram name={group.name} size={32} />
 
           <Text style={styles.title} numberOfLines={1}>
             {group.name}

@@ -1,4 +1,4 @@
-import type { ChatMessage } from '../../services/serviceGroup';
+import type { ChatMessage } from '../../services/serviceChat';
 import type { OutgoingMessage } from './messageRows';
 
 export const CACHE_VERSION = 1;
@@ -11,7 +11,7 @@ export function userPrefix(userId: string): string {
   return PREFIX + userId + ':';
 }
 
-export function squadsKey(userId: string): string {
+export function groupsKey(userId: string): string {
   return userPrefix(userId) + 'squads';
 }
 

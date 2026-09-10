@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { searchMessages, type SearchHit } from '../../services/serviceGroup';
+import { searchMessages, type SearchHit } from '../../services/serviceChat';
 import { highlightParts, isSearchable, snippet } from './search';
 import { layout, paper, paperFont, radius, space } from '../../theme';
 

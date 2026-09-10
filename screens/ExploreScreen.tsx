@@ -14,13 +14,12 @@ import {
 import {
   DEFAULT_RADIUS_KM,
   getFeed,
-  type Center,
   type FeedEvent,
 } from '../services/serviceFeed';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
-import { getCurrentCoords } from '../services/serviceLocation';
+import { getCurrentCoords, type Coords, type LocationState } from '../services/serviceLocation';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
-import EventCard, { type EventCardData } from '../components/events/EventCard';
+import EventCard, { type CardEvent } from '../components/events/EventCard';
 import { colors, font, layout, space, textSize } from '../theme';
 import Chip from '../components/general/Chip';
 import SectionLabel from '../components/general/SectionLabel';
@@ -30,9 +29,7 @@ const RADII = [5, 10, 25, 50];
 
 const MIN_VISIBLE = 6;
 
-type LocationState = 'asking' | 'on' | 'off';
-
-function toCardData(event: FeedEvent): EventCardData {
+function toCardData(event: FeedEvent): CardEvent {
   return {
     id: event.id,
     title: event.title,
@@ -40,7 +37,7 @@ function toCardData(event: FeedEvent): EventCardData {
     startTime: event.startTime,
     location: event.location,
     placeLabel: event.placeLabel,
-    squadName: event.groupName,
+    groupName: event.groupName,
     myStatus: event.myStatus,
     going: [],
     goingCount: event.goingCount,
@@ -60,7 +57,7 @@ function applyRsvp(event: FeedEvent, status: RsvpStatus | null): FeedEvent {
 }
 
 export default function ExploreScreen() {
-  const [center, setCenter] = useState<Center | null>(null);
+  const [center, setCenter] = useState<Coords | null>(null);
   const [locationState, setLocationState] = useState<LocationState>('asking');
 
   const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS_KM);

@@ -1,3 +1,4 @@
+import type { Person } from "../lib/people";
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
 import { toEventTags, type EventTag } from "../lib/tags";
@@ -79,16 +80,14 @@ export type EventPhoto = {
 
 export type RsvpStatus = "in" | "out";
 
-export type Attendee = {
-  userId: string;
-  name: string;
+export type Attendee = Person & {
   status: RsvpStatus;
 };
 
 export type MyEvent = GroupEvent & {
   groupName: string;
   myStatus?: RsvpStatus;
-  going: { id: string; name: string }[];
+  going: Person[];
 };
 
 function toEvent(r: EventRow): GroupEvent {
@@ -112,7 +111,7 @@ function toEvent(r: EventRow): GroupEvent {
 
 function toAttendee(a: AttendeeRow): Attendee {
   return {
-    userId: a.user_id,
+    id: a.user_id,
     name: a.profiles?.display_name ?? "",
     status: a.status === "in" ? "in" : "out",
   };

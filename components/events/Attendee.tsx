@@ -1,9 +1,10 @@
+import type { Person } from '../../lib/people';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, font, radius, textSize } from '../../theme';
 import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 
 type AttendeeStackProps = {
-  people: { id: string; name: string }[];
+  people: Person[];
   max?: number;
   size?: number;
   onDark?: boolean;

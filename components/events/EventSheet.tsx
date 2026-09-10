@@ -1,3 +1,4 @@
+import type { Person } from '../../lib/people';
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -14,8 +15,6 @@ import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 import Ticket from '../general/Ticket';
 import EventPhotos from './EventPhotos';
 import RsvpButtons from './RsvpButtons';
-
-type Person = { userId: string; name: string };
 
 async function openMaps(lat: number, lng: number, label?: string): Promise<void> {
   const url = mapsUrl(Platform.OS, lat, lng, label);
@@ -42,7 +41,7 @@ export type SheetEvent = {
   createdBy?: string;
   isMember?: boolean;
   myStatus?: RsvpStatus;
-  going?: { id: string; name: string }[];
+  going?: Person[];
 };
 
 type EventSheetProps = {
@@ -137,12 +136,12 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
 
   const going = attendees.filter((a) => a.status === 'in');
   const notGoing = attendees.filter((a) => a.status === 'out');
-  const answered = new Set(attendees.map((a) => a.userId));
+  const answered = new Set(attendees.map((a) => a.id));
   const noAnswer: Person[] = Object.entries(memberNames)
     .filter(([id]) => !answered.has(id))
-    .map(([id, name]) => ({ userId: id, name }));
+    .map(([id, name]) => ({ id, name }));
 
-  const myStatus = attendees.find((a) => a.userId === currentUserId)?.status;
+  const myStatus = attendees.find((a) => a.id === currentUserId)?.status;
   const canSeeRoster = event?.isMember !== false;
   const isOwner = event?.createdBy !== undefined && event.createdBy === currentUserId;
   const hasHappened = event ? event.date <= keyOf(new Date()) : false;
@@ -176,9 +175,9 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
                 <View style={styles.grabber} />
 
                 <View style={styles.topRow}>
-                  <View style={styles.squadPill}>
-                    <View style={styles.squadDot} />
-                    <Text style={styles.squadName} numberOfLines={1}>{event.groupName}</Text>
+                  <View style={styles.groupPill}>
+                    <View style={styles.groupDot} />
+                    <Text style={styles.groupName} numberOfLines={1}>{event.groupName}</Text>
                   </View>
                   <View style={styles.spacer} />
                   <Text style={styles.code}>№ {ticketCode(event.id)}</Text>
@@ -343,7 +342,7 @@ function Section({ title, people, dot, empty }: SectionProps) {
       ) : (
         <View style={styles.chips}>
           {people.map((person) => (
-            <View key={person.userId} style={styles.chip}>
+            <View key={person.id} style={styles.chip}>
               <GradientAvatar label={person.name || '?'} initials={initialsFor(person.name)} size={26} />
               <Text style={styles.chipName} numberOfLines={1}>{person.name || 'Someone'}</Text>
             </View>
@@ -379,7 +378,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.4)',
   },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  squadPill: {
+  groupPill: {
     flexDirection: 'row',
     alignItems: 'center',
     maxWidth: '52%',
@@ -389,8 +388,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
-  squadDot: { width: 8, height: 8, borderRadius: radius.pill, backgroundColor: '#FFFFFF' },
-  squadName: { flexShrink: 1, color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.caption },
+  groupDot: { width: 8, height: 8, borderRadius: radius.pill, backgroundColor: '#FFFFFF' },
+  groupName: { flexShrink: 1, color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.caption },
   code: { color: 'rgba(255,255,255,0.5)', fontFamily: font.mono, fontSize: 10, letterSpacing: 1 },
   title: {
     marginTop: space.sm,

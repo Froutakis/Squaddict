@@ -3,7 +3,7 @@ import type { MyEvent } from '../../services/serviceEvents';
 import { colors, font, space, textSize } from '../../theme';
 import { addDays, keyOf } from '../../lib/datetime';
 import SectionLabel from '../general/SectionLabel';
-import EventCard, { type EventCardData } from './EventCard';
+import EventCard, { type CardEvent } from './EventCard';
 
 export function bestOfWeek(events: MyEvent[], today: Date): MyEvent | null {
   const from = keyOf(addDays(today, -7));
@@ -36,7 +36,7 @@ function caption(count: number): string {
 }
 
 type EventOfTheWeekProps = {
-  event: EventCardData;
+  event: CardEvent;
   onPress?: () => void;
 };
 

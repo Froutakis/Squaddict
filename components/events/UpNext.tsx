@@ -132,8 +132,8 @@ export default function UpNext({
   return (
     <Ticket tone="ink" torn={checkedIn} onPress={onPress} accessibilityLabel={event.title} stub={stub}>
       <View style={styles.topRow}>
-        <View style={styles.squadPill}>
-          <Text style={styles.squadText} numberOfLines={1}>
+        <View style={styles.groupPill}>
+          <Text style={styles.groupText} numberOfLines={1}>
             {event.groupName}
           </Text>
         </View>
@@ -180,14 +180,14 @@ const styles = StyleSheet.create({
   spacer: { flex: 1 },
 
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  squadPill: {
+  groupPill: {
     maxWidth: '58%',
     paddingHorizontal: space.sm,
     paddingVertical: 3,
     borderRadius: radius.pill,
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
-  squadText: { color: WHITE, fontFamily: font.semi, fontSize: textSize.caption },
+  groupText: { color: WHITE, fontFamily: font.semi, fontSize: textSize.caption },
   codeRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   code: { color: FAINT, fontFamily: font.mono, fontSize: 10, letterSpacing: 1 },
   codeLive: { color: WHITE, fontFamily: font.mono, fontSize: 10, letterSpacing: 1 },

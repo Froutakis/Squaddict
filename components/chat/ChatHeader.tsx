@@ -7,7 +7,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { SquadMonogram } from './SquadPicker';
+import { GroupMonogram } from './GroupPicker';
 import { presenceLabel } from './typing';
 import { paper, paperFont, radius, space } from '../../theme';
 
@@ -40,7 +40,7 @@ export default function ChatHeader({
         <Ionicons name="chevron-back" size={20} color={paper.ink} />
       </Pressable>
 
-      <SquadMonogram name={name} size={32} />
+      <GroupMonogram name={name} size={32} />
 
       <View style={styles.text}>
         <Text style={styles.title} numberOfLines={1}>

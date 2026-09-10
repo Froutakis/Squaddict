@@ -10,17 +10,17 @@ const MENU_WIDTH = 230;
 
 type HomeHeaderProps = {
   displayName: string;
-  squads: Group[];
-  squadId: string | null;
-  onSquadSelect: (squadId: string | null) => void;
+  groups: Group[];
+  groupId: string | null;
+  onGroupSelect: (groupId: string | null) => void;
   onSignOut: () => void;
 };
 
 export default function HomeHeader({
   displayName,
-  squads,
-  squadId,
-  onSquadSelect,
+  groups,
+  groupId,
+  onGroupSelect,
   onSignOut,
 }: HomeHeaderProps) {
   const [open, setOpen] = useState(false);
@@ -28,8 +28,8 @@ export default function HomeHeader({
   const [anchor, setAnchor] = useState({ top: 0, left: 0 });
   const trigger = useRef<View>(null);
 
-  const active = squads.find((group) => group.id === squadId);
-  const squadLabel = active ? active.name : 'All squads';
+  const active = groups.find((group) => group.id === groupId);
+  const groupLabel = active ? active.name : 'All squads';
 
   function openPicker() {
     setOpen(false);
@@ -42,7 +42,7 @@ export default function HomeHeader({
   }
 
   function choose(id: string | null) {
-    onSquadSelect(id);
+    onGroupSelect(id);
     setPicker(false);
   }
 
@@ -55,23 +55,23 @@ export default function HomeHeader({
           <Pressable
             ref={trigger}
             onPress={openPicker}
-            disabled={squads.length === 0}
+            disabled={groups.length === 0}
             accessibilityRole="button"
             accessibilityLabel="Select squad"
             accessibilityState={{ expanded: picker }}
             style={({ pressed }) => [styles.picker, pressed && styles.pressed]}
           >
-            {squadId !== null ? (
+            {groupId !== null ? (
               <GradientAvatar
-                label={squadLabel}
-                initials={initialsFor(squadLabel)}
+                label={groupLabel}
+                initials={initialsFor(groupLabel)}
                 size={25}
               />
             ) : null}
             <Text style={styles.pickerText} numberOfLines={1}>
-              {squadLabel}
+              {groupLabel}
             </Text>
-            {squads.length > 0 ? (
+            {groups.length > 0 ? (
               <Ionicons
                 name={picker ? 'chevron-up' : 'chevron-down'}
                 size={18}
@@ -122,35 +122,35 @@ export default function HomeHeader({
         onRequestClose={() => setPicker(false)}
       >
         <Pressable style={styles.backdrop} onPress={() => setPicker(false)}>
-          <View style={[styles.squadMenu, { top: anchor.top, left: anchor.left }]}>
+          <View style={[styles.groupMenu, { top: anchor.top, left: anchor.left }]}>
             <Pressable
               onPress={() => choose(null)}
               accessibilityRole="button"
               accessibilityLabel="All squads"
-              style={({ pressed }) => [styles.squadRow, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.groupRow, pressed && styles.pressed]}
             >
               <View style={styles.allDot} />
-              <Text style={styles.squadName}>All squads</Text>
-              {squadId === null ? (
+              <Text style={styles.groupName}>All squads</Text>
+              {groupId === null ? (
                 <Ionicons name="checkmark" size={16} color={colors.primary} />
               ) : null}
             </Pressable>
 
-            {squads.map((group) => (
+            {groups.map((group) => (
               <Pressable
                 key={group.id}
                 onPress={() => choose(group.id)}
                 accessibilityRole="button"
                 accessibilityLabel={group.name}
-                style={({ pressed }) => [styles.squadRow, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.groupRow, pressed && styles.pressed]}
               >
                 <View style={[styles.mono, { backgroundColor: solidFor(group.name) }]}>
                   <Text style={styles.monoText}>{initialsFor(group.name)}</Text>
                 </View>
-                <Text style={styles.squadName} numberOfLines={1}>
+                <Text style={styles.groupName} numberOfLines={1}>
                   {group.name}
                 </Text>
-                {squadId === group.id ? (
+                {groupId === group.id ? (
                   <Ionicons name="checkmark" size={16} color={colors.primary} />
                 ) : null}
               </Pressable>
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
   },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(12,25,38,0.18)' },
-  squadMenu: {
+  groupMenu: {
     position: 'absolute',
     width: MENU_WIDTH,
     backgroundColor: colors.surface,
@@ -200,14 +200,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...shadow.button,
   },
-  squadRow: {
+  groupRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
     paddingHorizontal: space.md,
     paddingVertical: 11,
   },
-  squadName: { flex: 1, color: colors.text, fontFamily: font.medium, fontSize: textSize.base },
+  groupName: { flex: 1, color: colors.text, fontFamily: font.medium, fontSize: textSize.base },
   allDot: {
     width: 24,
     height: 24,

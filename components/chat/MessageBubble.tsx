@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { ReplyQuote } from '../../services/serviceGroup';
+import type { ReplyQuote } from '../../services/serviceChat';
 import { bubbleSize } from './media';
-import { mentionParts, type Member } from './mentions';
+import { mentionParts } from './mentions';
+import type { Person } from '../../lib/people';
 import type { ReactionCount } from './reactions';
 import { paper, paperFont, shadow, space } from '../../theme';
-import { SquadMonogram } from './SquadPicker';
+import { GroupMonogram } from './GroupPicker';
 
 const AVATAR = 24;
 const ROUND = 18;
@@ -34,7 +35,7 @@ type MessageBubbleProps = {
   onToggleReaction?: (emoji: string) => void;
   reply?: ReplyQuote | null;
   replyUnknown?: boolean;
-  members?: Member[];
+  members?: Person[];
   meId?: string;
   imageUri?: string | null;
   imageWidth?: number;
@@ -154,7 +155,7 @@ export default function MessageBubble({
     <View style={[styles.row, mine ? styles.rowMine : styles.rowOther, isFirst && styles.rowFirst]}>
       {}
       {mine ? null : isLast ? (
-        <SquadMonogram name={senderName || '?'} size={AVATAR} />
+        <GroupMonogram name={senderName || '?'} size={AVATAR} />
       ) : (
         <View style={styles.avatarSpacer} />
       )}

@@ -1,3 +1,4 @@
+import type { Person } from '../../lib/people';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { RsvpStatus } from '../../services/serviceEvents';
 import { colors, font, radius, solidFor, space, textSize } from '../../theme';
@@ -8,16 +9,16 @@ import Punch, { type PunchState } from '../general/Punch';
 import AttendeeStack from './Attendee';
 import RsvpButtons from './RsvpButtons';
 
-export type EventCardData = {
+export type CardEvent = {
   id: string;
   title: string;
   date: string;
   startTime?: string;
   location?: string;
   placeLabel?: string;
-  squadName: string;
+  groupName: string;
   myStatus?: RsvpStatus;
-  going: { id: string; name: string }[];
+  going: Person[];
   goingCount: number;
   distanceKm?: number;
 };
@@ -25,7 +26,7 @@ export type EventCardData = {
 export type EventCardAction = 'none' | 'rsvp' | 'request';
 
 type EventCardProps = {
-  event: EventCardData;
+  event: CardEvent;
   action?: EventCardAction;
   saving?: boolean;
   requested?: boolean;
@@ -50,7 +51,7 @@ export default function EventCard({
   onRequest,
 }: EventCardProps) {
   const { month, day } = dateParts(event.date);
-  const squadColor = solidFor(event.squadName);
+  const groupColor = solidFor(event.groupName);
   const status = statusOf(event.myStatus);
   const place = placeLines(event.location, event.placeLabel);
 
@@ -80,10 +81,10 @@ export default function EventCard({
         </View>
 
         <View style={styles.body}>
-          <View style={styles.squadRow}>
-            <View style={[styles.squadDot, { backgroundColor: squadColor }]} />
-            <Text style={[styles.squadName, { color: squadColor }]} numberOfLines={1}>
-              {event.squadName}
+          <View style={styles.groupRow}>
+            <View style={[styles.groupDot, { backgroundColor: groupColor }]} />
+            <Text style={[styles.groupName, { color: groupColor }]} numberOfLines={1}>
+              {event.groupName}
             </Text>
             <View style={styles.spacer} />
             {corner ? <Text style={styles.corner}>{corner}</Text> : null}
@@ -170,9 +171,9 @@ const styles = StyleSheet.create({
   day: { color: colors.text, fontFamily: font.mono, fontSize: 17, letterSpacing: 0.5 },
 
   body: { flex: 1, minWidth: 0, gap: 2 },
-  squadRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  squadDot: { width: 6, height: 6, borderRadius: radius.pill },
-  squadName: { flexShrink: 1, fontFamily: font.semi, fontSize: textSize.caption },
+  groupRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  groupDot: { width: 6, height: 6, borderRadius: radius.pill },
+  groupName: { flexShrink: 1, fontFamily: font.semi, fontSize: textSize.caption },
   corner: {
     color: colors.textFaint,
     fontFamily: font.mono,

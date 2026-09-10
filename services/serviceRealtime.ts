@@ -1,5 +1,6 @@
+import type { Person } from "../lib/people";
 import { supabase } from './supabaseClient';
-import { getMessages } from './serviceGroup';
+import { getMessages } from './serviceChat';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 const TYPING_EVENT = 'typing';
@@ -14,11 +15,9 @@ export type ChatHandlers = {
   onReactionGone?: (row: any) => void;
 };
 
-export type Me = { id: string; name: string };
-
 export function openGroupChat(
   groupId: string,
-  me: Me,
+  me: Person,
   handlers: ChatHandlers,
 ): RealtimeChannel {
   const filter = `group_id=eq.${groupId}`;
@@ -77,7 +76,7 @@ export function openGroupChat(
   return channel;
 }
 
-export function sendTyping(channel: RealtimeChannel, me: Me): void {
+export function sendTyping(channel: RealtimeChannel, me: Person): void {
   channel
     .send({ type: 'broadcast', event: TYPING_EVENT, payload: { id: me.id, name: me.name } })
     .catch(function () {
@@ -90,7 +89,7 @@ export async function closeGroupChat(channel: RealtimeChannel): Promise<void> {
 
 export async function startChat(
   groupId: string,
-  me: Me,
+  me: Person,
   handlers: ChatHandlers,
   limit?: number,
 ) {

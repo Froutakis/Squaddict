@@ -11,12 +11,12 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Group } from '../../services/serviceGroup';
-import type { GroupPreview } from '../../services/serviceGroup';
+import type { GroupPreview } from '../../services/serviceChat';
 import { initialsFor } from '../general/GradientAvatar';
 import { unreadLabel } from './unread';
 import { layout, paper, paperFont, radius, shadow, solidFor, space } from '../../theme';
 
-export function SquadMonogram({ name, size = 44 }: { name: string; size?: number }) {
+export function GroupMonogram({ name, size = 44 }: { name: string; size?: number }) {
   const color = solidFor(name);
 
   return (
@@ -95,7 +95,7 @@ function PersonGlyph({ size = 34 }: { size?: number }) {
   );
 }
 
-type SquadPickerProps = {
+type GroupPickerProps = {
   groups: Group[];
   previews: Record<string, GroupPreview>;
   unread?: Record<string, number>;
@@ -103,11 +103,11 @@ type SquadPickerProps = {
   onSelect: (id: string) => void;
   displayName?: string;
   onBack?: () => void;
-  onCreateSquad?: () => void;
+  onCreateGroup?: () => void;
   onEnterCode?: () => void;
 };
 
-export default function SquadPicker({
+export default function GroupPicker({
   groups,
   previews,
   unread = {},
@@ -115,9 +115,9 @@ export default function SquadPicker({
   onSelect,
   onBack,
   displayName = '',
-  onCreateSquad,
+  onCreateGroup,
   onEnterCode,
-}: SquadPickerProps) {
+}: GroupPickerProps) {
   const who = displayName || 'you';
 
   const [query, setQuery] = useState('');
@@ -229,7 +229,7 @@ export default function SquadPicker({
                 {}
                 {index > 0 ? <View style={styles.divider} /> : null}
 
-                <SquadMonogram name={group.name} />
+                <GroupMonogram name={group.name} />
 
                 <View style={styles.rowText}>
                   <Text style={styles.name} numberOfLines={1}>
@@ -266,13 +266,13 @@ export default function SquadPicker({
         </View>
       )}
 
-      {onCreateSquad || onEnterCode ? (
+      {onCreateGroup || onEnterCode ? (
         <View>
           <Text style={styles.section}>Start something</Text>
           <View style={styles.startRow}>
-            {onCreateSquad ? (
+            {onCreateGroup ? (
               <Pressable
-                onPress={onCreateSquad}
+                onPress={onCreateGroup}
                 accessibilityRole="button"
                 accessibilityLabel="Make a squad"
                 style={startTileStyle}

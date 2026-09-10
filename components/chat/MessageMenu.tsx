@@ -11,7 +11,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import type { ChatMessage } from '../../services/serviceGroup';
+import type { ChatMessage } from '../../services/serviceChat';
 import { layout, paper, paperFont, radius, space } from '../../theme';
 
 const QUICK = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉'];

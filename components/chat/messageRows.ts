@@ -1,4 +1,4 @@
-import type { ChatMessage } from '../../services/serviceGroup';
+import type { ChatMessage } from '../../services/serviceChat';
 
 export type OutgoingMessage = {
   id: string;

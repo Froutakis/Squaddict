@@ -1,28 +1,29 @@
 import {
   messagesKey,
   outboxKey,
-  squadsKey,
+  groupsKey,
   trimForCache,
   userPrefix,
 } from "../components/chat/cache";
 import type { OutgoingMessage } from "../components/chat/messageRows";
 import { keysWithPrefix, readJson, removeByPrefix, writeJson } from "../lib/store";
-import type { ChatMessage, Group, GroupPreview } from "./serviceGroup";
+import type { Group } from "./serviceGroup";
+import type { ChatMessage, GroupPreview } from "./serviceChat";
 
-export type CachedSquads = {
+export type CachedGroups = {
   groups: Group[];
   previews: Record<string, GroupPreview>;
 };
 
-export async function readSquads(userId: string): Promise<CachedSquads | null> {
-  return readJson<CachedSquads>(squadsKey(userId));
+export async function readGroups(userId: string): Promise<CachedGroups | null> {
+  return readJson<CachedGroups>(groupsKey(userId));
 }
 
-export async function writeSquads(
+export async function writeGroups(
   userId: string,
-  value: CachedSquads,
+  value: CachedGroups,
 ): Promise<void> {
-  await writeJson(squadsKey(userId), value);
+  await writeJson(groupsKey(userId), value);
 }
 
 export async function readMessages(

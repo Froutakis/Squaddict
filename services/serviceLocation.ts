@@ -9,6 +9,8 @@ export type LocationResult =
   | { ok: true; coords: Coords }
   | { ok: false; reason: "denied" | "unavailable" };
 
+export type LocationState = "asking" | "on" | "off";
+
 const MAX_CACHE_AGE_MS = 5 * 60 * 1000;
 
 function toCoords(position: Location.LocationObject): Coords {

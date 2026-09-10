@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { DEFAULT_RADIUS_KM, getFeed, type Center, type FeedEvent } from '../../services/serviceFeed';
-import { getCurrentCoords } from '../../services/serviceLocation';
+import { DEFAULT_RADIUS_KM, getFeed, type FeedEvent } from '../../services/serviceFeed';
+import { getCurrentCoords, type Coords, type LocationState } from '../../services/serviceLocation';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../../services/serviceEvents';
 import { colors, font, space, textSize } from '../../theme';
 import SectionLabel from '../general/SectionLabel';
 import FeedTicket from '../events/FeedTicket';
 
 const SHOWN = 8;
-
-type LocationState = 'asking' | 'on' | 'off';
 
 type OutThereRowProps = {
   refreshNonce?: number;
@@ -28,7 +26,7 @@ function applyRsvp(event: FeedEvent, status: RsvpStatus | null): FeedEvent {
 }
 
 export default function OutThereRow({ refreshNonce = 0, onOpen }: OutThereRowProps) {
-  const [center, setCenter] = useState<Center | null>(null);
+  const [center, setCenter] = useState<Coords | null>(null);
   const [locationState, setLocationState] = useState<LocationState>('asking');
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);

@@ -1,4 +1,4 @@
-import type { ChatMessage } from '../../services/serviceGroup';
+import type { ChatMessage } from '../../services/serviceChat';
 
 export type Connection = 'connecting' | 'online' | 'offline';
 
