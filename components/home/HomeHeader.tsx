@@ -61,6 +61,13 @@ export default function HomeHeader({
             accessibilityState={{ expanded: picker }}
             style={({ pressed }) => [styles.picker, pressed && styles.pressed]}
           >
+            {squadId !== null ? (
+              <GradientAvatar
+                label={squadLabel}
+                initials={initialsFor(squadLabel)}
+                size={25}
+              />
+            ) : null}
             <Text style={styles.pickerText} numberOfLines={1}>
               {squadLabel}
             </Text>

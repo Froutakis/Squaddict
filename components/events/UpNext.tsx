@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent, RsvpStatus } from '../../services/serviceEvents';
 import { colors, font, radius, space, textSize } from '../../theme';
 import { countdownLabel, formatDateTime } from '../../lib/datetime';
+import { mapsUrl } from '../../lib/maps';
 import { placeLines } from '../../lib/place';
 import { ticketCode } from '../../lib/ticket';
 import Ticket from '../general/Ticket';
@@ -22,6 +23,8 @@ type UpNextProps = {
   saving?: boolean;
   live?: boolean;
   liveText?: string;
+  checkedIn?: boolean;
+  onCheckIn?: () => void;
   onAddPhoto?: () => void;
 };
 
@@ -32,10 +35,25 @@ export default function UpNext({
   saving = false,
   live = false,
   liveText,
+  checkedIn = false,
+  onCheckIn,
   onAddPhoto,
 }: UpNextProps) {
   const place = placeLines(event.location, event.placeLabel);
   const answered = event.myStatus === 'in' || event.myStatus === 'out';
+  const isIn = event.myStatus === 'in';
+  const hasPoint = event.lat !== undefined && event.lng !== undefined;
+
+  async function openMaps() {
+    if (!hasPoint) return;
+
+    const url = mapsUrl(Platform.OS, event.lat!, event.lng!, place.primary);
+    try {
+      await Linking.openURL(url);
+    } catch {
+      await Linking.openURL(mapsUrl('web', event.lat!, event.lng!, place.primary));
+    }
+  }
 
   const stub = answered ? (
     <View style={styles.stub}>
@@ -43,43 +61,76 @@ export default function UpNext({
 
       <View style={styles.stubText}>
         <Text style={styles.stubTitle}>
-          {event.myStatus === 'in' ? "You're in" : 'You passed'}
+          {checkedIn ? "You're here" : event.myStatus === 'in' ? "You're in" : 'You passed'}
         </Text>
-        <Pressable
-          onPress={() => onRsvp(null)}
-          disabled={saving}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Change your answer"
-        >
-          <Text style={styles.change}>Change</Text>
-        </Pressable>
+        {checkedIn ? (
+          <Text style={styles.change}>Punched at the door</Text>
+        ) : (
+          <Pressable
+            onPress={() => onRsvp(null)}
+            disabled={saving}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Change your answer"
+          >
+            <Text style={styles.change}>Change</Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.spacer} />
 
-      <View style={styles.stubRight}>
-        <AttendeeStack people={event.going} size={24} max={3} onDark />
-        <Text style={styles.count}>{event.going.length} IN</Text>
-      </View>
+      {checkedIn ? (
+        onAddPhoto ? (
+          <Pressable
+            onPress={onAddPhoto}
+            accessibilityRole="button"
+            accessibilityLabel="Add a photo from this night"
+            style={({ pressed }) => [styles.camera, pressed && styles.pressed]}
+          >
+            <Ionicons name="camera" size={19} color={colors.text} />
+          </Pressable>
+        ) : (
+          <View style={styles.stubRight}>
+            <AttendeeStack people={event.going} size={24} max={3} onDark />
+            <Text style={styles.count}>{event.going.length} IN</Text>
+          </View>
+        )
+      ) : live && isIn && onCheckIn ? (
+        <>
+          {hasPoint ? (
+            <Pressable
+              onPress={openMaps}
+              accessibilityRole="button"
+              accessibilityLabel="Open in maps"
+              style={({ pressed }) => [styles.round, pressed && styles.pressed]}
+            >
+              <Ionicons name="navigate-outline" size={17} color={WHITE} />
+            </Pressable>
+          ) : null}
 
-      {onAddPhoto ? (
-        <Pressable
-          onPress={onAddPhoto}
-          accessibilityRole="button"
-          accessibilityLabel="Add a photo from this night"
-          style={({ pressed }) => [styles.camera, pressed && styles.cameraPressed]}
-        >
-          <Ionicons name="camera" size={19} color={colors.text} />
-        </Pressable>
-      ) : null}
+          <Pressable
+            onPress={onCheckIn}
+            accessibilityRole="button"
+            accessibilityLabel="I am here"
+            style={({ pressed }) => [styles.here, pressed && styles.pressed]}
+          >
+            <Text style={styles.hereText}>I'm here</Text>
+          </Pressable>
+        </>
+      ) : (
+        <View style={styles.stubRight}>
+          <AttendeeStack people={event.going} size={24} max={3} onDark />
+          <Text style={styles.count}>{event.going.length} IN</Text>
+        </View>
+      )}
     </View>
   ) : (
     <RsvpButtons status={event.myStatus} saving={saving} onChange={onRsvp} onDark compact stretch />
   );
 
   return (
-    <Ticket tone="ink" torn={live} onPress={onPress} accessibilityLabel={event.title} stub={stub}>
+    <Ticket tone="ink" torn={checkedIn} onPress={onPress} accessibilityLabel={event.title} stub={stub}>
       <View style={styles.topRow}>
         <View style={styles.squadPill}>
           <Text style={styles.squadText} numberOfLines={1}>
@@ -162,6 +213,25 @@ const styles = StyleSheet.create({
   stubTitle: { color: WHITE, fontFamily: font.semi, fontSize: textSize.body },
   change: { color: FAINT, fontFamily: font.medium, fontSize: textSize.caption },
   stubRight: { alignItems: 'flex-end', gap: 3 },
+  round: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.28)',
+  },
+  here: {
+    height: 38,
+    paddingHorizontal: 18,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: WHITE,
+  },
+  hereText: { color: colors.text, fontFamily: font.semi, fontSize: textSize.base },
+  pressed: { opacity: 0.7 },
   camera: {
     width: 38,
     height: 38,
@@ -170,6 +240,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: WHITE,
   },
-  cameraPressed: { opacity: 0.75 },
   count: { color: FAINT, fontFamily: font.mono, fontSize: 9.5, letterSpacing: 1 },
 });

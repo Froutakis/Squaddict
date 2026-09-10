@@ -7,14 +7,21 @@ import { getUserById } from '../services/serviceUser';
 import { logout } from '../services/serviceAuth';
 import { getGroupsForUser } from '../services/serviceGroup';
 import { clearRsvp, getEventCovers, getMyEvents, setRsvp } from '../services/serviceEvents';
+import { getFeed } from '../services/serviceFeed';
 import { signImages } from '../services/serviceMedia';
 import { mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
 import { colors, font, layout, space } from '../theme';
-import { dayFilterLabel, inPhotoWindow, keyOf } from '../lib/datetime';
+import {
+  dayFilterLabel,
+  inPhotoWindow,
+  isHappeningNow,
+  keyOf,
+  liveLabel,
+} from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
-import MemoriesBar from '../components/home/MemoriesBar';
-import OutThereRow from '../components/home/OutThereRow';
-import { MEMORY_LIMIT, toMemoryNights } from '../components/home/memories';
+import { useNow } from '../components/home/useNow';
+import { userPrefix } from '../components/chat/cache';
+import { readJson, writeJson } from '../lib/store';
 import DayFilterRow from '../components/home/DayFilterRow';
 import ListEmpty from '../components/home/ListEmpty';
 import SectionLabel from '../components/general/SectionLabel';
@@ -22,11 +29,16 @@ import Button from '../components/general/Button';
 import CalendarCard from '../components/events/CalendarCard';
 import EventCard, { type EventCardData } from '../components/events/EventCard';
 import UpNext from '../components/events/UpNext';
-import EventOfTheWeek, { bestOfWeek } from '../components/events/EventOfTheWeek';
-import { PhotoPrompt } from '../components/events/EventPhotos';
+import {
+  capture,
+  messageFor,
+  PhotoSourceSheet,
+  type PhotoSource,
+} from '../components/events/EventPhotos';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import EventFormSheet from '../components/events/EventFormSheet';
 import GroupFormSheet from '../components/group/GroupFormSheet';
+import GroupCard, { type CardSquad } from '../components/group/GroupCard';
 
 const RENEW_TICK_MS = 5 * 60 * 1000;
 
@@ -65,13 +77,58 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const [openEvent, setOpenEvent] = useState<SheetEvent | null>(null);
   const [editEvent, setEditEvent] = useState<MyEvent | null>(null);
   const [rsvpError, setRsvpError] = useState<string | null>(null);
+  const [checkedIn, setCheckedIn] = useState<Record<string, true>>({});
   const [coverPhotos, setCoverPhotos] = useState<Record<string, EventPhoto>>({});
   const [signed, setSigned] = useState<SignedMap>({});
   const [clock, setClock] = useState(0);
   const [photoNonce, setPhotoNonce] = useState(0);
-  const [feedNonce, setFeedNonce] = useState(0);
+  const [addingPhoto, setAddingPhoto] = useState<MyEvent | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [feedSquads, setFeedSquads] = useState<CardSquad[]>([]);
 
-  const signedRef = useRef<SignedMap>({});
+  useEffect(() => {
+    let cancelled = false;
+
+    readJson<Record<string, true>>(userPrefix(user.id) + 'checkedin').then((stored) => {
+      if (!cancelled && stored) setCheckedIn(stored);
+    });
+
+    getFeed()
+      .then((page) => {
+        if (!cancelled) setFeedSquads(page.squads);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user.id]);
+
+  async function pickPhoto(source: PhotoSource) {
+    const target = addingPhoto;
+    if (!target || photoBusy) return;
+
+    setPhotoBusy(true);
+    setPhotoError(null);
+
+    try {
+      const result = await capture(source, { id: target.id, groupId: target.groupId });
+      setAddingPhoto(null);
+      if (result) setPhotoNonce((n) => n + 1);
+    } catch (problem) {
+      setPhotoError(messageFor(problem));
+      setAddingPhoto(null);
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  function checkIn(eventId: string) {
+    const next = { ...checkedIn, [eventId]: true as const };
+    setCheckedIn(next);
+    writeJson(userPrefix(user.id) + 'checkedin', next);
+  }
 
   const load = useCallback(
     async function load() {
@@ -143,15 +200,21 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     setShowCreate(true);
   }
 
+  const now = useNow();
   const today = keyOf(new Date());
   const dayMode = selectedDate !== null;
   const visible = squadId ? events.filter((e) => e.groupId === squadId) : events;
   const upcoming = visible.filter((e) => e.date >= today);
   const upNextEvent = dayMode ? undefined : upcoming[0];
-  const pool = dayMode ? visible.filter((e) => e.date === selectedDate) : upcoming.slice(1);
+  const liveEvent = dayMode
+    ? undefined
+    : visible.find((e) => isHappeningNow(e.date, e.startTime, e.endTime, now));
+  const heroEvent = liveEvent ?? upNextEvent;
+  const pool = dayMode
+    ? visible.filter((e) => e.date === selectedDate)
+    : upcoming.filter((e) => e.id !== heroEvent?.id);
   const waiting = pool.filter((e) => e.myStatus === undefined);
   const later = pool.filter((e) => e.myStatus !== undefined);
-  const weekBest = dayMode ? null : bestOfWeek(visible, new Date());
   const wantsPhoto = visible.find(
     (e) => e.myStatus === 'in' && inPhotoWindow(e.date, e.startTime, e.endTime),
   );
@@ -163,30 +226,8 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     .join(',');
 
   useEffect(() => {
-    signedRef.current = signed;
-  }, [signed]);
-
-  useEffect(() => {
     const tick = setInterval(() => setClock((c) => c + 1), RENEW_TICK_MS);
     return () => clearInterval(tick);
-  }, []);
-
-  const signPaths = useCallback(function sign(paths: string[]) {
-    const missing = pathsToSign(paths, signedRef.current, Date.now());
-    if (missing.length === 0) return;
-
-    signImages(missing)
-      .then((fresh) => setSigned((prev) => mergeSigned(prev, fresh)))
-      .catch(() => {});
-  }, []);
-
-  const forgetSigned = useCallback(function forget(path: string) {
-    setSigned((prev) => {
-      if (!prev[path]) return prev;
-      const next = { ...prev };
-      delete next[path];
-      return next;
-    });
   }, []);
 
   useEffect(() => {
@@ -240,17 +281,6 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     return byDate;
   }, [events, coverPhotos, signed]);
 
-  const nights = useMemo(
-    () => toMemoryNights(visible, coverPhotos, today).slice(0, MEMORY_LIMIT),
-    [visible, coverPhotos, today],
-  );
-
-  const squadSizes = useMemo(() => {
-    const sizes: Record<string, number> = {};
-    for (const group of groups) sizes[group.id] = group.memberCount;
-    return sizes;
-  }, [groups]);
-
   function renderBody() {
     if (loading) {
       return (
@@ -303,35 +333,30 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     return (
       <>
 
-        {upNextEvent ? (
+        {heroEvent ? (
           <View style={styles.body}>
-            <SectionLabel>Up next</SectionLabel>
+            <SectionLabel>{liveEvent ? 'Happening now' : 'Up next'}</SectionLabel>
             <UpNext
-              event={upNextEvent}
-              onPress={() => setOpenEvent(upNextEvent)}
-              onRsvp={(status) => handleRsvp(upNextEvent.id, status)}
+              event={heroEvent}
+              live={liveEvent !== undefined}
+              liveText={
+                liveEvent
+                  ? liveLabel(liveEvent.date, liveEvent.startTime, liveEvent.endTime, now)
+                  : undefined
+              }
+              checkedIn={checkedIn[heroEvent.id] === true}
+              onCheckIn={() => checkIn(heroEvent.id)}
+              onAddPhoto={
+                checkedIn[heroEvent.id] === true ? () => setAddingPhoto(heroEvent) : undefined
+              }
+              onPress={() => setOpenEvent(heroEvent)}
+              onRsvp={(status) => handleRsvp(heroEvent.id, status)}
             />
+            {photoError ? <Text style={styles.error}>{photoError}</Text> : null}
           </View>
         ) : null}
 
-        {wantsPhoto ? (
-          <View style={styles.body}>
-            <PhotoPrompt
-              event={wantsPhoto}
-              onChanged={() => setPhotoNonce((n) => n + 1)}
-            />
-          </View>
-        ) : null}
-
-        <MemoriesBar
-          userId={user.id}
-          nights={nights}
-          squadSizes={squadSizes}
-          signed={signed}
-          signPaths={signPaths}
-          onImageError={forgetSigned}
-          onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
-        />
+    
 
         <View style={styles.body}>
           <CalendarCard
@@ -376,7 +401,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
         <View style={styles.body}>
           <SectionLabel>{dayMode ? 'On this day' : 'Later'}</SectionLabel>
 
-          {later.length === 0 ? (
+          {later.length === 0 ? ( 
             waiting.length === 0 ? (
               <ListEmpty
                 title={dayMode ? `Nothing on ${dayFilterLabel(selectedDate)}` : 'Nothing else planned'}
@@ -398,14 +423,23 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
           )}
         </View>
 
-        {weekBest ? (
-          <View style={styles.body}>
-            <EventOfTheWeek
-              event={toCardData(weekBest)}
-              onPress={() => setOpenEvent(weekBest)}
-            />
+        {feedSquads.length > 0 ? (
+          <View>
+            <View style={styles.body}>
+              <SectionLabel>Pareas you crossed</SectionLabel>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.row}
+            >
+              {feedSquads.map((squad) => (
+                <GroupCard key={squad.id} squad={squad} />
+              ))}
+            </ScrollView>
           </View>
         ) : null}
+
       </>
     );
   }
@@ -421,8 +455,15 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
           onSignOut={() => logout().catch(() => {})}
         />
         {renderBody()}
-        <OutThereRow refreshNonce={feedNonce} onOpen={(event) => setOpenEvent(event)} />
       </ScrollView>
+
+      <PhotoSourceSheet
+        visible={addingPhoto !== null}
+        onClose={() => {
+          if (!photoBusy) setAddingPhoto(null);
+        }}
+        onPick={pickPhoto}
+      />
 
       <EventFormSheet
         visible={showCreate}
@@ -449,10 +490,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
         event={openEvent}
         currentUserId={user.id}
         onClose={() => setOpenEvent(null)}
-        onChanged={async () => {
-          setEvents(await getMyEvents(user.id));
-          setFeedNonce((n) => n + 1);
-        }}
+        onChanged={async () => setEvents(await getMyEvents(user.id))}
         onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
         onEdit={(e) => {
           const mine = events.find((one) => one.id === e.id);
@@ -470,6 +508,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  row: { gap: space.sm, paddingHorizontal: space.lg },
   content: {
     width: '100%',
     maxWidth: layout.column,
