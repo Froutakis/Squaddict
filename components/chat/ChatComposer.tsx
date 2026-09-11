@@ -5,7 +5,7 @@ import type { LocalImage } from './messageRows';
 import { applyMention, matchMembers, mentionQuery } from './mentions';
 import type { Person } from '../../lib/people';
 import { GroupMonogram } from './GroupPicker';
-import { paper, paperFont, radius, space } from '../../theme';
+import { paper, typo, radius, space } from '../../theme';
 
 type ChatComposerProps = {
   onSend: (text: string) => void;
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   editLabel: {
     flex: 1,
     color: paper.accent,
-    fontFamily: paperFont.medium,
+    ...typo.medium,
     fontSize: 12,
   },
   attach: {
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   thumb: { width: 34, height: 34, borderRadius: radius.sm, backgroundColor: paper.surfaceAlt },
-  attachmentLabel: { flex: 1, color: paper.inkSoft, fontFamily: paperFont.medium, fontSize: 12 },
+  attachmentLabel: { flex: 1, color: paper.inkSoft, ...typo.medium, fontSize: 12 },
   picker: {
     marginBottom: space.xs,
     backgroundColor: paper.surface,
@@ -369,11 +369,11 @@ const styles = StyleSheet.create({
   suggestionName: {
     flex: 1,
     color: paper.ink,
-    fontFamily: paperFont.medium,
+    ...typo.medium,
     fontSize: 14,
   },
   replyText: { flex: 1 },
-  replyBody: { color: paper.inkSoft, fontFamily: paperFont.regular, fontSize: 11 },
+  replyBody: { color: paper.inkSoft, ...typo.regular, fontSize: 11 },
   input: {
     flex: 1,
     maxHeight: 120,
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
     borderColor: paper.line,
     borderRadius: FIELD / 2,
     color: paper.ink,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: 14.5,
     lineHeight: 20,
   },

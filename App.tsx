@@ -1,14 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Poppins_500Medium, Poppins_600SemiBold, Poppins_700Bold, Poppins_800ExtraBold, useFonts } from '@expo-google-fonts/poppins';
-import {
-  Commissioner_400Regular,
-  Commissioner_500Medium,
-  Commissioner_600SemiBold,
-} from '@expo-google-fonts/commissioner';
-import { AlegreyaSans_700Bold } from '@expo-google-fonts/alegreya-sans';
-import { DMMono_400Regular } from '@expo-google-fonts/dm-mono';
 import type { User } from '@supabase/supabase-js';
 import RegisterScreen from './screens/RegisterScreen';
 import { supabase } from './services/supabaseClient';
@@ -27,17 +19,6 @@ export default function App() {
   const [screen, setScreen] = useState<NavTab>('home');
   const [threadOpen, setThreadOpen] = useState(false);
   const [createNonce, setCreateNonce] = useState(0);
-  const [fontsLoaded, fontError] = useFonts({
-    Poppins_500Medium,
-    Poppins_600SemiBold,
-    Poppins_700Bold,
-    Poppins_800ExtraBold,
-    Commissioner_400Regular,
-    Commissioner_500Medium,
-    Commissioner_600SemiBold,
-    AlegreyaSans_700Bold,
-    DMMono_400Regular,
-  });
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -52,11 +33,11 @@ export default function App() {
     return () => data.subscription.unsubscribe();
   }, []);
 
-  if (checkingSession || (!fontsLoaded && !fontError)) {
+  if (checkingSession) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <StatusBar style="dark" />
+        <StatusBar style="light" />
       </View>
     );
   }
@@ -98,7 +79,7 @@ export default function App() {
       {navHidden ? null : (
         <BottomNav active={screen} onNavigate={navigate} onCreate={requestCreate} />
       )}
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
     </View>
   );
 }

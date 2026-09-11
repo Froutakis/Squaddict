@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
-import { font, gradientFor, radius } from '../../theme';
+import { typo, gradientFor, radius } from '../../theme';
 
 export function initialsFor(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -56,5 +56,5 @@ export default function GradientAvatar({
 
 const styles = StyleSheet.create({
   base: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  text: { color: '#FFFFFF', fontFamily: font.semi, letterSpacing: 0.4 },
+  text: { color: '#FFFFFF', ...typo.semi, letterSpacing: 0.4 },
 });

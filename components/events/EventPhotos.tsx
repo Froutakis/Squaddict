@@ -9,7 +9,7 @@ import {
 } from '../../services/serviceEvents';
 import { pickImage, prepareImage, signImages, takePhoto } from '../../services/serviceMedia';
 import type { SignedMap } from '../chat/media';
-import { colors, font, radius, space, textSize } from '../../theme';
+import { colors, typo, radius, space, textSize } from '../../theme';
 
 const TILE = 72;
 
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
 
   label: {
     color: colors.textSoft,
-    fontFamily: font.mono,
+    ...typo.mono,
     fontSize: textSize.caption,
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -294,8 +294,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  empty: { color: colors.textFaint, fontFamily: font.medium, fontSize: textSize.body },
-  error: { color: colors.danger, fontFamily: font.medium, fontSize: textSize.body },
+  empty: { color: colors.textFaint, ...typo.medium, fontSize: textSize.body },
+  error: { color: colors.danger, ...typo.medium, fontSize: textSize.body },
 
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   },
   sheetTitle: {
     color: colors.text,
-    fontFamily: font.display,
+    ...typo.display,
     fontSize: textSize.heading,
     letterSpacing: -0.3,
     marginBottom: space.xs,
@@ -341,13 +341,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   optionText: { flex: 1, minWidth: 0, gap: 1 },
-  optionTitle: { color: colors.text, fontFamily: font.semi, fontSize: textSize.base },
-  optionBody: { color: colors.textFaint, fontFamily: font.medium, fontSize: textSize.small },
+  optionTitle: { color: colors.text, ...typo.semi, fontSize: textSize.base },
+  optionBody: { color: colors.textFaint, ...typo.medium, fontSize: textSize.small },
   cancel: {
     marginTop: space.xs,
     paddingVertical: space.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cancelText: { color: colors.textSoft, fontFamily: font.semi, fontSize: textSize.base },
+  cancelText: { color: colors.textSoft, ...typo.semi, fontSize: textSize.base },
 });

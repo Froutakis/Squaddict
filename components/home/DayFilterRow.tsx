@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, font, radius, space } from '../../theme';
+import { colors, typo, radius, space } from '../../theme';
 
 type DayFilterRowProps = {
   label: string;
@@ -25,7 +25,7 @@ export default function DayFilterRow({ label, onClear }: DayFilterRowProps) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  text: { color: colors.textSoft, fontFamily: font.semi, fontSize: 13, flexShrink: 1 },
+  text: { color: colors.textSoft, ...typo.semi, fontSize: 13, flexShrink: 1 },
   clear: {
     height: 28,
     paddingHorizontal: 12,
@@ -36,6 +36,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  clearText: { color: colors.primary, fontFamily: font.semi, fontSize: 12 },
+  clearText: { color: colors.primary, ...typo.semi, fontSize: 12 },
   pressed: { opacity: 0.7 },
 });

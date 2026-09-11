@@ -18,7 +18,7 @@ import type { MemoryNight } from '../home/memories';
 import { formatDateTime } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import { ticketCode } from '../../lib/ticket';
-import { colors, font, radius, solidFor, space, textSize } from '../../theme';
+import { colors, typo, radius, solidFor, space, textSize } from '../../theme';
 import CloseButton from '../general/CloseButton';
 import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 import Punch from '../general/Punch';
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
   scrim: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
 
   gone: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center' },
-  goneText: { color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.lead },
+  goneText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.lead },
 
   zone: { position: 'absolute', top: 110, bottom: 230 },
   zoneLeft: { left: 0, width: '40%' },
@@ -449,45 +449,45 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: 13 },
   headText: { flex: 1 },
-  group: { color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.base },
+  group: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.base },
   when: {
     marginTop: 1,
     color: 'rgba(255,255,255,0.62)',
-    fontFamily: font.mono,
+    ...typo.mono,
     fontSize: textSize.caption,
   },
 
   foot: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: space.md, paddingBottom: space.xl },
   stubTop: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  place: { color: colors.text, fontFamily: font.semi, fontSize: textSize.body, flexShrink: 1 },
-  code: { color: colors.textFaint, fontFamily: font.mono, fontSize: 10, letterSpacing: 1 },
+  place: { color: colors.text, ...typo.semi, fontSize: textSize.body, flexShrink: 1 },
+  code: { color: colors.textFaint, ...typo.mono, fontSize: 10, letterSpacing: 1 },
   title: {
     marginTop: space.xs,
     color: colors.text,
-    fontFamily: font.display,
+    ...typo.display,
     fontSize: textSize.heading,
     letterSpacing: -0.3,
   },
   caption: {
     marginTop: 3,
     color: colors.textSoft,
-    fontFamily: font.medium,
+    ...typo.medium,
     fontSize: textSize.body,
     lineHeight: 18,
   },
 
   stubRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   spacer: { flex: 1 },
-  were: { color: colors.textSoft, fontFamily: font.semi, fontSize: textSize.small },
-  counter: { color: colors.textFaint, fontFamily: font.mono, fontSize: textSize.caption },
+  were: { color: colors.textSoft, ...typo.semi, fontSize: textSize.small },
+  counter: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption },
   add: {
     height: 32,
     paddingHorizontal: 14,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.text,
+    backgroundColor: colors.ink,
   },
-  addText: { color: colors.textOnBrand, fontFamily: font.semi, fontSize: textSize.small },
+  addText: { color: colors.textOnBrand, ...typo.semi, fontSize: textSize.small },
   pressed: { opacity: 0.7 },
 });

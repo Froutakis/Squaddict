@@ -4,7 +4,7 @@ import { todayLabel } from '../../lib/datetime';
 import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 import { useRef, useState } from 'react';
 import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, font, radius, shadow, solidFor, space, textSize } from '../../theme';
+import { colors, typo, radius, shadow, solidFor, space, textSize } from '../../theme';
 
 const MENU_WIDTH = 230;
 
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   text: { flex: 1 },
   date: {
     color: colors.textFaint,
-    fontFamily: font.mono,
+    ...typo.mono,
     fontSize: textSize.caption,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   pickerText: {
     flexShrink: 1,
     color: colors.text,
-    fontFamily: font.display,
+    ...typo.display,
     fontSize: textSize.hero,
     letterSpacing: -0.5,
   },
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: 11,
   },
-  groupName: { flex: 1, color: colors.text, fontFamily: font.medium, fontSize: textSize.base },
+  groupName: { flex: 1, color: colors.text, ...typo.medium, fontSize: textSize.base },
   allDot: {
     width: 24,
     height: 24,
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  monoText: { color: '#FFFFFF', fontFamily: font.semi, fontSize: 9 },
+  monoText: { color: '#FFFFFF', ...typo.semi, fontSize: 9 },
 
   pressed: { opacity: 0.7 },
   menu: { alignItems: 'flex-end', paddingHorizontal: space.lg, paddingTop: space.xs },
@@ -236,5 +236,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  signOutText: { color: colors.danger, fontFamily: font.semi, fontSize: textSize.base },
+  signOutText: { color: colors.danger, ...typo.semi, fontSize: textSize.base },
 });

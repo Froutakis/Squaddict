@@ -7,7 +7,7 @@ import {
   HANDLE_PATTERN,
   type Group,
 } from '../../services/serviceGroup';
-import { colors, font, radius, space } from '../../theme';
+import { colors, typo, radius, space } from '../../theme';
 import AuthField from '../general/AuthField';
 import Button from '../general/Button';
 import SheetHeader from '../general/SheetHeader';
@@ -201,10 +201,10 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: radius.pill },
   tabActive: { backgroundColor: colors.surface },
-  tabText: { color: colors.textSoft, fontFamily: font.medium, fontSize: 14 },
-  tabTextActive: { color: colors.primary, fontFamily: font.semi },
+  tabText: { color: colors.textSoft, ...typo.medium, fontSize: 14 },
+  tabTextActive: { color: colors.primary, ...typo.semi },
   pressed: { opacity: 0.7 },
-  hint: { color: colors.textSoft, fontFamily: font.medium, fontSize: 14 },
+  hint: { color: colors.textSoft, ...typo.medium, fontSize: 14 },
   form: { gap: space.md, marginTop: space.xs },
-  formError: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
+  formError: { color: colors.danger, ...typo.medium, fontSize: 13 },
 });

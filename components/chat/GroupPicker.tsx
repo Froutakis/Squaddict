@@ -14,7 +14,7 @@ import { Group } from '../../services/serviceGroup';
 import type { GroupPreview } from '../../services/serviceChat';
 import { initialsFor } from '../general/GradientAvatar';
 import { unreadLabel } from './unread';
-import { layout, paper, paperFont, radius, shadow, solidFor, space } from '../../theme';
+import { layout, paper, typo, radius, shadow, solidFor, space } from '../../theme';
 
 export function GroupMonogram({ name, size = 44 }: { name: string; size?: number }) {
   const color = solidFor(name);
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: paper.ink,
-    fontFamily: paperFont.display,
+    ...typo.display,
     fontSize: 30,
     letterSpacing: -0.4,
     textAlign: 'center',
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     color: paper.ink,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: 14,
     outlineStyle: 'none',
   } as any,
@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
     marginBottom: space.sm,
     marginLeft: 2,
     color: paper.inkSoft,
-    fontFamily: paperFont.semi,
+    ...typo.semi,
     fontSize: 11,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
@@ -396,10 +396,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     ...shadow.card,
   },
-  startTitle: { color: paper.ink, fontFamily: paperFont.semi, fontSize: 14.5 },
+  startTitle: { color: paper.ink, ...typo.semi, fontSize: 14.5 },
   startBody: {
     color: paper.inkFaint,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: 11.5,
     lineHeight: 16,
   },
@@ -420,12 +420,12 @@ const styles = StyleSheet.create({
     backgroundColor: paper.lineSoft,
   },
   rowText: { flex: 1 },
-  name: { color: paper.ink, fontFamily: paperFont.semi, fontSize: 15 },
-  preview: { marginTop: 2, color: paper.inkSoft, fontFamily: paperFont.regular, fontSize: 13 },
-  previewUnread: { color: paper.ink, fontFamily: paperFont.medium },
+  name: { color: paper.ink, ...typo.semi, fontSize: 15 },
+  preview: { marginTop: 2, color: paper.inkSoft, ...typo.regular, fontSize: 13 },
+  previewUnread: { color: paper.ink, ...typo.medium },
   rowEnd: { alignItems: 'flex-end', gap: 4 },
-  stamp: { color: paper.inkFaint, fontFamily: paperFont.mono, fontSize: 10.5 },
-  stampUnread: { color: paper.accent, fontFamily: paperFont.medium },
+  stamp: { color: paper.inkFaint, ...typo.mono, fontSize: 10.5 },
+  stampUnread: { color: paper.accent, ...typo.medium },
 
   badge: {
     minWidth: 20,
@@ -441,20 +441,20 @@ const styles = StyleSheet.create({
   badgeCalled: { paddingHorizontal: 5 },
   badgeAt: {
     color: '#FFFFFF',
-    fontFamily: paperFont.semi,
+    ...typo.semi,
     fontSize: 11,
     lineHeight: 14,
     opacity: 0.85,
   },
   badgeText: {
     color: '#FFFFFF',
-    fontFamily: paperFont.semi,
+    ...typo.semi,
     fontSize: 11,
     lineHeight: 14,
   },
 
   monogram: { alignItems: 'center', justifyContent: 'center' },
-  monogramText: { fontFamily: paperFont.semi, letterSpacing: 0.2 },
+  monogramText: { ...typo.semi, letterSpacing: 0.2 },
 
   blank: {
     alignItems: 'center',
@@ -466,10 +466,10 @@ const styles = StyleSheet.create({
     borderColor: paper.line,
     borderRadius: radius.lg,
   },
-  blankTitle: { color: paper.ink, fontFamily: paperFont.semi, fontSize: 15 },
+  blankTitle: { color: paper.ink, ...typo.semi, fontSize: 15 },
   blankText: {
     color: paper.inkSoft,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: 13,
     textAlign: 'center',
   },

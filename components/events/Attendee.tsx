@@ -1,6 +1,6 @@
 import type { Person } from '../../lib/people';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, font, radius, textSize } from '../../theme';
+import { colors, typo, radius, textSize } from '../../theme';
 import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 
 type AttendeeStackProps = {
@@ -22,7 +22,7 @@ export default function AttendeeStack({
 
   const shown = people.slice(0, max);
   const extra = people.length - shown.length;
-  const ring = ringColor ?? (onDark ? colors.text : colors.surface);
+  const ring = ringColor ?? (onDark ? colors.ink : colors.surface);
 
   return (
     <View style={styles.row}>
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
   },
   moreLight: { backgroundColor: colors.surfaceAlt },
   moreDark: { backgroundColor: 'rgba(255,255,255,0.2)' },
-  moreText: { fontFamily: font.semi, fontSize: textSize.micro },
+  moreText: { ...typo.semi, fontSize: textSize.micro },
   moreTextLight: { color: colors.textSoft },
   moreTextDark: { color: '#FFFFFF' },
 });

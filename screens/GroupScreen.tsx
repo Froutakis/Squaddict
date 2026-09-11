@@ -17,7 +17,7 @@ import {
   rotateInviteCode,
   type Group,
 } from '../services/serviceGroup';
-import { layout, paper, paperFont, radius, space, textSize } from '../theme';
+import { layout, paper, typo, radius, space, textSize } from '../theme';
 
 type Member = {
   id: string;
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pressed: { opacity: 0.6 },
-  title: { flex: 1, color: paper.ink, fontFamily: paperFont.semi, fontSize: textSize.lead },
+  title: { flex: 1, color: paper.ink, ...typo.semi, fontSize: textSize.lead },
 
   content: { padding: space.md, gap: space.md, paddingBottom: space.xl },
 
@@ -280,26 +280,26 @@ const styles = StyleSheet.create({
   name: {
     marginTop: space.sm,
     color: paper.ink,
-    fontFamily: paperFont.display,
+    ...typo.display,
     fontSize: textSize.hero,
     textAlign: 'center',
   },
-  handle: { color: paper.accent, fontFamily: paperFont.mono, fontSize: textSize.body },
-  count: { color: paper.inkFaint, fontFamily: paperFont.medium, fontSize: textSize.small },
+  handle: { color: paper.accent, ...typo.mono, fontSize: textSize.body },
+  count: { color: paper.inkFaint, ...typo.medium, fontSize: textSize.small },
   bio: {
     marginTop: space.sm,
     color: paper.inkSoft,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: textSize.base,
     lineHeight: 21,
     textAlign: 'center',
   },
 
   loader: { marginVertical: space.xl },
-  error: { color: paper.danger, fontFamily: paperFont.medium, fontSize: textSize.body },
+  error: { color: paper.danger, ...typo.medium, fontSize: textSize.body },
   hint: {
     color: paper.inkFaint,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: textSize.body,
     textAlign: 'center',
     paddingVertical: space.md,
@@ -315,14 +315,14 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     color: paper.inkFaint,
-    fontFamily: paperFont.mono,
+    ...typo.mono,
     fontSize: textSize.micro,
     letterSpacing: 1.2,
   },
   codeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
   code: {
     color: paper.ink,
-    fontFamily: paperFont.mono,
+    ...typo.mono,
     fontSize: textSize.heading,
     letterSpacing: 3,
   },
@@ -335,14 +335,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: paper.accentSoft,
   },
-  ghostText: { color: paper.accent, fontFamily: paperFont.semi, fontSize: textSize.small },
-  cardHint: { color: paper.inkFaint, fontFamily: paperFont.regular, fontSize: textSize.small, lineHeight: 17 },
+  ghostText: { color: paper.accent, ...typo.semi, fontSize: textSize.small },
+  cardHint: { color: paper.inkFaint, ...typo.regular, fontSize: textSize.small, lineHeight: 17 },
 
   section: { gap: space.xs },
   sectionLabel: {
     marginBottom: space.xxs,
     color: paper.inkFaint,
-    fontFamily: paperFont.mono,
+    ...typo.mono,
     fontSize: textSize.micro,
     letterSpacing: 1.2,
   },
@@ -357,10 +357,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
   },
-  memberName: { flex: 1, color: paper.ink, fontFamily: paperFont.medium, fontSize: textSize.base },
+  memberName: { flex: 1, color: paper.ink, ...typo.medium, fontSize: textSize.base },
   you: {
     color: paper.inkFaint,
-    fontFamily: paperFont.mono,
+    ...typo.mono,
     fontSize: textSize.caption,
   },
 
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     borderColor: paper.line,
     backgroundColor: paper.surface,
   },
-  leaveText: { color: paper.danger, fontFamily: paperFont.semi, fontSize: textSize.base },
+  leaveText: { color: paper.danger, ...typo.semi, fontSize: textSize.base },
   confirmRow: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
   confirm: {
     flex: 1,
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   cancel: { borderColor: paper.line, backgroundColor: paper.surface },
-  cancelText: { color: paper.inkSoft, fontFamily: paperFont.semi, fontSize: textSize.base },
+  cancelText: { color: paper.inkSoft, ...typo.semi, fontSize: textSize.base },
   danger: { borderColor: paper.danger, backgroundColor: paper.danger },
-  dangerText: { color: '#FFFFFF', fontFamily: paperFont.semi, fontSize: textSize.base },
+  dangerText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.base },
 });

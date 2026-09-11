@@ -11,7 +11,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import type { MyEvent } from '../../services/serviceEvents';
-import { colors, font, radius, shadow, solidFor, space, sun } from '../../theme';
+import { colors, typo, radius, shadow, solidFor, space, sun } from '../../theme';
 import { addDays, keyOf } from '../../lib/datetime';
 
 type CalendarCardProps = {
@@ -183,7 +183,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     marginBottom: space.xs,
   },
-  month: { color: colors.textFaint, fontFamily: font.semi, fontSize: 11, letterSpacing: 0.8 },
+  month: { color: colors.textFaint, ...typo.semi, fontSize: 11, letterSpacing: 0.8 },
 
   strip: { gap: GAP, paddingHorizontal: space.md },
   pressed: { opacity: 0.7 },
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 2,
   },
-  tileSelected: { backgroundColor: colors.text, borderColor: colors.text },
+  tileSelected: { backgroundColor: colors.ink, borderColor: colors.ink },
   tileCover: { borderColor: 'transparent', justifyContent: 'flex-end', paddingBottom: 8 },
 
   cover: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
@@ -217,10 +217,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#0A1420',
   },
 
-  weekday: { color: colors.textFaint, fontFamily: font.semi, fontSize: 10, letterSpacing: 0.6 },
+  weekday: { color: colors.textFaint, ...typo.semi, fontSize: 10, letterSpacing: 0.6 },
   weekdayOnDark: { color: 'rgba(255,255,255,0.72)' },
 
-  number: { color: colors.text, fontFamily: font.mono, fontSize: 17 },
+  number: { color: colors.text, ...typo.mono, fontSize: 17 },
   numberToday: { color: colors.primary },
   numberOnDark: { color: '#FFFFFF' },
 

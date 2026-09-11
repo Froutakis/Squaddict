@@ -99,7 +99,7 @@ import {
 } from '../services/serviceMedia';
 import { closeGroupChat, sendTyping, startChat } from '../services/serviceRealtime';
 import { getUserById } from '../services/serviceUser';
-import { layout, paper, paperFont, space } from '../theme';
+import { layout, paper, typo, space } from '../theme';
 import GroupScreen from './GroupScreen';
 
 const CATCH_UP_LIMIT = 300;
@@ -1229,7 +1229,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingBottom: space.xxs,
     color: paper.inkFaint,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: 12,
     fontStyle: 'italic',
   },
@@ -1245,10 +1245,10 @@ const styles = StyleSheet.create({
   olderSpinner: { paddingVertical: space.md, alignItems: 'center' },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: space.lg },
-  emptyTitle: { color: paper.ink, fontFamily: paperFont.display, fontSize: 21 },
+  emptyTitle: { color: paper.ink, ...typo.display, fontSize: 21 },
   emptyText: {
     color: paper.inkSoft,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: 14,
     textAlign: 'center',
   },
@@ -1256,7 +1256,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.xs,
     color: paper.accent,
-    fontFamily: paperFont.medium,
+    ...typo.medium,
     fontSize: 13,
     textAlign: 'center',
   },
@@ -1266,7 +1266,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.xs,
     backgroundColor: paper.surfaceAlt,
     color: paper.inkSoft,
-    fontFamily: paperFont.medium,
+    ...typo.medium,
     fontSize: 12,
     textAlign: 'center',
   },

@@ -12,7 +12,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import type { ChatMessage } from '../../services/serviceChat';
-import { layout, paper, paperFont, radius, space } from '../../theme';
+import { layout, paper, typo, radius, space } from '../../theme';
 
 const QUICK = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉'];
 
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     paddingTop: space.sm,
     paddingBottom: space.sm,
     color: paper.inkFaint,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: 13,
   },
   item: {
@@ -254,12 +254,12 @@ const styles = StyleSheet.create({
   customInput: {
     flex: 1,
     color: paper.ink,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: 18,
     outlineStyle: 'none',
   } as any,
   customGo: { width: 24, alignItems: 'center' },
   divider: { height: 1, marginLeft: space.md, backgroundColor: paper.lineSoft },
-  text: { color: paper.ink, fontFamily: paperFont.medium, fontSize: 15 },
+  text: { color: paper.ink, ...typo.medium, fontSize: 15 },
   textDanger: { color: paper.danger },
 });

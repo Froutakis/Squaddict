@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { searchMessages, type SearchHit } from '../../services/serviceChat';
 import { highlightParts, isSearchable, snippet } from './search';
-import { layout, paper, paperFont, radius, space } from '../../theme';
+import { layout, paper, typo, radius, space } from '../../theme';
 
 const DEBOUNCE_MS = 250;
 
@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     color: paper.ink,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: 14,
     outlineStyle: 'none',
   } as any,
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   note: {
     paddingTop: space.lg,
     color: paper.inkSoft,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: 13,
     textAlign: 'center',
   },
@@ -189,9 +189,9 @@ const styles = StyleSheet.create({
   hitWho: {
     marginBottom: 3,
     color: paper.inkFaint,
-    fontFamily: paperFont.medium,
+    ...typo.medium,
     fontSize: 11,
   },
-  hitText: { color: paper.ink, fontFamily: paperFont.regular, fontSize: 14, lineHeight: 20 },
-  hitMatch: { backgroundColor: paper.accentSoft, color: paper.accent, fontFamily: paperFont.semi },
+  hitText: { color: paper.ink, ...typo.regular, fontSize: 14, lineHeight: 20 },
+  hitMatch: { backgroundColor: paper.accentSoft, color: paper.accent, ...typo.semi },
 });

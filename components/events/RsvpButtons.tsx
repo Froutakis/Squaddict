@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { RsvpStatus } from '../../services/serviceEvents';
-import { colors, font, radius, space, textSize } from '../../theme';
+import { colors, typo, radius, space, textSize } from '../../theme';
 import Punch, { type PunchState } from '../general/Punch';
 
 type RsvpButtonsProps = {
@@ -118,10 +118,10 @@ const styles = StyleSheet.create({
 
   idleLight: { backgroundColor: colors.surface, borderColor: colors.border },
   idleDark: { backgroundColor: 'transparent', borderColor: 'rgba(255,255,255,0.3)' },
-  activeLight: { backgroundColor: colors.text, borderColor: colors.text },
+  activeLight: { backgroundColor: colors.ink, borderColor: colors.ink },
   activeDark: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
 
-  label: { fontFamily: font.semi, fontSize: textSize.base },
+  label: { ...typo.semi, fontSize: textSize.base },
   textIdleLight: { color: colors.textSoft },
   textIdleDark: { color: '#FFFFFF' },
   textActiveLight: { color: '#FFFFFF' },

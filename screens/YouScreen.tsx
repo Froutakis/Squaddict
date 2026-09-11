@@ -16,7 +16,7 @@ import GradientAvatar, { initialsFor } from '../components/general/GradientAvata
 import SectionLabel from '../components/general/SectionLabel';
 import GroupCard from '../components/group/GroupCard';
 import GroupScreen from './GroupScreen';
-import { colors, font, layout, space, textSize } from '../theme';
+import { colors, typo, layout, space, textSize } from '../theme';
 
 type YouScreenProps = {
   user: AuthUser;
@@ -134,20 +134,20 @@ const styles = StyleSheet.create({
   name: {
     marginTop: space.xs,
     color: colors.text,
-    fontFamily: font.display,
+    ...typo.display,
     fontSize: textSize.hero,
     letterSpacing: -0.5,
   },
-  since: { color: colors.textFaint, fontFamily: font.mono, fontSize: textSize.small },
+  since: { color: colors.textFaint, ...typo.mono, fontSize: textSize.small },
 
   list: { gap: space.sm },
   card: { width: '100%' },
 
   spinner: { alignSelf: 'flex-start', marginVertical: space.sm },
-  error: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
-  quiet: { color: colors.textFaint, fontFamily: font.medium, fontSize: 13 },
+  error: { color: colors.danger, ...typo.medium, fontSize: 13 },
+  quiet: { color: colors.textFaint, ...typo.medium, fontSize: 13 },
 
   signOut: { alignSelf: 'flex-start', paddingVertical: space.xs },
-  signOutText: { color: colors.danger, fontFamily: font.semi, fontSize: textSize.base },
+  signOutText: { color: colors.danger, ...typo.semi, fontSize: textSize.base },
   pressed: { opacity: 0.6 },
 });

@@ -1,7 +1,7 @@
 import type { Person } from '../../lib/people';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { RsvpStatus } from '../../services/serviceEvents';
-import { colors, font, radius, solidFor, space, textSize } from '../../theme';
+import { colors, typo, radius, solidFor, space, textSize } from '../../theme';
 import { countdownLabel, dateParts, daysUntil } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import Ticket from '../general/Ticket';
@@ -164,46 +164,46 @@ const styles = StyleSheet.create({
   },
   month: {
     color: colors.textFaint,
-    fontFamily: font.mono,
+    ...typo.mono,
     fontSize: 9,
     letterSpacing: 1.2,
   },
-  day: { color: colors.text, fontFamily: font.mono, fontSize: 17, letterSpacing: 0.5 },
+  day: { color: colors.text, ...typo.mono, fontSize: 17, letterSpacing: 0.5 },
 
   body: { flex: 1, minWidth: 0, gap: 2 },
   groupRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   groupDot: { width: 6, height: 6, borderRadius: radius.pill },
-  groupName: { flexShrink: 1, fontFamily: font.semi, fontSize: textSize.caption },
+  groupName: { flexShrink: 1, ...typo.semi, fontSize: textSize.caption },
   corner: {
     color: colors.textFaint,
-    fontFamily: font.mono,
+    ...typo.mono,
     fontSize: 9.5,
     letterSpacing: 1,
   },
 
   title: {
     color: colors.text,
-    fontFamily: font.title,
+    ...typo.title,
     fontSize: textSize.lead,
     letterSpacing: -0.2,
   },
-  meta: { color: colors.textSoft, fontFamily: font.mono, fontSize: textSize.small },
+  meta: { color: colors.textSoft, ...typo.mono, fontSize: textSize.small },
 
   stub: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  status: { color: colors.textSoft, fontFamily: font.semi, fontSize: textSize.small },
+  status: { color: colors.textSoft, ...typo.semi, fontSize: textSize.small },
 
   request: {
     height: 32,
     paddingHorizontal: 14,
     borderRadius: radius.sm,
     borderWidth: 1.5,
-    borderColor: colors.text,
-    backgroundColor: colors.text,
+    borderColor: colors.ink,
+    backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
   requestDone: { backgroundColor: 'transparent', borderColor: colors.border },
-  requestText: { color: colors.textOnBrand, fontFamily: font.semi, fontSize: textSize.body },
+  requestText: { color: colors.textOnBrand, ...typo.semi, fontSize: textSize.body },
   requestTextDone: { color: colors.textFaint },
   pressed: { opacity: 0.7 },
 });

@@ -5,7 +5,7 @@ import type { Group } from '../../services/serviceGroup';
 import { createEvent, updateEvent, type MyEvent, type NewEvent } from '../../services/serviceEvents';
 import type { Place } from '../../services/servicePlaces';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../../lib/tags';
-import { colors, font, radius, space, textSize } from '../../theme';
+import { colors, typo, radius, space, textSize } from '../../theme';
 import AuthField from '../general/AuthField';
 import Button from '../general/Button';
 import Chip from '../general/Chip';
@@ -293,9 +293,9 @@ const styles = StyleSheet.create({
 
   head: { paddingHorizontal: space.lg, paddingTop: space.lg },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  cancel: { color: colors.textSoft, fontFamily: font.medium, fontSize: 15 },
+  cancel: { color: colors.textSoft, ...typo.medium, fontSize: 15 },
   ghost: { color: 'transparent' },
-  sheetTitle: { color: colors.text, fontFamily: font.semi, fontSize: 15 },
+  sheetTitle: { color: colors.text, ...typo.semi, fontSize: 15 },
 
   scroll: { flexShrink: 1 },
   form: { gap: space.lg, padding: space.lg },
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   timeColumn: { flex: 1 },
   microLabel: {
     color: colors.textFaint,
-    fontFamily: font.mono,
+    ...typo.mono,
     fontSize: 10,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
 
   titleInput: {
     color: colors.text,
-    fontFamily: font.display,
+    ...typo.display,
     fontSize: textSize.display,
     letterSpacing: -0.6,
     paddingVertical: space.xs,
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.bg,
     color: colors.text,
-    fontFamily: font.medium,
+    ...typo.medium,
     fontSize: 14,
     lineHeight: 20,
     textAlignVertical: 'top',
@@ -343,8 +343,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   publicText: { flex: 1, gap: 3 },
-  publicTitle: { color: colors.textStrong, fontFamily: font.semi, fontSize: 15 },
-  publicBody: { color: colors.textSoft, fontFamily: font.medium, fontSize: 12.5, lineHeight: 17 },
+  publicTitle: { color: colors.textStrong, ...typo.semi, fontSize: 15 },
+  publicBody: { color: colors.textSoft, ...typo.medium, fontSize: 12.5, lineHeight: 17 },
 
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
   pressed: { opacity: 0.7 },
@@ -356,5 +356,5 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     gap: space.sm,
   },
-  formError: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
+  formError: { color: colors.danger, ...typo.medium, fontSize: 13 },
 });

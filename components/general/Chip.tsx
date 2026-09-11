@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, font, radius, space, textSize } from '../../theme';
+import { colors, typo, radius, space, textSize } from '../../theme';
 
 type ChipProps = {
   label: string;
@@ -69,11 +69,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   idle: { backgroundColor: colors.surface, borderColor: colors.border },
-  active: { backgroundColor: colors.text, borderColor: colors.text },
+  active: { backgroundColor: colors.ink, borderColor: colors.ink },
   pressed: { opacity: 0.7 },
   disabled: { opacity: 0.5 },
 
-  label: { color: colors.textSoft, fontFamily: font.semi, fontSize: textSize.small },
-  mono: { fontFamily: font.mono, fontSize: textSize.caption, letterSpacing: 0.6 },
+  label: { color: colors.textSoft, ...typo.semi, fontSize: textSize.small },
+  mono: { ...typo.mono, fontSize: textSize.caption, letterSpacing: 0.6 },
   labelActive: { color: '#FFFFFF' },
 });

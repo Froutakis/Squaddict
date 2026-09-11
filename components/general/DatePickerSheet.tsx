@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, font, radius, space } from '../../theme';
+import { colors, typo, radius, space } from '../../theme';
 import SheetHeader from './SheetHeader';
 import { addMonths, keyOf, monthGrid, parseDateKey } from '../../lib/datetime';
 
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   },
 
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  month: { color: colors.textFaint, fontFamily: font.semi, fontSize: 12, letterSpacing: 0.8 },
+  month: { color: colors.textFaint, ...typo.semi, fontSize: 12, letterSpacing: 0.8 },
   navBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   pressed: { opacity: 0.7 },
 
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     width: '14.2857%',
     textAlign: 'center',
     color: colors.textFaint,
-    fontFamily: font.medium,
+    ...typo.medium,
     fontSize: 11,
     marginBottom: space.xs,
   },
@@ -148,8 +148,8 @@ const styles = StyleSheet.create({
   },
   today: { backgroundColor: colors.primary },
   selected: { borderColor: colors.primary },
-  dayText: { color: colors.text, fontFamily: font.medium, fontSize: 14 },
-  dayTextToday: { color: colors.textOnBrand, fontFamily: font.semi },
+  dayText: { color: colors.text, ...typo.medium, fontSize: 14 },
+  dayTextToday: { color: colors.textOnBrand, ...typo.semi },
   outside: { color: colors.textFaint },
   blocked: { color: colors.textFaint, opacity: 0.5 },
 });

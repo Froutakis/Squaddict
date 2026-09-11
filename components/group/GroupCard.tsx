@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, font, radius, solidFor, space, textSize } from '../../theme';
+import { colors, typo, radius, solidFor, space, textSize } from '../../theme';
 import { initialsFor } from '../general/GradientAvatar';
 
 export const GROUP_CARD_WIDTH = 232;
@@ -127,20 +127,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  monogramText: { color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.body },
+  monogramText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.body },
   headText: { flex: 1 },
-  name: { color: colors.text, fontFamily: font.display, fontSize: textSize.lead, letterSpacing: -0.2 },
+  name: { color: colors.text, ...typo.display, fontSize: textSize.lead, letterSpacing: -0.2 },
   handle: {
     marginTop: 1,
     color: colors.textFaint,
-    fontFamily: font.mono,
+    ...typo.mono,
     fontSize: textSize.caption,
   },
 
   reason: {
     marginTop: space.sm,
     color: colors.primary,
-    fontFamily: font.mono,
+    ...typo.mono,
     fontSize: 9.5,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
   bio: {
     marginTop: space.xs,
     color: colors.textSoft,
-    fontFamily: font.medium,
+    ...typo.medium,
     fontSize: textSize.small,
     lineHeight: 17,
   },
@@ -165,10 +165,10 @@ const styles = StyleSheet.create({
   stats: {
     flex: 1,
     color: colors.textFaint,
-    fontFamily: font.mono,
+    ...typo.mono,
     fontSize: 10,
     letterSpacing: 0.4,
   },
-  followText: { color: colors.primary, fontFamily: font.semi, fontSize: textSize.small },
-  followingText: { color: colors.success, fontFamily: font.semi, fontSize: textSize.small },
+  followText: { color: colors.primary, ...typo.semi, fontSize: textSize.small },
+  followingText: { color: colors.success, ...typo.semi, fontSize: textSize.small },
 });

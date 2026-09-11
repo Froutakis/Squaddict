@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { GroupMonogram } from './GroupPicker';
 import { presenceLabel } from './typing';
-import { paper, paperFont, radius, space } from '../../theme';
+import { paper, typo, radius, space } from '../../theme';
 
 type ChatHeaderProps = {
   name: string;
@@ -98,11 +98,11 @@ const styles = StyleSheet.create({
   },
   pressed: { backgroundColor: paper.surfaceAlt },
   text: { flex: 1 },
-  title: { color: paper.ink, fontFamily: paperFont.semi, fontSize: 16 },
+  title: { color: paper.ink, ...typo.semi, fontSize: 16 },
   subtitle: {
     marginTop: 2,
     color: paper.inkFaint,
-    fontFamily: paperFont.mono,
+    ...typo.mono,
     fontSize: 9.5,
     letterSpacing: 0.9,
     textTransform: 'uppercase',

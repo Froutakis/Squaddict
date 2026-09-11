@@ -5,7 +5,7 @@ import { ActivityIndicator, Linking, Modal, Platform, Pressable, ScrollView, Sty
 import type { Attendee, RsvpStatus } from '../../services/serviceEvents';
 import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/serviceEvents';
 import { getMemberNames } from '../../services/serviceGroup';
-import { colors, font, radius, space, textSize } from '../../theme';
+import { colors, typo, radius, space, textSize } from '../../theme';
 import { formatDateTime, keyOf } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import { mapsUrl } from '../../lib/maps';
@@ -389,19 +389,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
   groupDot: { width: 8, height: 8, borderRadius: radius.pill, backgroundColor: '#FFFFFF' },
-  groupName: { flexShrink: 1, color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.caption },
-  code: { color: 'rgba(255,255,255,0.5)', fontFamily: font.mono, fontSize: 10, letterSpacing: 1 },
+  groupName: { flexShrink: 1, color: '#FFFFFF', ...typo.semi, fontSize: textSize.caption },
+  code: { color: 'rgba(255,255,255,0.5)', ...typo.mono, fontSize: 10, letterSpacing: 1 },
   title: {
     marginTop: space.sm,
     color: '#FFFFFF',
-    fontFamily: font.display,
+    ...typo.display,
     fontSize: textSize.display,
     lineHeight: 34,
     letterSpacing: -0.6,
   },
-  when: { marginTop: space.xs, color: 'rgba(255,255,255,0.78)', fontFamily: font.mono, fontSize: textSize.base },
-  where: { marginTop: 3, color: 'rgba(255,255,255,0.78)', fontFamily: font.medium, fontSize: textSize.base },
-  whereSub: { color: 'rgba(255,255,255,0.5)', fontFamily: font.medium, fontSize: textSize.small, lineHeight: 17 },
+  when: { marginTop: space.xs, color: 'rgba(255,255,255,0.78)', ...typo.mono, fontSize: textSize.base },
+  where: { marginTop: 3, color: 'rgba(255,255,255,0.78)', ...typo.medium, fontSize: textSize.base },
+  whereSub: { color: 'rgba(255,255,255,0.5)', ...typo.medium, fontSize: textSize.small, lineHeight: 17 },
 
   body: {
     gap: space.sm,
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     paddingTop: space.md,
     paddingBottom: space.xl,
   },
-  description: { color: colors.text, fontFamily: font.medium, fontSize: textSize.base, lineHeight: 20 },
+  description: { color: colors.text, ...typo.medium, fontSize: textSize.base, lineHeight: 20 },
 
   maps: {
     flexDirection: 'row',
@@ -423,9 +423,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   mapsPressed: { opacity: 0.7 },
-  mapsText: { color: colors.primary, fontFamily: font.semi, fontSize: textSize.base },
+  mapsText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
 
-  error: { color: colors.danger, fontFamily: font.medium, fontSize: textSize.body },
+  error: { color: colors.danger, ...typo.medium, fontSize: textSize.body },
   loader: { marginVertical: space.lg },
 
   list: { maxHeight: 320 },
@@ -435,12 +435,12 @@ const styles = StyleSheet.create({
   sectionDot: { width: 8, height: 8, borderRadius: radius.pill },
   sectionTitle: {
     color: colors.textSoft,
-    fontFamily: font.mono,
+    ...typo.mono,
     fontSize: textSize.caption,
     letterSpacing: 1,
     textTransform: 'uppercase',
   },
-  empty: { color: colors.textFaint, fontFamily: font.medium, fontSize: textSize.body },
+  empty: { color: colors.textFaint, ...typo.medium, fontSize: textSize.body },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
   chip: {
     flexDirection: 'row',
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     backgroundColor: colors.bg,
   },
-  chipName: { flexShrink: 1, color: colors.text, fontFamily: font.semi, fontSize: textSize.body },
+  chipName: { flexShrink: 1, color: colors.text, ...typo.semi, fontSize: textSize.body },
 
   ownerRow: { flexDirection: 'row', gap: space.sm },
   ownerBtn: {
@@ -467,8 +467,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   pressed: { opacity: 0.7 },
-  editText: { color: colors.textSoft, fontFamily: font.semi, fontSize: textSize.base },
-  deleteText: { color: colors.danger, fontFamily: font.semi, fontSize: textSize.base },
+  editText: { color: colors.textSoft, ...typo.semi, fontSize: textSize.base },
+  deleteText: { color: colors.danger, ...typo.semi, fontSize: textSize.base },
   confirmRow: { flexDirection: 'row', gap: space.sm },
   confirmBtn: {
     flex: 1,
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   cancelBtn: { borderColor: colors.border, backgroundColor: colors.surface },
-  cancelText: { color: colors.textSoft, fontFamily: font.semi, fontSize: textSize.base },
+  cancelText: { color: colors.textSoft, ...typo.semi, fontSize: textSize.base },
   dangerBtn: { borderColor: colors.danger, backgroundColor: colors.danger },
-  dangerText: { color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.base },
+  dangerText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.base },
 });

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, font, layout, radius, shadow, space } from '../../theme';
+import { colors, typo, layout, radius, shadow, space } from '../../theme';
 
 export type NavTab = 'home' | 'explore' | 'groups' | 'you';
 
@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   soon: { opacity: 0.4 },
   pressed: { opacity: 0.6 },
 
-  label: { color: colors.textSoft, fontFamily: font.semi, fontSize: 9.5, letterSpacing: 0.2 },
+  label: { color: colors.textSoft, ...typo.semi, fontSize: 9.5, letterSpacing: 0.2 },
   labelActive: { color: colors.primary },
 
   create: {

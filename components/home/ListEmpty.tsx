@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, font, radius, space } from '../../theme';
+import { colors, typo, radius, space } from '../../theme';
 
 type ListEmptyProps = {
   title: string;
@@ -37,11 +37,11 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     backgroundColor: colors.surfaceAlt,
   },
-  title: { color: colors.textStrong, fontFamily: font.bold, fontSize: 15.5, textAlign: 'center' },
+  title: { color: colors.textStrong, ...typo.bold, fontSize: 15.5, textAlign: 'center' },
   body: {
     marginTop: 4,
     color: colors.textSoft,
-    fontFamily: font.medium,
+    ...typo.medium,
     fontSize: 13.5,
     textAlign: 'center',
   },
@@ -54,6 +54,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonText: { color: colors.textOnBrand, fontFamily: font.bold, fontSize: 13.5 },
+  buttonText: { color: colors.textOnBrand, ...typo.bold, fontSize: 13.5 },
   pressed: { opacity: 0.7 },
 });

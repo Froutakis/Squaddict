@@ -1,6 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Group } from '../../services/serviceGroup';
-import { colors, font, radius, solidFor, space, textSize } from '../../theme';
+import { colors, typo, radius, solidFor, space, textSize } from '../../theme';
 import { initialsFor } from './GradientAvatar';
 
 type GroupBarProps = {
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipIdle: { backgroundColor: colors.surface, borderColor: colors.border },
-  chipActive: { backgroundColor: colors.text, borderColor: colors.text },
+  chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
   pressed: { opacity: 0.7 },
 
   monogram: {
@@ -103,9 +103,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  monogramText: { color: '#FFFFFF', fontFamily: font.semi, fontSize: 9.5 },
+  monogramText: { color: '#FFFFFF', ...typo.semi, fontSize: 9.5 },
 
-  name: { flexShrink: 1, color: colors.textSoft, fontFamily: font.semi, fontSize: textSize.small },
+  name: { flexShrink: 1, color: colors.textSoft, ...typo.semi, fontSize: textSize.small },
   nameActive: { color: '#FFFFFF' },
 
   badge: {
@@ -117,5 +117,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { color: '#FFFFFF', fontFamily: font.bold, fontSize: 10 },
+  badgeText: { color: '#FFFFFF', ...typo.bold, fontSize: 10 },
 });

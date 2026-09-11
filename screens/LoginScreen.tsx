@@ -6,7 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import AuthField from '../components/general/AuthField';
 import Button from '../components/general/Button';
 import { login } from '../services/serviceAuth';
-import { colors, font, radius, space, tint } from '../theme';
+import { colors, typo, radius, space, tint } from '../theme';
 
 type LoginScreenProps = {
   onSwitchToRegister?: () => void;
@@ -114,13 +114,13 @@ const styles = StyleSheet.create({
   glow: { position: 'absolute', top: 0, left: 0, right: 0, height: 320 },
   content: { flexGrow: 1, justifyContent: 'center', width: '100%', maxWidth: 500, alignSelf: 'center', paddingHorizontal: space.lg, paddingVertical: space.xl },
   header: { alignItems: 'center', marginBottom: 36 },
-  title: { color: colors.text, fontFamily: font.display, fontSize: 42, letterSpacing: -1.5 },
-  accent: { color: colors.accent, fontFamily: font.display },
-  subtitle: { marginTop: space.xs, color: colors.textSoft, fontFamily: font.medium, fontSize: 16, lineHeight: 24, textAlign: 'center' },
+  title: { color: colors.text, ...typo.display, fontSize: 42, letterSpacing: -1.5 },
+  accent: { color: colors.accent, ...typo.display },
+  subtitle: { marginTop: space.xs, color: colors.textSoft, ...typo.medium, fontSize: 16, lineHeight: 24, textAlign: 'center' },
   form: { gap: 20 },
   error: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: radius.sm, backgroundColor: tint.danger },
-  errorText: { flex: 1, color: colors.danger, fontFamily: font.medium, fontSize: 14 },
+  errorText: { flex: 1, color: colors.danger, ...typo.medium, fontSize: 14 },
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-  footerText: { color: colors.textSoft, fontFamily: font.medium, fontSize: 14 },
-  footerLink: { color: colors.accent, fontFamily: font.semi, fontSize: 14 },
+  footerText: { color: colors.textSoft, ...typo.medium, fontSize: 14 },
+  footerLink: { color: colors.accent, ...typo.semi, fontSize: 14 },
 });

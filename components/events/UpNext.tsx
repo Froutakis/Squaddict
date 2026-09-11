@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent, RsvpStatus } from '../../services/serviceEvents';
-import { colors, font, radius, space, textSize } from '../../theme';
+import { colors, typo, radius, space, textSize } from '../../theme';
 import { countdownLabel, formatDateTime } from '../../lib/datetime';
 import { mapsUrl } from '../../lib/maps';
 import { placeLines } from '../../lib/place';
@@ -187,16 +187,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
-  groupText: { color: WHITE, fontFamily: font.semi, fontSize: textSize.caption },
+  groupText: { color: WHITE, ...typo.semi, fontSize: textSize.caption },
   codeRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  code: { color: FAINT, fontFamily: font.mono, fontSize: 10, letterSpacing: 1 },
-  codeLive: { color: WHITE, fontFamily: font.mono, fontSize: 10, letterSpacing: 1 },
+  code: { color: FAINT, ...typo.mono, fontSize: 10, letterSpacing: 1 },
+  codeLive: { color: WHITE, ...typo.mono, fontSize: 10, letterSpacing: 1 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success },
 
   title: {
     marginTop: space.sm,
     color: WHITE,
-    fontFamily: font.display,
+    ...typo.display,
     fontSize: textSize.display,
     lineHeight: 34,
     letterSpacing: -0.6,
@@ -205,13 +205,13 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.xs },
   metaStack: { flex: 1, gap: 1 },
   metaFill: { flex: 1 },
-  metaLine: { color: SOFT, fontFamily: font.mono, fontSize: textSize.body },
-  metaSub: { color: FAINT, fontFamily: font.medium, fontSize: textSize.caption },
+  metaLine: { color: SOFT, ...typo.mono, fontSize: textSize.body },
+  metaSub: { color: FAINT, ...typo.medium, fontSize: textSize.caption },
 
   stub: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   stubText: { gap: 1 },
-  stubTitle: { color: WHITE, fontFamily: font.semi, fontSize: textSize.body },
-  change: { color: FAINT, fontFamily: font.medium, fontSize: textSize.caption },
+  stubTitle: { color: WHITE, ...typo.semi, fontSize: textSize.body },
+  change: { color: FAINT, ...typo.medium, fontSize: textSize.caption },
   stubRight: { alignItems: 'flex-end', gap: 3 },
   round: {
     width: 38,
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: WHITE,
   },
-  hereText: { color: colors.text, fontFamily: font.semi, fontSize: textSize.base },
+  hereText: { color: colors.text, ...typo.semi, fontSize: textSize.base },
   pressed: { opacity: 0.7 },
   camera: {
     width: 38,
@@ -240,5 +240,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: WHITE,
   },
-  count: { color: FAINT, fontFamily: font.mono, fontSize: 9.5, letterSpacing: 1 },
+  count: { color: FAINT, ...typo.mono, fontSize: 9.5, letterSpacing: 1 },
 });

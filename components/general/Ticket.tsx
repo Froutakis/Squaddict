@@ -121,7 +121,7 @@ export default function Ticket({
                   styles.curtain,
                   {
                     left: tear.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
-                    backgroundColor: ink ? colors.text : colors.surface,
+                    backgroundColor: ink ? colors.ink : colors.surface,
                   },
                 ]}
               />
@@ -167,7 +167,7 @@ function Dashes({ color }: { color: string }) {
 const styles = StyleSheet.create({
   card: { borderRadius: radius.lg, overflow: 'visible' },
   light: { backgroundColor: colors.surface, ...shadow.card },
-  ink: { backgroundColor: colors.text, ...shadow.hero },
+  ink: { backgroundColor: colors.ink, ...shadow.hero },
   pressed: { opacity: 0.85 },
 
   main: { paddingHorizontal: space.md, paddingTop: space.md, paddingBottom: space.sm },

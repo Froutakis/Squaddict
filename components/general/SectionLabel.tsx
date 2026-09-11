@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, font, radius, space } from '../../theme';
+import { colors, typo, radius, space } from '../../theme';
 
 type SectionLabelProps = {
   children: string;
@@ -24,7 +24,7 @@ export default function SectionLabel({ children, count }: SectionLabelProps) {
 const styles = StyleSheet.create({
   label: {
     color: colors.textFaint,
-    fontFamily: font.bold,
+    ...typo.bold,
     fontSize: 11,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
@@ -43,5 +43,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: space.xs,
   },
-  badgeText: { color: '#FFFFFF', fontFamily: font.bold, fontSize: 10.5 },
+  badgeText: { color: '#FFFFFF', ...typo.bold, fontSize: 10.5 },
 });

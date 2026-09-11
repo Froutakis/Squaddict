@@ -20,7 +20,7 @@ import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import { getCurrentCoords, type Coords, type LocationState } from '../services/serviceLocation';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
-import { colors, font, layout, space, textSize } from '../theme';
+import { colors, typo, layout, space, textSize } from '../theme';
 import Chip from '../components/general/Chip';
 import SectionLabel from '../components/general/SectionLabel';
 import ListEmpty from '../components/home/ListEmpty';
@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
   screenTitle: {
     paddingHorizontal: space.lg,
     color: colors.text,
-    fontFamily: font.display,
+    ...typo.display,
     fontSize: textSize.hero,
     letterSpacing: -0.5,
   },
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: space.lg,
   },
-  locationText: { color: colors.textSoft, fontFamily: font.medium, fontSize: textSize.body },
+  locationText: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body },
 
   banner: {
     flexDirection: 'row',
@@ -314,8 +314,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: colors.surfaceAlt,
   },
-  bannerText: { flex: 1, color: colors.textSoft, fontFamily: font.medium, fontSize: textSize.small },
-  bannerAction: { color: colors.primary, fontFamily: font.semi, fontSize: textSize.small },
+  bannerText: { flex: 1, color: colors.textSoft, ...typo.medium, fontSize: textSize.small },
+  bannerAction: { color: colors.primary, ...typo.semi, fontSize: textSize.small },
   pressed: { opacity: 0.7 },
 
   chips: { gap: space.xs, paddingHorizontal: space.lg, paddingVertical: 2 },
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   error: {
     paddingHorizontal: space.lg,
     color: colors.danger,
-    fontFamily: font.medium,
+    ...typo.medium,
     fontSize: textSize.body,
   },
 

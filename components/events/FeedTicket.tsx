@@ -3,7 +3,7 @@ import type { FeedEvent } from '../../services/serviceFeed';
 import type { RsvpStatus } from '../../services/serviceEvents';
 import { dateParts, weekdayShort } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
-import { colors, font, radius, solidFor, space, textSize } from '../../theme';
+import { colors, typo, radius, solidFor, space, textSize } from '../../theme';
 import { initialsFor } from '../general/GradientAvatar';
 import Punch from '../general/Punch';
 import Ticket from '../general/Ticket';
@@ -111,17 +111,17 @@ const styles = StyleSheet.create({
   },
   weekday: {
     color: colors.textFaint,
-    fontFamily: font.semi,
+    ...typo.semi,
     fontSize: 8.5,
     letterSpacing: 1,
   },
-  day: { color: colors.text, fontFamily: font.display, fontSize: 17, lineHeight: 20 },
-  km: { color: colors.textFaint, fontFamily: font.mono, fontSize: 10, letterSpacing: 0.8 },
+  day: { color: colors.text, ...typo.display, fontSize: 17, lineHeight: 20 },
+  km: { color: colors.textFaint, ...typo.mono, fontSize: 10, letterSpacing: 0.8 },
 
   title: {
     marginTop: space.sm,
     color: colors.text,
-    fontFamily: font.display,
+    ...typo.display,
     fontSize: 16.5,
     lineHeight: 19,
     letterSpacing: -0.3,
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   meta: {
     marginTop: 3,
     color: colors.textSoft,
-    fontFamily: font.mono,
+    ...typo.mono,
     fontSize: textSize.caption,
   },
 
@@ -141,11 +141,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  monogramText: { color: '#FFFFFF', fontFamily: font.semi, fontSize: 8 },
-  handle: { flex: 1, color: colors.textSoft, fontFamily: font.mono, fontSize: textSize.caption },
+  monogramText: { color: '#FFFFFF', ...typo.semi, fontSize: 8 },
+  handle: { flex: 1, color: colors.textSoft, ...typo.mono, fontSize: textSize.caption },
 
   stub: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  going: { color: colors.textFaint, fontFamily: font.mono, fontSize: textSize.caption },
+  going: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption },
   goingIn: { color: colors.success },
   pressed: { opacity: 0.6 },
 });

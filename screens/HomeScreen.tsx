@@ -10,7 +10,7 @@ import { clearRsvp, getEventCovers, getMyEvents, setRsvp } from '../services/ser
 import { getFeed } from '../services/serviceFeed';
 import { signImages } from '../services/serviceMedia';
 import { mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
-import { colors, font, layout, space } from '../theme';
+import { colors, typo, layout, space } from '../theme';
 import {
   dayFilterLabel,
   inPhotoWindow,
@@ -574,19 +574,19 @@ const styles = StyleSheet.create({
     gap: space.md,
   },
   body: { paddingHorizontal: space.lg, gap: space.sm },
-  error: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
-  quiet: { color: colors.textFaint, fontFamily: font.medium, fontSize: 13 },
+  error: { color: colors.danger, ...typo.medium, fontSize: 13 },
+  quiet: { color: colors.textFaint, ...typo.medium, fontSize: 13 },
   state: { alignItems: 'center', paddingHorizontal: space.lg, paddingVertical: space.xl, gap: space.xs },
   stateTitle: {
     color: colors.text,
-    fontFamily: font.display,
+    ...typo.display,
     fontSize: 21,
     letterSpacing: -0.3,
     textAlign: 'center',
   },
   stateBody: {
     color: colors.textSoft,
-    fontFamily: font.medium,
+    ...typo.medium,
     fontSize: 14.5,
     lineHeight: 21,
     textAlign: 'center',

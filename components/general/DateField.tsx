@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, font } from '../../theme';
+import { colors, typo } from '../../theme';
 import { dayMonth } from '../../lib/datetime';
 import { fieldStyles } from '../../fieldStyles';
 import DatePickerSheet from './DatePickerSheet';
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
   value: {
     flex: 1,
     color: colors.text,
-    fontFamily: font.mono,
+    ...typo.mono,
     fontSize: 15,
     letterSpacing: 0.4,
   },

@@ -5,7 +5,7 @@ import { bubbleSize } from './media';
 import { mentionParts } from './mentions';
 import type { Person } from '../../lib/people';
 import type { ReactionCount } from './reactions';
-import { paper, paperFont, shadow, space } from '../../theme';
+import { paper, typo, shadow, space } from '../../theme';
 import { GroupMonogram } from './GroupPicker';
 
 const AVATAR = 24;
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
   },
   deletedText: {
     color: paper.inkFaint,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: 14,
     fontStyle: 'italic',
   },
@@ -340,8 +340,8 @@ const styles = StyleSheet.create({
   },
   quoteBar: { width: 2, borderRadius: 1, backgroundColor: paper.accent },
   quoteText: { flexShrink: 1, paddingVertical: 1 },
-  quoteWho: { color: paper.accent, fontFamily: paperFont.semi, fontSize: 11 },
-  quoteBody: { color: paper.inkSoft, fontFamily: paperFont.regular, fontSize: 12, lineHeight: 16 },
+  quoteWho: { color: paper.accent, ...typo.semi, fontSize: 11 },
+  quoteBody: { color: paper.inkSoft, ...typo.regular, fontSize: 12, lineHeight: 16 },
   quoteGone: { fontStyle: 'italic', color: paper.inkFaint },
 
   reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
@@ -358,22 +358,22 @@ const styles = StyleSheet.create({
   },
   chipMine: { borderColor: paper.accent, backgroundColor: paper.accentSoft },
   chipEmoji: { fontSize: 12, lineHeight: 16 },
-  chipCount: { color: paper.inkSoft, fontFamily: paperFont.medium, fontSize: 11 },
+  chipCount: { color: paper.inkSoft, ...typo.medium, fontSize: 11 },
   chipCountMine: { color: paper.accent },
 
   sender: {
     marginBottom: 4,
     marginLeft: 2,
     color: paper.inkFaint,
-    fontFamily: paperFont.mono,
+    ...typo.mono,
     fontSize: 9.5,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
-  text: { color: paper.ink, fontFamily: paperFont.regular, fontSize: 14, lineHeight: 20 },
+  text: { color: paper.ink, ...typo.regular, fontSize: 14, lineHeight: 20 },
   textMine: { color: paper.onMine },
 
-  mention: { color: paper.accent, fontFamily: paperFont.semi },
+  mention: { color: paper.accent, ...typo.semi },
   mentionOnMine: { color: paper.accentOnMine },
   mentionMe: { backgroundColor: paper.accentSoft },
   mentionMeOnMine: { backgroundColor: 'rgba(157, 180, 255, 0.22)' },
@@ -381,21 +381,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginHorizontal: 2,
     color: paper.inkFaint,
-    fontFamily: paperFont.mono,
+    ...typo.mono,
     fontSize: 10.5,
   },
   pendingNote: {
     marginTop: 4,
     marginHorizontal: 2,
     color: paper.inkFaint,
-    fontFamily: paperFont.regular,
+    ...typo.regular,
     fontSize: 11,
   },
   failedNote: {
     marginTop: 4,
     marginHorizontal: 2,
     color: paper.danger,
-    fontFamily: paperFont.medium,
+    ...typo.medium,
     fontSize: 11,
   },
 
@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
   },
   separatorText: {
     color: paper.inkFaint,
-    fontFamily: paperFont.mono,
+    ...typo.mono,
     fontSize: 9.5,
     letterSpacing: 1.4,
     textTransform: 'uppercase',

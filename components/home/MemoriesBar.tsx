@@ -3,7 +3,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import type { SignedMap } from '../chat/media';
 import { readJson, writeJson } from '../../lib/store';
 import { dayMonth } from '../../lib/datetime';
-import { colors, font, radius, solidFor, space, textSize } from '../../theme';
+import { colors, typo, radius, solidFor, space, textSize } from '../../theme';
 import { initialsFor } from '../general/GradientAvatar';
 import SectionLabel from '../general/SectionLabel';
 import StoryViewer from '../events/StoryViewer';
@@ -201,15 +201,15 @@ const styles = StyleSheet.create({
   },
   cover: { flex: 1, borderRadius: radius.pill },
   blank: { alignItems: 'center', justifyContent: 'center' },
-  blankText: { color: '#FFFFFF', fontFamily: font.semi, fontSize: textSize.base },
-  name: { maxWidth: 74, color: colors.text, fontFamily: font.semi, fontSize: textSize.caption },
-  nameSeen: { color: colors.textSoft, fontFamily: font.medium },
-  stamp: { color: colors.textFaint, fontFamily: font.mono, fontSize: textSize.micro },
+  blankText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.base },
+  name: { maxWidth: 74, color: colors.text, ...typo.semi, fontSize: textSize.caption },
+  nameSeen: { color: colors.textSoft, ...typo.medium },
+  stamp: { color: colors.textFaint, ...typo.mono, fontSize: textSize.micro },
   error: {
     paddingHorizontal: space.lg,
     paddingTop: space.xs,
     color: colors.danger,
-    fontFamily: font.medium,
+    ...typo.medium,
     fontSize: textSize.small,
   },
 });

@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { MyEvent } from '../../services/serviceEvents';
-import { colors, font, space, textSize } from '../../theme';
+import { colors, typo, space, textSize } from '../../theme';
 import { addDays, keyOf } from '../../lib/datetime';
 import SectionLabel from '../general/SectionLabel';
 import EventCard, { type CardEvent } from './EventCard';
@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   caption: {
     marginBottom: space.sm,
     color: colors.textSoft,
-    fontFamily: font.medium,
+    ...typo.medium,
     fontSize: textSize.body,
   },
 });

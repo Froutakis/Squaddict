@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { DEFAULT_RADIUS_KM, getFeed, type FeedEvent } from '../../services/serviceFeed';
 import { getCurrentCoords, type Coords, type LocationState } from '../../services/serviceLocation';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../../services/serviceEvents';
-import { colors, font, space, textSize } from '../../theme';
+import { colors, typo, space, textSize } from '../../theme';
 import SectionLabel from '../general/SectionLabel';
 import FeedTicket from '../events/FeedTicket';
 
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     marginTop: -2,
     marginBottom: space.xs,
     color: colors.textFaint,
-    fontFamily: font.medium,
+    ...typo.medium,
     fontSize: textSize.small,
   },
   row: { gap: space.sm, paddingHorizontal: space.lg, paddingVertical: space.xs },

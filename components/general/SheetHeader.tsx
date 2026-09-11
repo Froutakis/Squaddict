@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, font, radius, space } from '../../theme';
+import { colors, typo, radius, space } from '../../theme';
 import CloseButton from './CloseButton';
 
 type SheetHeaderProps = {
@@ -37,5 +37,5 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  title: { flex: 1, color: colors.text, fontFamily: font.bold, fontSize: 20 },
+  title: { flex: 1, color: colors.text, ...typo.bold, fontSize: 20 },
 });

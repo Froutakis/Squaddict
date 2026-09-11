@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { Ionicons } from '@expo/vector-icons';
 import { reversePlace, searchPlaces, type Place } from '../../services/servicePlaces';
 import { getCurrentCoords } from '../../services/serviceLocation';
-import { colors, font, radius, space } from '../../theme';
+import { colors, typo, radius, space } from '../../theme';
 import { fieldStyles } from '../../fieldStyles';
 
 type PlaceFieldProps = {
@@ -217,7 +217,7 @@ export default function PlaceField({ label, place, onChange, loading = false, er
 }
 
 const styles = StyleSheet.create({
-  input: { flex: 1, minHeight: 48, color: colors.text, fontFamily: font.medium, fontSize: 15 },
+  input: { flex: 1, minHeight: 48, color: colors.text, ...typo.medium, fontSize: 15 },
   results: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -235,17 +235,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  resultText: { flex: 1, color: colors.text, fontFamily: font.medium, fontSize: 14 },
+  resultText: { flex: 1, color: colors.text, ...typo.medium, fontSize: 14 },
   pressed: { backgroundColor: colors.surfaceAlt },
   attribution: {
     color: colors.textFaint,
-    fontFamily: font.medium,
+    ...typo.medium,
     fontSize: 10,
     paddingVertical: 5,
     paddingHorizontal: space.md,
   },
   useMine: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 2 },
   useMinePressed: { opacity: 0.6 },
-  useMineText: { color: colors.primary, fontFamily: font.semi, fontSize: 13 },
-  error: { color: colors.danger, fontFamily: font.medium, fontSize: 13 },
+  useMineText: { color: colors.primary, ...typo.semi, fontSize: 13 },
+  error: { color: colors.danger, ...typo.medium, fontSize: 13 },
 });
