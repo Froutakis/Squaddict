@@ -1,8 +1,8 @@
 import type { Person } from '../../lib/people';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { RsvpStatus } from '../../services/serviceEvents';
-import { colors, typo, radius, solidFor, space, textSize } from '../../theme';
-import { countdownLabel, dateParts, daysUntil } from '../../lib/datetime';
+import { colors, radius, solidFor, space, textSize, tracking, typo } from '../../theme';
+import { countdownLabel, dateParts, daysUntil, weekdayShort } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import Ticket from '../general/Ticket';
 import Punch, { type PunchState } from '../general/Punch';
@@ -50,7 +50,7 @@ export default function EventCard({
   onRsvp,
   onRequest,
 }: EventCardProps) {
-  const { month, day } = dateParts(event.date);
+  const { day } = dateParts(event.date);
   const groupColor = solidFor(event.groupName);
   const status = statusOf(event.myStatus);
   const place = placeLines(event.location, event.placeLabel);
@@ -76,7 +76,7 @@ export default function EventCard({
     <Ticket onPress={onPress} accessibilityLabel={event.title} stub={renderStub()}>
       <View style={styles.main}>
         <View style={styles.date}>
-          <Text style={styles.month}>{month}</Text>
+          <Text style={styles.weekday}>{weekdayShort(event.date)}</Text>
           <Text style={styles.day}>{String(day).padStart(2, '0')}</Text>
         </View>
 
@@ -155,20 +155,15 @@ const styles = StyleSheet.create({
   spacer: { flex: 1 },
 
   date: {
-    width: 46,
+    width: 50,
     height: 48,
-    borderRadius: radius.sm,
-    backgroundColor: colors.bg,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  month: {
-    color: colors.textFaint,
-    ...typo.mono,
-    fontSize: 9,
-    letterSpacing: 1.2,
-  },
-  day: { color: colors.text, ...typo.mono, fontSize: 17, letterSpacing: 0.5 },
+  weekday: { color: colors.accent, ...typo.semi, fontSize: 10, letterSpacing: 0.5 },
+  day: { color: colors.text, ...typo.title, fontSize: 20, letterSpacing: tracking.title },
 
   body: { flex: 1, minWidth: 0, gap: 2 },
   groupRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },

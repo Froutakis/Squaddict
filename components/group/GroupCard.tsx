@@ -1,8 +1,8 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, typo, radius, solidFor, space, textSize } from '../../theme';
+import { colors, radius, shadow, solidFor, space, textSize, tracking, typo } from '../../theme';
 import { initialsFor } from '../general/GradientAvatar';
 
-export const GROUP_CARD_WIDTH = 232;
+export const GROUP_CARD_WIDTH = 216;
 
 export type CardGroup = {
   id: string;
@@ -75,14 +75,6 @@ export default function GroupCard({
         </Text>
       ) : null}
 
-      {group.bio ? (
-        <Text style={styles.bio} numberOfLines={2}>
-          {group.bio}
-        </Text>
-      ) : null}
-
-      <View style={styles.rule} />
-
       <View style={styles.foot}>
         <Text style={styles.stats} numberOfLines={1}>
           {stats.join(' · ')}
@@ -111,11 +103,10 @@ export default function GroupCard({
 const styles = StyleSheet.create({
   card: {
     width: GROUP_CARD_WIDTH,
-    padding: space.md,
-    borderRadius: radius.lg,
+    padding: 14,
+    borderRadius: radius.md,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...shadow.card,
   },
   pressed: { opacity: 0.7 },
 
@@ -123,52 +114,43 @@ const styles = StyleSheet.create({
   monogram: {
     width: 38,
     height: 38,
-    borderRadius: radius.pill,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   monogramText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.body },
   headText: { flex: 1 },
-  name: { color: colors.text, ...typo.display, fontSize: textSize.lead, letterSpacing: -0.2 },
+  name: { color: colors.text, ...typo.semi, fontSize: 15.5, letterSpacing: tracking.title },
   handle: {
     marginTop: 1,
     color: colors.textFaint,
-    ...typo.mono,
-    fontSize: textSize.caption,
+    ...typo.medium,
+    fontSize: textSize.small,
   },
 
   reason: {
-    marginTop: space.sm,
+    marginTop: 11,
     color: colors.primary,
-    ...typo.mono,
-    fontSize: 9.5,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    lineHeight: 14,
-  },
-  bio: {
-    marginTop: space.xs,
-    color: colors.textSoft,
     ...typo.medium,
     fontSize: textSize.small,
-    lineHeight: 17,
+    lineHeight: 16,
   },
-
-  rule: { height: 1, backgroundColor: colors.border, marginTop: space.sm },
 
   foot: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    marginTop: space.sm,
+    marginTop: 11,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   stats: {
     flex: 1,
     color: colors.textFaint,
     ...typo.mono,
-    fontSize: 10,
-    letterSpacing: 0.4,
+    fontSize: textSize.small,
   },
-  followText: { color: colors.primary, ...typo.semi, fontSize: textSize.small },
-  followingText: { color: colors.success, ...typo.semi, fontSize: textSize.small },
+  followText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
+  followingText: { color: colors.success, ...typo.semi, fontSize: textSize.base },
 });

@@ -88,7 +88,7 @@ export default function UpNext({
             accessibilityLabel="Add a photo from this night"
             style={({ pressed }) => [styles.camera, pressed && styles.pressed]}
           >
-            <Ionicons name="camera" size={19} color={colors.text} />
+            <Ionicons name="camera" size={19} color={colors.onLight} />
           </Pressable>
         ) : (
           <View style={styles.stubRight}>
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: WHITE,
   },
-  hereText: { color: colors.text, ...typo.semi, fontSize: textSize.base },
+  hereText: { color: colors.onLight, ...typo.semi, fontSize: textSize.base },
   pressed: { opacity: 0.7 },
   camera: {
     width: 38,

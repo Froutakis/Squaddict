@@ -3,7 +3,7 @@ import type { FeedEvent } from '../../services/serviceFeed';
 import type { RsvpStatus } from '../../services/serviceEvents';
 import { dateParts, weekdayShort } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
-import { colors, typo, radius, solidFor, space, textSize } from '../../theme';
+import { colors, radius, solidFor, space, textSize, tracking, typo } from '../../theme';
 import { initialsFor } from '../general/GradientAvatar';
 import Punch from '../general/Punch';
 import Ticket from '../general/Ticket';
@@ -101,21 +101,15 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center' },
   spacer: { flex: 1 },
   date: {
-    width: 40,
-    paddingVertical: 3,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bg,
+    width: 50,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  weekday: {
-    color: colors.textFaint,
-    ...typo.semi,
-    fontSize: 8.5,
-    letterSpacing: 1,
-  },
-  day: { color: colors.text, ...typo.display, fontSize: 17, lineHeight: 20 },
+  weekday: { color: colors.accent, ...typo.semi, fontSize: 10, letterSpacing: 0.5 },
+  day: { color: colors.text, ...typo.title, fontSize: 20, letterSpacing: tracking.title },
   km: { color: colors.textFaint, ...typo.mono, fontSize: 10, letterSpacing: 0.8 },
 
   title: {

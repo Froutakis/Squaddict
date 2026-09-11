@@ -459,11 +459,11 @@ const styles = StyleSheet.create({
 
   foot: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: space.md, paddingBottom: space.xl },
   stubTop: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  place: { color: colors.text, ...typo.semi, fontSize: textSize.body, flexShrink: 1 },
-  code: { color: colors.textFaint, ...typo.mono, fontSize: 10, letterSpacing: 1 },
+  place: { color: colors.onLight, ...typo.semi, fontSize: textSize.body, flexShrink: 1 },
+  code: { color: colors.onLightSoft, ...typo.mono, fontSize: 10, letterSpacing: 1 },
   title: {
     marginTop: space.xs,
-    color: colors.text,
+    color: colors.onLight,
     ...typo.display,
     fontSize: textSize.heading,
     letterSpacing: -0.3,

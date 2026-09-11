@@ -18,6 +18,9 @@ export const colors = {
   inkStrong: '#2A3D5E',
   onInk: '#FFFFFF',
 
+  onLight: '#0B1421',
+  onLightSoft: '#5A6B7D',
+
   primary: '#5B84FF',
   primaryDark: '#2145E6',
   accent: '#FF7F63',

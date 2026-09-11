@@ -12,6 +12,7 @@ import { signImages } from '../services/serviceMedia';
 import { mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
 import { colors, typo, layout, space } from '../theme';
 import {
+  countdownLabel,
   dayFilterLabel,
   inPhotoWindow,
   isHappeningNow,
@@ -24,7 +25,8 @@ import { userPrefix } from '../components/chat/cache';
 import { readJson, writeJson } from '../lib/store';
 import DayFilterRow from '../components/home/DayFilterRow';
 import ListEmpty from '../components/home/ListEmpty';
-import SectionLabel from '../components/general/SectionLabel';
+import SectionHead from '../components/home/SectionHead';
+import PlanCard from '../components/home/PlanCard';
 import Button from '../components/general/Button';
 import CalendarCard from '../components/events/CalendarCard';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
@@ -47,6 +49,14 @@ type HomeScreenProps = {
   user: AuthUser;
   createNonce?: number;
 };
+
+function planLine(event: MyEvent): string {
+  const parts: string[] = [];
+  if (event.startTime) parts.push(event.startTime);
+  if (event.placeLabel ?? event.location) parts.push((event.placeLabel ?? event.location) as string);
+  parts.push(`${event.going.length} in`);
+  return parts.join(' · ');
+}
 
 function toCardData(event: MyEvent): CardEvent {
   return {
@@ -361,8 +371,17 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
       <>
 
         {heroEvent ? (
-          <View style={styles.body}>
-            <SectionLabel>{liveEvent ? 'Happening now' : 'Up next'}</SectionLabel>
+          <View>
+            <SectionHead
+              title={liveEvent ? 'Happening now' : 'Up next'}
+              live={liveEvent !== undefined}
+              meta={
+                liveEvent
+                  ? liveLabel(liveEvent.date, liveEvent.startTime, liveEvent.endTime, now)
+                  : countdownLabel(heroEvent.date)
+              }
+            />
+            <View style={styles.body}>
             <UpNext
               event={heroEvent}
               live={liveEvent !== undefined}
@@ -380,6 +399,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
               onRsvp={(status) => handleRsvp(heroEvent.id, status)}
             />
             {photoError ? <Text style={styles.error}>{photoError}</Text> : null}
+            </View>
           </View>
         ) : null}
 
@@ -411,9 +431,10 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
         ) : null}
 
         <View>
-          <View style={styles.body}>
-            <SectionLabel>{dayMode ? 'On this day' : 'Later'}</SectionLabel>
-          </View>
+          <SectionHead
+            title={dayMode ? 'On this day' : 'Later'}
+            meta={later.length > 0 ? `${later.length} plans` : undefined}
+          />
 
           {later.length === 0 ? (
             <View style={styles.body}>
@@ -435,17 +456,23 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
               contentContainerStyle={styles.row}
             >
               {later.map((event) => (
-                <View key={event.id} style={styles.laterCard}>
-                  <EventCard event={toCardData(event)} onPress={() => setOpenEvent(event)} />
-                </View>
+                <PlanCard
+                  key={event.id}
+                  title={event.title}
+                  date={event.date}
+                  line={planLine(event)}
+                  groupName={groupId === null ? event.groupName : undefined}
+                  onPress={() => setOpenEvent(event)}
+                />
               ))}
             </ScrollView>
           )}
         </View>
 
         {waiting.length > 0 ? (
-          <View style={styles.body}>
-            <SectionLabel count={waiting.length}>Waiting on you</SectionLabel>
+          <View>
+            <SectionHead title="Waiting on you" count={waiting.length} />
+            <View style={styles.body}>
             {waiting.map((event) => (
               <EventCard
                 key={event.id}
@@ -455,14 +482,13 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
                 onRsvp={(status) => handleRsvp(event.id, status)}
               />
             ))}
+            </View>
           </View>
         ) : null}
 
         {feedGroups.length > 0 ? (
           <View>
-            <View style={styles.body}>
-              <SectionLabel>Pareas you crossed</SectionLabel>
-            </View>
+            <SectionHead title="Pareas you crossed" meta="Where you met" />
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -564,13 +590,12 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   row: { gap: space.sm, paddingHorizontal: space.lg },
-  laterCard: { width: 288 },
   content: {
     width: '100%',
     maxWidth: layout.column,
     alignSelf: 'center',
     paddingVertical: space.md,
-    paddingBottom: 110,
+    paddingBottom: 130,
     gap: space.md,
   },
   body: { paddingHorizontal: space.lg, gap: space.sm },

@@ -125,5 +125,5 @@ const styles = StyleSheet.create({
   textIdleLight: { color: colors.textSoft },
   textIdleDark: { color: '#FFFFFF' },
   textActiveLight: { color: '#FFFFFF' },
-  textActiveDark: { color: colors.text },
+  textActiveDark: { color: colors.onLight },
 });
