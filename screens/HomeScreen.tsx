@@ -86,12 +86,17 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [feedGroups, setFeedGroups] = useState<CardGroup[]>([]);
+  const [following, setFollowing] = useState<Record<string, true>>({});
 
   useEffect(() => {
     let cancelled = false;
 
     readJson<Record<string, true>>(userPrefix(user.id) + 'checkedin').then((stored) => {
       if (!cancelled && stored) setCheckedIn(stored);
+    });
+
+    readJson<Record<string, true>>(userPrefix(user.id) + 'following').then((stored) => {
+      if (!cancelled && stored) setFollowing(stored);
     });
 
     getFeed()
@@ -128,6 +133,15 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     const next = { ...checkedIn, [eventId]: true as const };
     setCheckedIn(next);
     writeJson(userPrefix(user.id) + 'checkedin', next);
+  }
+
+  function toggleFollow(groupId: string) {
+    const next = { ...following };
+    if (next[groupId]) delete next[groupId];
+    else next[groupId] = true;
+
+    setFollowing(next);
+    writeJson(userPrefix(user.id) + 'following', next);
   }
 
   const load = useCallback(
@@ -383,6 +397,39 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
           </View>
         ) : null}
 
+        <View>
+          <View style={styles.body}>
+            <SectionLabel>{dayMode ? 'On this day' : 'Later'}</SectionLabel>
+          </View>
+
+          {later.length === 0 ? (
+            <View style={styles.body}>
+              {waiting.length === 0 ? (
+                <ListEmpty
+                  title={dayMode ? `Nothing on ${dayFilterLabel(selectedDate)}` : 'Nothing else planned'}
+                  body="A free evening is a terrible thing to waste."
+                  actionLabel="Propose something"
+                  onAction={() => openNewEvent(selectedDate)}
+                />
+              ) : (
+                <Text style={styles.quiet}>Nothing else on the books.</Text>
+              )}
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.row}
+            >
+              {later.map((event) => (
+                <View key={event.id} style={styles.laterCard}>
+                  <EventCard event={toCardData(event)} onPress={() => setOpenEvent(event)} />
+                </View>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+
         {waiting.length > 0 ? (
           <View style={styles.body}>
             <SectionLabel count={waiting.length}>Waiting on you</SectionLabel>
@@ -398,31 +445,6 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
           </View>
         ) : null}
 
-        <View style={styles.body}>
-          <SectionLabel>{dayMode ? 'On this day' : 'Later'}</SectionLabel>
-
-          {later.length === 0 ? ( 
-            waiting.length === 0 ? (
-              <ListEmpty
-                title={dayMode ? `Nothing on ${dayFilterLabel(selectedDate)}` : 'Nothing else planned'}
-                body="A free evening is a terrible thing to waste."
-                actionLabel="Propose something"
-                onAction={() => openNewEvent(selectedDate)}
-              />
-            ) : (
-              <Text style={styles.quiet}>Nothing else on the books.</Text>
-            )
-          ) : (
-            later.map((event) => (
-              <EventCard
-                key={event.id}
-                event={toCardData(event)}
-                onPress={() => setOpenEvent(event)}
-              />
-            ))
-          )}
-        </View>
-
         {feedGroups.length > 0 ? (
           <View>
             <View style={styles.body}>
@@ -434,7 +456,12 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
               contentContainerStyle={styles.row}
             >
               {feedGroups.map((group) => (
-                <GroupCard key={group.id} group={group} />
+                <GroupCard
+                  key={group.id}
+                  group={group}
+                  following={following[group.id] === true}
+                  onFollow={() => toggleFollow(group.id)}
+                />
               ))}
             </ScrollView>
           </View>
@@ -509,6 +536,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   row: { gap: space.sm, paddingHorizontal: space.lg },
+  laterCard: { width: 288 },
   content: {
     width: '100%',
     maxWidth: layout.column,

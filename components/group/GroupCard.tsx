@@ -11,6 +11,7 @@ export type CardGroup = {
   bio: string | null;
   memberCount: number;
   openEvents?: number;
+  followerCount?: number;
 };
 
 type GroupCardProps = {
@@ -39,6 +40,8 @@ export default function GroupCard({
   const stats = [plural(group.memberCount, 'member', 'members')];
   if (group.openEvents !== undefined && group.openEvents > 0) {
     stats.push(plural(group.openEvents, 'plan up', 'plans up'));
+  } else if (group.followerCount !== undefined && group.followerCount > 0) {
+    stats.push(plural(group.followerCount, 'follower', 'followers'));
   }
 
   const label = `${group.name}, @${group.handle}, ${stats.join(', ')}`;
@@ -93,7 +96,7 @@ export default function GroupCard({
             accessibilityRole="button"
             accessibilityLabel={following ? `Unfollow ${group.name}` : `Follow ${group.name}`}
             accessibilityState={{ selected: following, disabled: saving }}
-            style={({ pressed }) => (pressed ? styles.pressed : null)}
+            style={({ pressed }) => (pressed || saving ? styles.pressed : null)}
           >
             <Text style={following ? styles.followingText : styles.followText}>
               {following ? 'Following' : 'Follow'}
