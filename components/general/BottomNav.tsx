@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, font, layout, radius, shadow, space } from '../../theme';
 
-export type NavTab = 'home' | 'explore' | 'groups';
+export type NavTab = 'home' | 'explore' | 'groups' | 'you';
 
 type Icon = keyof typeof Ionicons.glyphMap;
 
@@ -16,7 +16,7 @@ const SLOTS: Slot[] = [
   { kind: 'tab', key: 'explore', label: 'Explore', icon: 'compass-outline', iconActive: 'compass' },
   { kind: 'create' },
   { kind: 'tab', key: 'groups', label: 'Parea', icon: 'chatbubbles-outline', iconActive: 'chatbubbles' },
-  { kind: 'soon', label: 'You', icon: 'person-outline' },
+  { kind: 'tab', key: 'you', label: 'You', icon: 'person-outline', iconActive: 'person' },
 ];
 
 type BottomNavProps = {

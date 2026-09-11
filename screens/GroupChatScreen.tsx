@@ -1062,8 +1062,13 @@ export default function GroupChatScreen({
     return (
       <GroupScreen
         group={activeGroup}
+        userId={user.id}
         onBack={function () {
           setGroupScreen(false);
+        }}
+        onLeave={function () {
+          setGroupScreen(false);
+          closeGroup();
         }}
       />
     );

@@ -39,6 +39,7 @@ import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import EventFormSheet from '../components/events/EventFormSheet';
 import GroupFormSheet from '../components/group/GroupFormSheet';
 import GroupCard, { type CardGroup } from '../components/group/GroupCard';
+import GroupScreen from './GroupScreen';
 
 const RENEW_TICK_MS = 5 * 60 * 1000;
 
@@ -87,6 +88,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [feedGroups, setFeedGroups] = useState<CardGroup[]>([]);
   const [following, setFollowing] = useState<Record<string, true>>({});
+  const [profileGroup, setProfileGroup] = useState<Group | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -207,6 +209,17 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   useEffect(() => {
     if (createNonce > 0) openNewEvent(selectedDate);
   }, [createNonce]);
+
+  function openProfile(card: CardGroup) {
+    setProfileGroup({
+      id: card.id,
+      handle: card.handle,
+      name: card.name,
+      bio: card.bio,
+      avatarUrl: null,
+      memberCount: card.memberCount,
+    });
+  }
 
   function openNewEvent(date: string | null) {
     setEditEvent(null);
@@ -460,6 +473,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
                   key={group.id}
                   group={group}
                   following={following[group.id] === true}
+                  onPress={() => openProfile(group)}
                   onFollow={() => toggleFollow(group.id)}
                 />
               ))}
@@ -468,6 +482,20 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
         ) : null}
 
       </>
+    );
+  }
+
+  if (profileGroup) {
+    return (
+      <GroupScreen
+        group={profileGroup}
+        userId={user.id}
+        onBack={() => setProfileGroup(null)}
+        onLeave={() => {
+          setProfileGroup(null);
+          load();
+        }}
+      />
     );
   }
 

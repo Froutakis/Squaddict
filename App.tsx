@@ -17,6 +17,7 @@ import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
 import GroupChatScreen from './screens/GroupChatScreen';
 import ExploreScreen from './screens/ExploreScreen';
+import YouScreen from './screens/YouScreen';
 import BottomNav, { type NavTab } from './components/general/BottomNav';
 
 export default function App() {
@@ -87,6 +88,8 @@ export default function App() {
           <GroupChatScreen user={user} onThreadChange={setThreadOpen} />
         ) : screen === 'explore' ? (
           <ExploreScreen />
+        ) : screen === 'you' ? (
+          <YouScreen user={user} />
         ) : (
           <HomeScreen user={user} createNonce={createNonce} />
         )}
