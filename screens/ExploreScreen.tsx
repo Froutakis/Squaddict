@@ -22,7 +22,7 @@ import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
 import { colors, typo, layout, space, textSize } from '../theme';
 import Chip from '../components/general/Chip';
-import SectionLabel from '../components/general/SectionLabel';
+import SectionHead from '../components/general/SectionHead';
 import ListEmpty from '../components/home/ListEmpty';
 
 const RADII = [5, 10, 25, 50];
@@ -207,9 +207,7 @@ export default function ExploreScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {visible.length > 0 ? (
-        <View style={styles.sectionHead}>
-          <SectionLabel>{center ? 'Closest to you' : 'Open to Parea'}</SectionLabel>
-        </View>
+        <SectionHead title={center ? 'Closest to you' : 'Open to Parea'} />
       ) : null}
     </View>
   );
@@ -327,7 +325,6 @@ const styles = StyleSheet.create({
     fontSize: textSize.body,
   },
 
-  sectionHead: { paddingHorizontal: space.lg, paddingTop: space.xs },
   item: { paddingHorizontal: space.lg, paddingBottom: space.sm },
   empty: { paddingHorizontal: space.lg, paddingTop: space.sm },
 });

@@ -24,7 +24,7 @@ import { userPrefix } from '../components/chat/cache';
 import { readJson, writeJson } from '../lib/store';
 import DayFilterRow from '../components/home/DayFilterRow';
 import ListEmpty from '../components/home/ListEmpty';
-import SectionHead from '../components/home/SectionHead';
+import SectionHead from '../components/general/SectionHead';
 import PlanCard from '../components/home/PlanCard';
 import Button from '../components/general/Button';
 import CalendarCard from '../components/events/CalendarCard';

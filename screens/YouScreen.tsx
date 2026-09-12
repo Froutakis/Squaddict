@@ -13,7 +13,7 @@ import { logout } from '../services/serviceAuth';
 import { getUserById } from '../services/serviceUser';
 import { getGroupsForUser, type Group } from '../services/serviceGroup';
 import Monogram, { initialsFor } from '../components/general/Monogram';
-import SectionLabel from '../components/general/SectionLabel';
+import SectionHead from '../components/general/SectionHead';
 import GroupCard from '../components/group/GroupCard';
 import GroupScreen from './GroupScreen';
 import GroupFormSheet from '../components/group/GroupFormSheet';
@@ -83,9 +83,9 @@ export default function YouScreen({ user }: YouScreenProps) {
           </Text>
         </View>
 
-        <View style={styles.body}>
-          <SectionLabel>Your pareas</SectionLabel>
+        <SectionHead title="Your pareas" />
 
+        <View style={styles.body}>
           {loading ? (
             <ActivityIndicator color={colors.primary} style={styles.spinner} />
           ) : error ? (
@@ -106,9 +106,9 @@ export default function YouScreen({ user }: YouScreenProps) {
           )}
         </View>
 
-        <View style={styles.body}>
-          <SectionLabel>Start something</SectionLabel>
+        <SectionHead title="Start something" />
 
+        <View style={styles.body}>
           <View style={styles.startRow}>
             <Pressable
               onPress={() => setGroupForm('create')}

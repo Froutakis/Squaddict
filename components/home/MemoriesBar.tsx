@@ -5,7 +5,7 @@ import { readJson, writeJson } from '../../lib/store';
 import { dayMonth } from '../../lib/datetime';
 import { colors, typo, radius, solidFor, space, textSize } from '../../theme';
 import { initialsFor } from '../general/Monogram';
-import SectionLabel from '../general/SectionLabel';
+import SectionHead from '../general/SectionHead';
 import StoryViewer from '../events/StoryViewer';
 import { capture, messageFor, PhotoSourceSheet, type PhotoSource } from '../events/EventPhotos';
 import {
@@ -110,9 +110,7 @@ export default function MemoriesBar({
 
   return (
     <View>
-      <View style={styles.head}>
-        <SectionLabel>Nights filed</SectionLabel>
-      </View>
+      <SectionHead title="Nights filed" />
 
       <ScrollView
         horizontal
@@ -188,7 +186,6 @@ export default function MemoriesBar({
 }
 
 const styles = StyleSheet.create({
-  head: { paddingHorizontal: space.lg },
   row: { gap: space.sm, paddingHorizontal: space.lg, paddingVertical: 2 },
   bubble: { width: 74, alignItems: 'center', gap: 5 },
   pressed: { opacity: 0.7 },
