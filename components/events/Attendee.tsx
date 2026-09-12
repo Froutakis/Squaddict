@@ -1,7 +1,7 @@
 import type { Person } from '../../lib/people';
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, typo, radius, textSize } from '../../theme';
-import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
+import Monogram, { initialsFor } from '../general/Monogram';
 
 type AttendeeStackProps = {
   people: Person[];
@@ -27,9 +27,9 @@ export default function AttendeeStack({
   return (
     <View style={styles.row}>
       {shown.map((person, i) => (
-        <GradientAvatar
+        <Monogram
           key={person.id}
-          label={person.name || '?'}
+          name={person.name || '?'}
           initials={initialsFor(person.name)}
           size={size}
           ring={2}

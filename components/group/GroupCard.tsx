@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, radius, shadow, solidFor, space, textSize, tracking, typo } from '../../theme';
-import { initialsFor } from '../general/GradientAvatar';
+import { colors, radius, shadow, space, textSize, tracking, typo } from '../../theme';
+import Monogram from '../general/Monogram';
 
 export const GROUP_CARD_WIDTH = 216;
 
@@ -55,9 +55,7 @@ export default function GroupCard({
       style={({ pressed }) => [styles.card, pressed && onPress ? styles.pressed : null, style]}
     >
       <View style={styles.head}>
-        <View style={[styles.monogram, { backgroundColor: solidFor(group.name) }]}>
-          <Text style={styles.monogramText}>{initialsFor(group.name)}</Text>
-        </View>
+        <Monogram name={group.name} size={38} square />
 
         <View style={styles.headText}>
           <Text style={styles.name} numberOfLines={1}>
@@ -111,14 +109,6 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
 
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  monogram: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monogramText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.body },
   headText: { flex: 1 },
   name: { color: colors.text, ...typo.semi, fontSize: 15.5, letterSpacing: tracking.title },
   handle: {

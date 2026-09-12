@@ -12,36 +12,14 @@ import {
 } from 'react-native';
 import { Group } from '../../services/serviceGroup';
 import type { GroupPreview } from '../../services/serviceChat';
-import { initialsFor } from '../general/GradientAvatar';
+import { initialsFor } from '../general/Monogram';
 import { unreadLabel } from './unread';
-import { layout, paper, typo, radius, shadow, solidFor, space } from '../../theme';
+import { layout, paper, typo, radius, shadow, space } from '../../theme';
 import GroupSelect from '../general/GroupSelect';
+import Monogram from '../general/Monogram';
 
 export function GroupMonogram({ name, size = 44 }: { name: string; size?: number }) {
-  const color = solidFor(name);
-
-  return (
-    <View
-      style={[
-        styles.monogram,
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: color,
-        },
-      ]}
-    >
-      <Text
-        style={[
-          styles.monogramText,
-          { color: paper.onMine, fontSize: Math.round(size * 0.36) },
-        ]}
-      >
-        {initialsFor(name)}
-      </Text>
-    </View>
-  );
+  return <Monogram name={name} size={size} />;
 }
 
 function stampFor(iso: string) {
@@ -360,8 +338,6 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
 
-  monogram: { alignItems: 'center', justifyContent: 'center' },
-  monogramText: { ...typo.semi, letterSpacing: 0.2 },
 
   blank: {
     alignItems: 'center',

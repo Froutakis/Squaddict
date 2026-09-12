@@ -35,7 +35,6 @@ import {
 } from '../components/chat/replies';
 import SearchOverlay from '../components/chat/SearchOverlay';
 import GroupPicker from '../components/chat/GroupPicker';
-import GroupFormSheet from '../components/group/GroupFormSheet';
 import { mentionIds, toMembers } from '../components/chat/mentions';
 import type { Person } from '../lib/people';
 import { dropMissingImages, restoreOutbox } from '../components/chat/cache';
@@ -121,7 +120,6 @@ export default function GroupChatScreen({
   const [activeId, setActiveId] = useState<string | null>(initialGroupId);
   const [filterId, setFilterId] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, GroupPreview>>({});
-  const [groupForm, setGroupForm] = useState<'create' | 'join' | null>(null);
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [mentionCounts, setMentionCounts] = useState<Record<string, number>>({});
   const [displayName, setDisplayName] = useState('');
@@ -1035,29 +1033,8 @@ export default function GroupChatScreen({
           displayName={displayName}
           onSelect={openGroup}
           onBack={onBack}
-          onCreateGroup={function () {
-            setGroupForm('create');
-          }}
-          onEnterCode={function () {
-            setGroupForm('join');
-          }}
         />
 
-        <GroupFormSheet
-          visible={groupForm !== null}
-          initialMode={groupForm ?? 'create'}
-          onClose={function () {
-            setGroupForm(null);
-          }}
-          onDone={function (group) {
-            setGroups(function (current) {
-              if (current.some((one) => one.id === group.id)) return current;
-              return [...current, group];
-            });
-            setGroupForm(null);
-            openGroup(group.id);
-          }}
-        />
       </SafeAreaView>
     );
   }

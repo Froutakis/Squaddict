@@ -12,7 +12,7 @@ import type { User as AuthUser } from '@supabase/supabase-js';
 import { logout } from '../services/serviceAuth';
 import { getUserById } from '../services/serviceUser';
 import { getGroupsForUser, type Group } from '../services/serviceGroup';
-import GradientAvatar, { initialsFor } from '../components/general/GradientAvatar';
+import Monogram, { initialsFor } from '../components/general/Monogram';
 import SectionLabel from '../components/general/SectionLabel';
 import GroupCard from '../components/group/GroupCard';
 import GroupScreen from './GroupScreen';
@@ -74,7 +74,7 @@ export default function YouScreen({ user }: YouScreenProps) {
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.crest}>
-          <GradientAvatar label={displayName} initials={initialsFor(displayName)} size={72} />
+          <Monogram name={displayName} initials={initialsFor(displayName)} size={72} />
           <Text style={styles.name} numberOfLines={1}>
             {displayName}
           </Text>

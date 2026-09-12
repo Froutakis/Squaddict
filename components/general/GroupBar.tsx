@@ -1,7 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Group } from '../../services/serviceGroup';
 import { colors, typo, radius, solidFor, space, textSize } from '../../theme';
-import { initialsFor } from './GradientAvatar';
+import { initialsFor } from './Monogram';
 
 type GroupBarProps = {
   groups: Group[];

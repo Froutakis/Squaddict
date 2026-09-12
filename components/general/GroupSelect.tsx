@@ -2,8 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRef, useState } from 'react';
 import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Group } from '../../services/serviceGroup';
-import { colors, radius, shadow, solidFor, space, textSize, typo } from '../../theme';
-import GradientAvatar, { initialsFor } from './GradientAvatar';
+import { colors, radius, shadow, space, textSize, typo } from '../../theme';
+import Monogram, { initialsFor } from './Monogram';
 
 const MENU_WIDTH = 230;
 
@@ -54,7 +54,7 @@ export default function GroupSelect({
         accessibilityState={{ expanded: picker }}
         style={({ pressed }) => [styles.trigger, pressed && styles.pressed]}
       >
-        <GradientAvatar label={avatarLabel} initials={initialsFor(avatarLabel)} size={25} />
+        <Monogram name={avatarLabel} initials={initialsFor(avatarLabel)} size={25} />
 
         <Text style={styles.triggerText} numberOfLines={1}>
           {label}
@@ -84,8 +84,8 @@ export default function GroupSelect({
               accessibilityLabel={`${allLabel}, everything you are in`}
               style={({ pressed }) => [styles.row, pressed && styles.pressed]}
             >
-              <GradientAvatar
-                label={allAvatarLabel || allLabel}
+              <Monogram
+                name={allAvatarLabel || allLabel}
                 initials={initialsFor(allAvatarLabel || allLabel)}
                 size={24}
               />
@@ -103,9 +103,7 @@ export default function GroupSelect({
                 accessibilityLabel={group.name}
                 style={({ pressed }) => [styles.row, pressed && styles.pressed]}
               >
-                <View style={[styles.mono, { backgroundColor: solidFor(group.name) }]}>
-                  <Text style={styles.monoText}>{initialsFor(group.name)}</Text>
-                </View>
+                <Monogram name={group.name} size={24} />
                 <Text style={styles.name} numberOfLines={1}>
                   {group.name}
                 </Text>
@@ -150,14 +148,6 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   name: { flex: 1, color: colors.text, ...typo.medium, fontSize: textSize.base },
-  mono: {
-    width: 24,
-    height: 24,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monoText: { color: '#FFFFFF', ...typo.semi, fontSize: 9 },
 
   pressed: { opacity: 0.7 },
 });

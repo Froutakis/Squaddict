@@ -4,7 +4,7 @@ import type { SignedMap } from '../chat/media';
 import { readJson, writeJson } from '../../lib/store';
 import { dayMonth } from '../../lib/datetime';
 import { colors, typo, radius, solidFor, space, textSize } from '../../theme';
-import { initialsFor } from '../general/GradientAvatar';
+import { initialsFor } from '../general/Monogram';
 import SectionLabel from '../general/SectionLabel';
 import StoryViewer from '../events/StoryViewer';
 import { capture, messageFor, PhotoSourceSheet, type PhotoSource } from '../events/EventPhotos';

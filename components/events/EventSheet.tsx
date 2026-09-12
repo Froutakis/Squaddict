@@ -11,7 +11,7 @@ import { placeLines } from '../../lib/place';
 import { mapsUrl } from '../../lib/maps';
 import { ticketCode } from '../../lib/ticket';
 import CloseButton from '../general/CloseButton';
-import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
+import Monogram, { initialsFor } from '../general/Monogram';
 import Ticket from '../general/Ticket';
 import EventPhotos from './EventPhotos';
 import RsvpButtons from './RsvpButtons';
@@ -397,7 +397,7 @@ function Section({ title, people, dot, empty }: SectionProps) {
         <View style={styles.chips}>
           {people.map((person) => (
             <View key={person.id} style={styles.chip}>
-              <GradientAvatar label={person.name || '?'} initials={initialsFor(person.name)} size={26} />
+              <Monogram name={person.name || '?'} initials={initialsFor(person.name)} size={26} />
               <Text style={styles.chipName} numberOfLines={1}>{person.name || 'Someone'}</Text>
             </View>
           ))}

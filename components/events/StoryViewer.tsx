@@ -20,7 +20,7 @@ import { placeLines } from '../../lib/place';
 import { ticketCode } from '../../lib/ticket';
 import { colors, typo, radius, solidFor, space, textSize } from '../../theme';
 import CloseButton from '../general/CloseButton';
-import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
+import Monogram, { initialsFor } from '../general/Monogram';
 import Punch from '../general/Punch';
 import Ticket from '../general/Ticket';
 import AttendeeStack from './Attendee';
@@ -348,8 +348,8 @@ export default function StoryViewer({
           </View>
 
           <View style={styles.head}>
-            <GradientAvatar
-              label={event.groupName}
+            <Monogram
+              name={event.groupName}
               initials={initialsFor(event.groupName)}
               size={30}
             />

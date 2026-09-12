@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Group } from '../../services/serviceGroup';
-import { colors, radius, solidFor, space, textSize, tracking, typo } from '../../theme';
-import { initialsFor } from '../general/GradientAvatar';
+import { colors, radius, space, textSize, tracking, typo } from '../../theme';
+import Monogram from '../general/Monogram';
 
 type ShareToSquadSheetProps = {
   visible: boolean;
@@ -56,9 +56,7 @@ export default function ShareToSquadSheet({
                     accessibilityState={{ disabled: already || savingId !== null }}
                     style={({ pressed }) => [styles.row, pressed && !already ? styles.pressed : null]}
                   >
-                    <View style={[styles.mono, { backgroundColor: solidFor(group.name) }]}>
-                      <Text style={styles.monoText}>{initialsFor(group.name)}</Text>
-                    </View>
+                    <Monogram name={group.name} size={36} />
 
                     <View style={styles.rowText}>
                       <Text style={styles.name} numberOfLines={1}>
@@ -138,14 +136,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   pressed: { opacity: 0.7 },
-  mono: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monoText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.small },
   rowText: { flex: 1, minWidth: 0 },
   name: { color: colors.text, ...typo.semi, fontSize: textSize.base },
   members: { marginTop: 1, color: colors.textFaint, ...typo.mono, fontSize: textSize.caption },
