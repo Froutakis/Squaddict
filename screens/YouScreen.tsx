@@ -16,7 +16,9 @@ import GradientAvatar, { initialsFor } from '../components/general/GradientAvata
 import SectionLabel from '../components/general/SectionLabel';
 import GroupCard from '../components/group/GroupCard';
 import GroupScreen from './GroupScreen';
-import { colors, typo, layout, space, textSize } from '../theme';
+import GroupFormSheet from '../components/group/GroupFormSheet';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, radius, shadow, typo, layout, space, textSize } from '../theme';
 
 type YouScreenProps = {
   user: AuthUser;
@@ -28,6 +30,7 @@ export default function YouScreen({ user }: YouScreenProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
+  const [groupForm, setGroupForm] = useState<'create' | 'join' | null>(null);
 
   const load = useCallback(
     async function load() {
@@ -104,6 +107,38 @@ export default function YouScreen({ user }: YouScreenProps) {
         </View>
 
         <View style={styles.body}>
+          <SectionLabel>Start something</SectionLabel>
+
+          <View style={styles.startRow}>
+            <Pressable
+              onPress={() => setGroupForm('create')}
+              accessibilityRole="button"
+              accessibilityLabel="Make a parea"
+              style={({ pressed }) => [styles.startTile, pressed && styles.pressed]}
+            >
+              <Ionicons name="people-outline" size={22} color={colors.primary} />
+              <Text style={styles.startTitle}>Make a parea</Text>
+              <Text style={styles.startBody}>
+                Pick a handle, invite four people, post a night.
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setGroupForm('join')}
+              accessibilityRole="button"
+              accessibilityLabel="Enter a code"
+              style={({ pressed }) => [styles.startTile, pressed && styles.pressed]}
+            >
+              <Ionicons name="ticket-outline" size={22} color={colors.primary} />
+              <Text style={styles.startTitle}>Enter a code</Text>
+              <Text style={styles.startBody}>
+                Somebody texted you ten characters. Use them.
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.body}>
           <Pressable
             onPress={() => logout().catch(() => {})}
             accessibilityRole="button"
@@ -114,6 +149,16 @@ export default function YouScreen({ user }: YouScreenProps) {
           </Pressable>
         </View>
       </ScrollView>
+
+      <GroupFormSheet
+        visible={groupForm !== null}
+        initialMode={groupForm ?? 'create'}
+        onClose={() => setGroupForm(null)}
+        onDone={() => {
+          setGroupForm(null);
+          load();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -141,6 +186,17 @@ const styles = StyleSheet.create({
   since: { color: colors.textFaint, ...typo.mono, fontSize: textSize.small },
 
   list: { gap: space.sm },
+  startRow: { flexDirection: 'row', gap: 9 },
+  startTile: {
+    flex: 1,
+    gap: 6,
+    padding: 15,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    ...shadow.card,
+  },
+  startTitle: { color: colors.text, ...typo.semi, fontSize: 14.5 },
+  startBody: { color: colors.textFaint, ...typo.medium, fontSize: 11.5, lineHeight: 16 },
   card: { width: '100%' },
 
   spinner: { alignSelf: 'flex-start', marginVertical: space.sm },

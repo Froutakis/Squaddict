@@ -119,6 +119,7 @@ export default function GroupChatScreen({
 }: GroupChatScreenProps) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [activeId, setActiveId] = useState<string | null>(initialGroupId);
+  const [filterId, setFilterId] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, GroupPreview>>({});
   const [groupForm, setGroupForm] = useState<'create' | 'join' | null>(null);
   const [unread, setUnread] = useState<Record<string, number>>({});
@@ -1026,6 +1027,8 @@ export default function GroupChatScreen({
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <GroupPicker
           groups={groups}
+          groupId={filterId}
+          onGroupSelect={setFilterId}
           previews={previews}
           unread={unread}
           mentions={mentionCounts}

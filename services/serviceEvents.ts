@@ -169,19 +169,29 @@ export async function updateEvent(eventId: string, input: NewEvent): Promise<Gro
 }
 
 export async function getMyEvents(userId: string): Promise<MyEvent[]> {
-    const { data: memberships, error: mErr } = await supabase
-        .from("group_members")
-        .select("group_id")
-        .eq("user_id", userId);
+    const [{ data: memberships, error: mErr }, { data: answered, error: aErr }] = await Promise.all([
+        supabase.from("group_members").select("group_id").eq("user_id", userId),
+        supabase
+            .from("event_attendees")
+            .select("event_id")
+            .eq("user_id", userId)
+            .eq("status", "in"),
+    ]);
     if (mErr) throw mErr;
+    if (aErr) throw aErr;
 
-    const ids = memberships.map((m) => m.group_id);
-    if (ids.length === 0) return [];
+    const groupIds = (memberships ?? []).map((m) => m.group_id);
+    const eventIds = (answered ?? []).map((a) => a.event_id);
+    if (groupIds.length === 0 && eventIds.length === 0) return [];
+
+    const filters: string[] = [];
+    if (groupIds.length > 0) filters.push(`group_id.in.(${groupIds.join(",")})`);
+    if (eventIds.length > 0) filters.push(`id.in.(${eventIds.join(",")})`);
 
     const { data, error } = await supabase
         .from("events")
         .select("*, groups(name), event_attendees(user_id, status, profiles(display_name))")
-        .in("group_id", ids)
+        .or(filters.join(","))
         .order("date", { ascending: true })
         .order("start_time", { ascending: true, nullsFirst: true });
     if (error) throw error;

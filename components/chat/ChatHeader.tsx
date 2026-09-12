@@ -13,6 +13,7 @@ import { paper, typo, radius, space } from '../../theme';
 
 type ChatHeaderProps = {
   name: string;
+  withName?: string;
   memberCount: number;
   online: number;
   onBack: () => void;
@@ -23,6 +24,7 @@ type ChatHeaderProps = {
 
 export default function ChatHeader({
   name,
+  withName,
   memberCount,
   online,
   onBack,
@@ -40,13 +42,24 @@ export default function ChatHeader({
         <Ionicons name="chevron-back" size={20} color={paper.ink} />
       </Pressable>
 
-      <GroupMonogram name={name} size={32} />
+      {withName ? (
+        <View style={styles.pair}>
+          <GroupMonogram name={withName} size={30} />
+          <View style={styles.second}>
+            <GroupMonogram name={name} size={30} />
+          </View>
+        </View>
+      ) : (
+        <GroupMonogram name={name} size={32} />
+      )}
 
       <View style={styles.text}>
         <Text style={styles.title} numberOfLines={1}>
           {name}
         </Text>
-        <Text style={styles.subtitle}>{presenceLabel(memberCount, online)}</Text>
+        <Text style={styles.subtitle} numberOfLines={1}>
+          {withName ? `with ${withName}` : presenceLabel(memberCount, online)}
+        </Text>
       </View>
 
       <Pressable
@@ -97,6 +110,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pressed: { backgroundColor: paper.surfaceAlt },
+  pair: { width: 52, height: 30, flexDirection: 'row' },
+  second: { marginLeft: -8 },
   text: { flex: 1 },
   title: { color: paper.ink, ...typo.semi, fontSize: 16 },
   subtitle: {

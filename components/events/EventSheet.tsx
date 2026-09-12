@@ -15,6 +15,8 @@ import GradientAvatar, { initialsFor } from '../general/GradientAvatar';
 import Ticket from '../general/Ticket';
 import EventPhotos from './EventPhotos';
 import RsvpButtons from './RsvpButtons';
+import ShareToSquadSheet from './ShareToSquadSheet';
+import type { Group } from '../../services/serviceGroup';
 
 async function openMaps(lat: number, lng: number, label?: string): Promise<void> {
   const url = mapsUrl(Platform.OS, lat, lng, label);
@@ -46,6 +48,9 @@ export type SheetEvent = {
 
 type EventSheetProps = {
   event: SheetEvent | null;
+  groups?: Group[];
+  sharedGroupIds?: string[];
+  onShare?: (groupId: string) => Promise<void> | void;
   currentUserId: string;
   onClose: () => void;
   onChanged: () => void | Promise<void>;
@@ -53,7 +58,32 @@ type EventSheetProps = {
   onPhotosChanged?: () => void;
 };
 
-export default function EventSheet({ event, currentUserId, onClose, onChanged, onEdit, onPhotosChanged }: EventSheetProps) {
+export default function EventSheet({
+  event,
+  groups = [],
+  sharedGroupIds = [],
+  onShare,
+  currentUserId,
+  onClose,
+  onChanged,
+  onEdit,
+  onPhotosChanged,
+}: EventSheetProps) {
+  const [sharing, setSharing] = useState(false);
+  const [sharingId, setSharingId] = useState<string | null>(null);
+
+  async function share(groupId: string) {
+    if (!onShare || sharingId !== null) return;
+
+    setSharingId(groupId);
+    try {
+      await onShare(groupId);
+      setSharing(false);
+    } finally {
+      setSharingId(null);
+    }
+  }
+
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [memberNames, setMemberNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -211,6 +241,18 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
                   </Pressable>
                 ) : null}
 
+                {onShare && event.isMember === false ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Share this to a parea"
+                    onPress={() => setSharing(true)}
+                    style={({ pressed }) => [styles.maps, pressed && styles.mapsPressed]}
+                  >
+                    <Ionicons name="arrow-redo-outline" size={17} color={colors.primary} />
+                    <Text style={styles.mapsText}>Share to a parea</Text>
+                  </Pressable>
+                ) : null}
+
                 {error ? <Text style={styles.error}>{error}</Text> : null}
 
                 {loading ? (
@@ -318,6 +360,18 @@ export default function EventSheet({ event, currentUserId, onClose, onChanged, o
           ) : null}
         </Pressable>
       </Pressable>
+
+      <ShareToSquadSheet
+        visible={sharing}
+        groups={groups}
+        eventTitle={event?.title ?? ''}
+        savingId={sharingId}
+        sharedIds={sharedGroupIds}
+        onPick={share}
+        onClose={() => {
+          if (sharingId === null) setSharing(false);
+        }}
+      />
     </Modal>
   );
 }

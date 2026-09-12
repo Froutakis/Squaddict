@@ -15,6 +15,7 @@ import type { GroupPreview } from '../../services/serviceChat';
 import { initialsFor } from '../general/GradientAvatar';
 import { unreadLabel } from './unread';
 import { layout, paper, typo, radius, shadow, solidFor, space } from '../../theme';
+import GroupSelect from '../general/GroupSelect';
 
 export function GroupMonogram({ name, size = 44 }: { name: string; size?: number }) {
   const color = solidFor(name);
@@ -67,44 +68,16 @@ function stampFor(iso: string) {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-function PersonGlyph({ size = 34 }: { size?: number }) {
-  const head = Math.round(size * 0.3);
-  const shoulders = Math.round(size * 0.58);
-
-  return (
-    <View style={[styles.glyph, { width: size, height: size, borderRadius: size / 2 }]}>
-      <View
-        style={{
-          width: head,
-          height: head,
-          borderRadius: head / 2,
-          backgroundColor: paper.ink,
-          marginTop: Math.round(size * 0.2),
-        }}
-      />
-      <View
-        style={{
-          width: shoulders,
-          height: shoulders,
-          borderRadius: shoulders / 2,
-          backgroundColor: paper.ink,
-          marginTop: Math.round(size * 0.06),
-        }}
-      />
-    </View>
-  );
-}
-
 type GroupPickerProps = {
   groups: Group[];
   previews: Record<string, GroupPreview>;
   unread?: Record<string, number>;
   mentions?: Record<string, number>;
   onSelect: (id: string) => void;
+  groupId?: string | null;
+  onGroupSelect?: (groupId: string | null) => void;
   displayName?: string;
   onBack?: () => void;
-  onCreateGroup?: () => void;
-  onEnterCode?: () => void;
 };
 
 export default function GroupPicker({
@@ -113,21 +86,23 @@ export default function GroupPicker({
   unread = {},
   mentions = {},
   onSelect,
+  groupId = null,
+  onGroupSelect,
   onBack,
   displayName = '',
-  onCreateGroup,
-  onEnterCode,
 }: GroupPickerProps) {
   const who = displayName || 'you';
 
   const [query, setQuery] = useState('');
 
+  const scoped = groupId ? groups.filter((group) => group.id === groupId) : groups;
+
   const needle = query.trim().toLowerCase();
   const shown = needle
-    ? groups.filter(function (group) {
+    ? scoped.filter(function (group) {
         return group.name.toLowerCase().includes(needle);
       })
-    : groups;
+    : scoped;
 
   function rowStyle({ pressed }: { pressed: boolean }): StyleProp<ViewStyle> {
     if (pressed) return [styles.row, styles.rowPressed];
@@ -153,8 +128,13 @@ export default function GroupPicker({
           </Pressable>
         ) : null}
 
-        <PersonGlyph />
-        <Text style={styles.title}>{who}</Text>
+        <GroupSelect
+          groups={groups}
+          groupId={groupId}
+          allLabel={who}
+          allAvatarLabel={displayName}
+          onSelect={onGroupSelect ?? function () {}}
+        />
       </View>
 
       <View style={styles.search}>
@@ -266,49 +246,8 @@ export default function GroupPicker({
         </View>
       )}
 
-      {onCreateGroup || onEnterCode ? (
-        <View>
-          <Text style={styles.section}>Start something</Text>
-          <View style={styles.startRow}>
-            {onCreateGroup ? (
-              <Pressable
-                onPress={onCreateGroup}
-                accessibilityRole="button"
-                accessibilityLabel="Make a squad"
-                style={startTileStyle}
-              >
-                <Ionicons name="people-outline" size={22} color={paper.accent} />
-                <Text style={styles.startTitle}>Make a squad</Text>
-                <Text style={styles.startBody}>
-                  Pick a handle, invite four people, post a night.
-                </Text>
-              </Pressable>
-            ) : null}
-
-            {onEnterCode ? (
-              <Pressable
-                onPress={onEnterCode}
-                accessibilityRole="button"
-                accessibilityLabel="Enter a code"
-                style={startTileStyle}
-              >
-                <Ionicons name="ticket-outline" size={22} color={paper.accent} />
-                <Text style={styles.startTitle}>Enter a code</Text>
-                <Text style={styles.startBody}>
-                  Somebody texted you six characters. Use them.
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      ) : null}
     </ScrollView>
   );
-}
-
-function startTileStyle({ pressed }: { pressed: boolean }): StyleProp<ViewStyle> {
-  if (pressed) return [styles.startTile, styles.rowPressed];
-  return styles.startTile;
 }
 
 const styles = StyleSheet.create({
@@ -323,33 +262,17 @@ const styles = StyleSheet.create({
   head: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.sm,
+    gap: space.xs,
     paddingTop: space.lg,
     paddingBottom: space.md,
   },
   back: {
-    position: 'absolute',
-    left: -6,
-    top: space.lg,
-    width: 32,
+    width: 30,
     height: 32,
+    marginLeft: -8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: {
-    color: paper.ink,
-    ...typo.display,
-    fontSize: 30,
-    letterSpacing: -0.4,
-    textAlign: 'center',
-  },
-  glyph: {
-    alignItems: 'center',
-    overflow: 'hidden',
-    backgroundColor: paper.surfaceAlt,
-  },
-
   search: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -386,22 +309,6 @@ const styles = StyleSheet.create({
     borderColor: paper.line,
     borderRadius: radius.lg,
     overflow: 'hidden',
-  },
-  startRow: { flexDirection: 'row', gap: 9 },
-  startTile: {
-    flex: 1,
-    gap: 6,
-    padding: 15,
-    backgroundColor: paper.surface,
-    borderRadius: radius.lg,
-    ...shadow.card,
-  },
-  startTitle: { color: paper.ink, ...typo.semi, fontSize: 14.5 },
-  startBody: {
-    color: paper.inkFaint,
-    ...typo.regular,
-    fontSize: 11.5,
-    lineHeight: 16,
   },
   row: {
     flexDirection: 'row',

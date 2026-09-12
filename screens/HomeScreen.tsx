@@ -4,7 +4,6 @@ import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } f
 import type { Group } from '../services/serviceGroup';
 import type { EventPhoto, MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getUserById } from '../services/serviceUser';
-import { logout } from '../services/serviceAuth';
 import { getGroupsForUser } from '../services/serviceGroup';
 import { clearRsvp, getEventCovers, getMyEvents, setRsvp } from '../services/serviceEvents';
 import { getFeed } from '../services/serviceFeed';
@@ -533,7 +532,6 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
           groups={groups}
           groupId={groupId}
           onGroupSelect={setGroupId}
-          onSignOut={() => logout().catch(() => {})}
         />
         {renderBody()}
       </ScrollView>
