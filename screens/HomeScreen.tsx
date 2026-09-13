@@ -570,7 +570,6 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
         currentUserId={user.id}
         onClose={() => setOpenEvent(null)}
         onChanged={async () => setEvents(await getMyEvents(user.id))}
-        onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
         onEdit={(e) => {
           const mine = events.find((one) => one.id === e.id);
           if (!mine) return;

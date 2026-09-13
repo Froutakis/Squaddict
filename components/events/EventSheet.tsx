@@ -1,36 +1,21 @@
-import type { Person } from '../../lib/people';
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Attendee, RsvpStatus } from '../../services/serviceEvents';
 import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/serviceEvents';
-import { getMemberNames } from '../../services/serviceGroup';
 import { colors, typo, radius, space, textSize } from '../../theme';
-import { formatDateTime, keyOf } from '../../lib/datetime';
+import { formatDateTime } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
-import { mapsUrl } from '../../lib/maps';
 import { ticketCode } from '../../lib/ticket';
-import CloseButton from '../general/CloseButton';
-import Monogram, { initialsFor } from '../general/Monogram';
-import Ticket from '../general/Ticket';
-import EventPhotos from './EventPhotos';
-import RsvpButtons from './RsvpButtons';
+import AttendeeSheet from './AttendeeSheet';
 import ShareToSquadSheet from './ShareToSquadSheet';
+import Map from '../general/Map';
 import type { Group } from '../../services/serviceGroup';
-
-async function openMaps(lat: number, lng: number, label?: string): Promise<void> {
-  const url = mapsUrl(Platform.OS, lat, lng, label);
-
-  try {
-    await Linking.openURL(url);
-  } catch {
-    await Linking.openURL(mapsUrl('web', lat, lng, label));
-  }
-}
+import { getCurrentCoords } from '../../services/serviceLocation';
+import { getWalkingRoute, type Route } from '../../services/serviceRoute';
 
 export type SheetEvent = {
   id: string;
-  groupId: string;
   groupName: string;
   title: string;
   date: string;
@@ -42,8 +27,6 @@ export type SheetEvent = {
   lng?: number;
   createdBy?: string;
   isMember?: boolean;
-  myStatus?: RsvpStatus;
-  going?: Person[];
 };
 
 type EventSheetProps = {
@@ -55,7 +38,6 @@ type EventSheetProps = {
   onClose: () => void;
   onChanged: () => void | Promise<void>;
   onEdit?: (event: SheetEvent) => void;
-  onPhotosChanged?: () => void;
 };
 
 export default function EventSheet({
@@ -67,9 +49,9 @@ export default function EventSheet({
   onClose,
   onChanged,
   onEdit,
-  onPhotosChanged,
 }: EventSheetProps) {
   const [sharing, setSharing] = useState(false);
+  const [roster, setRoster] = useState(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
 
   async function share(groupId: string) {
@@ -85,11 +67,10 @@ export default function EventSheet({
   }
 
   const [attendees, setAttendees] = useState<Attendee[]>([]);
-  const [memberNames, setMemberNames] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [route, setRoute] = useState<Route | null>(null);
 
   const place = placeLines(event?.location, event?.placeLabel);
 
@@ -101,28 +82,44 @@ export default function EventSheet({
     setConfirming(false);
 
     async function load() {
-      setLoading(true);
       setError(null);
       try {
-        const [rows, names] = await Promise.all([
-          getAttendees(open!.id),
-          open!.isMember === false
-            ? Promise.resolve<Record<string, string>>({})
-            : getMemberNames(open!.groupId),
-        ]);
+        const rows = await getAttendees(open!.id);
         if (cancelled) return;
         setAttendees(rows);
-        setMemberNames(names);
       }
-      catch (e) {
+      catch {
         if (!cancelled) setError('Could not load who is coming.');
-      }
-      finally {
-        if (!cancelled) setLoading(false);
       }
     }
 
     load();
+    return () => { cancelled = true; };
+  }, [event?.id]);
+
+  useEffect(() => {
+    setRoute(null);
+
+    const target = event;
+    if (!target || target.lat === undefined || target.lng === undefined) return;
+    if (Platform.OS === 'web') return;
+
+    const to = { lat: target.lat, lng: target.lng };
+    let cancelled = false;
+
+    async function trace() {
+      try {
+        const here = await getCurrentCoords();
+        if (cancelled || !here.ok) return;
+
+        const found = await getWalkingRoute(here.coords, to);
+        if (!cancelled) setRoute(found);
+      } catch {
+        if (!cancelled) setRoute(null);
+      }
+    }
+
+    trace();
     return () => { cancelled = true; };
   }, [event?.id]);
 
@@ -138,7 +135,7 @@ export default function EventSheet({
       setAttendees(await getAttendees(event.id));
       await onChanged();
     }
-    catch (e) {
+    catch {
       setError('Could not save your answer. Try again.');
     }
     finally {
@@ -156,7 +153,7 @@ export default function EventSheet({
       await onChanged();
       onClose();
     }
-    catch (e) {
+    catch {
       setError('Could not delete the event.');
     }
     finally {
@@ -165,16 +162,9 @@ export default function EventSheet({
   }
 
   const going = attendees.filter((a) => a.status === 'in');
-  const notGoing = attendees.filter((a) => a.status === 'out');
-  const answered = new Set(attendees.map((a) => a.id));
-  const noAnswer: Person[] = Object.entries(memberNames)
-    .filter(([id]) => !answered.has(id))
-    .map(([id, name]) => ({ id, name }));
 
   const myStatus = attendees.find((a) => a.id === currentUserId)?.status;
-  const canSeeRoster = event?.isMember !== false;
   const isOwner = event?.createdBy !== undefined && event.createdBy === currentUserId;
-  const hasHappened = event ? event.date <= keyOf(new Date()) : false;
 
   return (
     <Modal
@@ -185,23 +175,38 @@ export default function EventSheet({
         if (!saving) onClose();
       }}
     >
-      <Pressable
-        style={styles.backdrop}
-        onPress={function () {
-          if (!saving) onClose();
-        }}
-      >
-        <Pressable style={styles.sheet} onPress={() => {}}>
+      <View style={styles.backdrop}>
+        <Pressable
+          style={styles.dismiss}
+          onPress={function () {
+            if (!saving) onClose();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        />
+
+        <View style={styles.sheet}>
           {event ? (
             <>
-              <Ticket
-                tone="ink"
-                notches={false}
-                style={styles.header}
-                stub={
-                  <RsvpButtons status={myStatus} saving={saving} onChange={handleRsvp} onDark stretch />
-                }
-              >
+              {event.lat !== undefined && event.lng !== undefined ? (
+                  <Map
+                    pins={[
+                      {
+                        id: event.id,
+                        lat: event.lat,
+                        lng: event.lng,
+                        label: place.primary || event.title,
+                      },
+                    ]}
+                    route={route?.points}
+                    showsUserLocation
+                    interactive
+                    spanKm={0.9}
+                    style={styles.canvas}
+                  />
+              ) : null}
+
+              <View style={styles.header}>
                 <View style={styles.grabber} />
 
                 <View style={styles.topRow}>
@@ -211,7 +216,16 @@ export default function EventSheet({
                   </View>
                   <View style={styles.spacer} />
                   <Text style={styles.code}>№ {ticketCode(event.id)}</Text>
-                  <CloseButton tone="light" onPress={onClose} disabled={saving} />
+
+                  <Pressable
+                    onPress={onClose}
+                    disabled={saving}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close"
+                    style={({ pressed }) => [styles.round, pressed && styles.pressed]}
+                  >
+                    <Ionicons name="close" size={18} color="#FFFFFF" />
+                  </Pressable>
                 </View>
 
                 <Text style={styles.title} numberOfLines={3}>{event.title}</Text>
@@ -222,89 +236,84 @@ export default function EventSheet({
                 {place.secondary ? (
                   <Text style={styles.whereSub} numberOfLines={2}>{place.secondary}</Text>
                 ) : null}
-              </Ticket>
+
+                <View style={styles.actions}>
+                  <Pressable
+                    onPress={() => handleRsvp(myStatus === 'in' ? null : 'in')}
+                    disabled={saving}
+                    accessibilityRole="button"
+                    accessibilityLabel="I'm in"
+                    accessibilityState={{ selected: myStatus === 'in', disabled: saving }}
+                    style={({ pressed }) => [
+                      styles.round,
+                      styles.roundBig,
+                      myStatus === 'in' && styles.roundUp,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Ionicons
+                      name={myStatus === 'in' ? 'thumbs-up' : 'thumbs-up-outline'}
+                      size={20}
+                      color="#FFFFFF"
+                    />
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => handleRsvp(myStatus === 'out' ? null : 'out')}
+                    disabled={saving}
+                    accessibilityRole="button"
+                    accessibilityLabel="Pass"
+                    accessibilityState={{ selected: myStatus === 'out', disabled: saving }}
+                    style={({ pressed }) => [
+                      styles.round,
+                      styles.roundBig,
+                      myStatus === 'out' && styles.roundDown,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Ionicons
+                      name={myStatus === 'out' ? 'thumbs-down' : 'thumbs-down-outline'}
+                      size={20}
+                      color="#FFFFFF"
+                    />
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => setRoster(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="See who is coming"
+                    style={({ pressed }) => [styles.round, styles.roundBig, pressed && styles.pressed]}
+                  >
+                    <Ionicons name="people-outline" size={20} color="#FFFFFF" />
+                    {going.length > 0 ? (
+                      <View style={styles.badge}>
+                        <Text style={styles.badgeText}>{going.length}</Text>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.gap} pointerEvents="none" />
 
               <View style={styles.body}>
                 {event.description ? (
                   <Text style={styles.description}>{event.description}</Text>
                 ) : null}
 
-                {event.lat !== undefined && event.lng !== undefined ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Open in maps"
-                    onPress={() => openMaps(event.lat!, event.lng!, place.primary)}
-                    style={({ pressed }) => [styles.maps, pressed && styles.mapsPressed]}
-                  >
-                    <Ionicons name="map-outline" size={17} color={colors.primary} />
-                    <Text style={styles.mapsText}>Open in maps</Text>
-                  </Pressable>
-                ) : null}
+                {error ? <Text style={styles.error}>{error}</Text> : null}
 
                 {onShare && event.isMember === false ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Share this to a parea"
                     onPress={() => setSharing(true)}
-                    style={({ pressed }) => [styles.maps, pressed && styles.mapsPressed]}
+                    style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
                   >
                     <Ionicons name="arrow-redo-outline" size={17} color={colors.primary} />
-                    <Text style={styles.mapsText}>Share to a parea</Text>
+                    <Text style={styles.actionText}>Share to a parea</Text>
                   </Pressable>
                 ) : null}
-
-                {error ? <Text style={styles.error}>{error}</Text> : null}
-
-                {loading ? (
-                  <ActivityIndicator color={colors.primary} style={styles.loader} />
-                ) : (
-                  <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-                    {hasHappened && canSeeRoster ? (
-                      <EventPhotos
-                        eventId={event.id}
-                        groupId={event.groupId}
-                        currentUserId={currentUserId}
-                        canAdd={myStatus === 'in'}
-                        onChanged={onPhotosChanged}
-                      />
-                    ) : null}
-
-                    {canSeeRoster ? (
-                      <>
-                        <Section
-                          title="Going"
-                          people={going}
-                          dot={colors.success}
-                          empty="Nobody so far"
-                        />
-                        <Section
-                          title="Can't make it"
-                          people={notGoing}
-                          dot={colors.danger}
-                          empty="Nobody so far"
-                        />
-                        <Section
-                          title="Still deciding"
-                          people={noAnswer}
-                          dot={colors.borderStrong}
-                          empty="Everyone answered"
-                        />
-                      </>
-                    ) : (
-                      <View style={styles.section}>
-                        <View style={styles.sectionHead}>
-                          <View style={[styles.sectionDot, { backgroundColor: colors.success }]} />
-                          <Text style={styles.sectionTitle}>
-                            {going.length} going · {notGoing.length} passed
-                          </Text>
-                        </View>
-                        <Text style={styles.empty}>
-                          You are not in this squad. You can still answer.
-                        </Text>
-                      </View>
-                    )}
-                  </ScrollView>
-                )}
 
                 {isOwner ? (
                   confirming ? (
@@ -358,8 +367,10 @@ export default function EventSheet({
               </View>
             </>
           ) : null}
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
+
+      <AttendeeSheet visible={roster} attendees={attendees} onClose={() => setRoster(false)} />
 
       <ShareToSquadSheet
         visible={sharing}
@@ -376,52 +387,52 @@ export default function EventSheet({
   );
 }
 
-type SectionProps = {
-  title: string;
-  people: Person[];
-  dot: string;
-  empty: string;
-};
-
-function Section({ title, people, dot, empty }: SectionProps) {
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHead}>
-        <View style={[styles.sectionDot, { backgroundColor: dot }]} />
-        <Text style={styles.sectionTitle}>{title} · {people.length}</Text>
-      </View>
-
-      {people.length === 0 ? (
-        <Text style={styles.empty}>{empty}</Text>
-      ) : (
-        <View style={styles.chips}>
-          {people.map((person) => (
-            <View key={person.id} style={styles.chip}>
-              <Monogram name={person.name || '?'} initials={initialsFor(person.name)} size={26} />
-              <Text style={styles.chipName} numberOfLines={1}>{person.name || 'Someone'}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  dismiss: { flex: 1 },
   sheet: {
-    maxHeight: '85%',
+    height: '94%',
     overflow: 'hidden',
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bg,
   },
 
-  header: {
-    borderRadius: 0,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+  header: { paddingHorizontal: space.md, paddingTop: space.md, paddingBottom: space.sm },
+  canvas: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    height: undefined,
   },
+  gap: { flex: 1 },
+  actions: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
+  round: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  roundBig: { width: 42, height: 42 },
+  roundUp: { backgroundColor: colors.success },
+  roundDown: { backgroundColor: colors.danger },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+  },
+  badgeText: { color: '#FFFFFF', ...typo.semi, fontSize: 9.5 },
   spacer: { flex: 1 },
   grabber: {
     width: 40,
@@ -435,7 +446,7 @@ const styles = StyleSheet.create({
   groupPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    maxWidth: '52%',
+    flexShrink: 1,
     gap: space.xs,
     paddingHorizontal: space.sm,
     paddingVertical: 4,
@@ -460,12 +471,12 @@ const styles = StyleSheet.create({
   body: {
     gap: space.sm,
     paddingHorizontal: space.lg,
-    paddingTop: space.md,
-    paddingBottom: space.xl,
+    paddingTop: space.sm,
+    paddingBottom: space.lg,
   },
   description: { color: colors.text, ...typo.medium, fontSize: textSize.base, lineHeight: 20 },
 
-  maps: {
+  action: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -476,37 +487,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.bg,
   },
-  mapsPressed: { opacity: 0.7 },
-  mapsText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
+  actionPressed: { opacity: 0.7 },
+  actionText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
 
   error: { color: colors.danger, ...typo.medium, fontSize: textSize.body },
-  loader: { marginVertical: space.lg },
-
-  list: { maxHeight: 320 },
-  listContent: { gap: space.md, paddingBottom: space.sm },
-  section: { gap: space.sm },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  sectionDot: { width: 8, height: 8, borderRadius: radius.pill },
-  sectionTitle: {
-    color: colors.textSoft,
-    ...typo.mono,
-    fontSize: textSize.caption,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  empty: { color: colors.textFaint, ...typo.medium, fontSize: textSize.body },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.xs,
-    paddingLeft: space.xs,
-    paddingRight: space.sm,
-    paddingVertical: 4,
-    borderRadius: radius.sm,
-    backgroundColor: colors.bg,
-  },
-  chipName: { flexShrink: 1, color: colors.text, ...typo.semi, fontSize: textSize.body },
 
   ownerRow: { flexDirection: 'row', gap: space.sm },
   ownerBtn: {
