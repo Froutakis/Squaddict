@@ -37,7 +37,7 @@ export default function App() {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
       </View>
     );
   }
@@ -79,7 +79,7 @@ export default function App() {
       {navHidden ? null : (
         <BottomNav active={screen} onNavigate={navigate} onCreate={requestCreate} />
       )}
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
     </View>
   );
 }

@@ -14,7 +14,7 @@ import RsvpButtons from './RsvpButtons';
 const WHITE = '#FFFFFF';
 const SOFT = 'rgba(255,255,255,0.78)';
 const FAINT = 'rgba(255,255,255,0.5)';
-const HOLE = '#05090D';
+const HOLE = '#102163';
 
 type UpNextProps = {
   event: MyEvent;
@@ -130,7 +130,7 @@ export default function UpNext({
   );
 
   return (
-    <Ticket tone="ink" torn={checkedIn} onPress={onPress} accessibilityLabel={event.title} stub={stub}>
+    <Ticket tone="brand" torn={checkedIn} onPress={onPress} accessibilityLabel={event.title} stub={stub}>
       <View style={styles.topRow}>
         <View style={styles.groupPill}>
           <Text style={styles.groupText} numberOfLines={1}>

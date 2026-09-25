@@ -1,51 +1,51 @@
 import type { TextStyle } from 'react-native';
 
 export const colors = {
-  bg: '#080E19',
-  surface: '#111B2B',
-  surfaceAlt: '#1A2739',
+  bg: '#EDF0F5',
+  surface: '#FFFFFF',
+  surfaceAlt: '#E4EAF0',
 
-  border: 'rgba(150,175,215,0.15)',
-  borderStrong: 'rgba(150,175,215,0.27)',
+  border: '#DFE5EE',
+  borderStrong: '#C9D4E1',
 
-  text: '#E9EFF8',
-  textStrong: '#FFFFFF',
-  textSoft: '#A3B2C7',
-  textFaint: '#7B8BA3',
+  text: '#0C1926',
+  textStrong: '#0C1926',
+  textSoft: '#5A6B7D',
+  textFaint: '#7A8898',
   textOnBrand: '#FFFFFF',
 
-  ink: '#20304C',
-  inkStrong: '#2A3D5E',
+  ink: '#0C1926',
+  inkStrong: '#16233A',
   onInk: '#FFFFFF',
 
   onLight: '#0B1421',
   onLightSoft: '#5A6B7D',
 
-  primary: '#5B84FF',
-  primaryDark: '#2145E6',
-  accent: '#FF7F63',
+  primary: '#2145E6',
+  primaryDark: '#16309E',
+  accent: '#D5442F',
 
-  success: '#3DBB8B',
-  danger: '#FF6F55',
+  success: '#1F7A57',
+  danger: '#D5442F',
 };
 
 export const sun = '#FFC53D';
 
 export const tint = {
-  success: 'rgba(61,187,139,0.16)',
-  danger: 'rgba(255,111,85,0.16)',
-  neutral: 'rgba(150,175,215,0.12)',
-  sun: 'rgba(255,197,61,0.16)',
+  success: '#E2F1EA',
+  danger: '#FBE6E1',
+  neutral: '#E4EAF0',
+  sun: '#FFF3D6',
 };
 
-export const brand = ['#2145E6', '#2145E6'] as const;
+export const brand = ['#1D3AC0', '#152C8F'] as const;
 
 export const avatarGradients: readonly (readonly [string, string])[] = [
-  ['#3557C7', '#3557C7'],
-  ['#4C79F5', '#4C79F5'],
-  ['#6A4BC4', '#6A4BC4'],
-  ['#8B44E0', '#8B44E0'],
-  ['#B25BF5', '#B25BF5'],
+  ['#152C6B', '#152C6B'],
+  ['#2145E6', '#2145E6'],
+  ['#3D2C8D', '#3D2C8D'],
+  ['#5B21B6', '#5B21B6'],
+  ['#9333EA', '#9333EA'],
 ];
 
 export function gradientFor(name: string): readonly [string, string] {
@@ -60,32 +60,32 @@ export function solidFor(name: string): string {
 
 export const shadow = {
   card: {
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 14,
+    shadowColor: '#0C1926',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
     elevation: 2,
   },
   button: {
-    shadowColor: '#2145E6',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
+    shadowColor: '#0C1926',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
     elevation: 4,
   },
   bubble: {
-    shadowColor: '#000000',
+    shadowColor: '#0C1926',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.04,
     shadowRadius: 3,
     elevation: 1,
   },
   hero: {
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.75,
-    shadowRadius: 30,
-    elevation: 8,
+    shadowColor: '#0C1926',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 22,
+    elevation: 6,
   },
 };
 
@@ -127,25 +127,24 @@ export const textSize = {
 };
 
 export const paper = {
-  bg: '#080E19',
-  surface: '#111B2B',
-  surfaceAlt: '#1A2739',
+  bg: '#EDF0F5',
+  surface: '#FFFFFF',
+  surfaceAlt: '#E4EAF0',
 
-  line: 'rgba(150,175,215,0.15)',
-  lineSoft: 'rgba(150,175,215,0.08)',
+  line: '#DFE5EE',
+  lineSoft: '#EAEFF5',
 
-  ink: '#E9EFF8',
-  inkSoft: '#A3B2C7',
-  inkFaint: '#7B8BA3',
+  ink: '#0C1926',
+  inkSoft: '#5A6B7D',
+  inkFaint: '#7A8898',
 
-  mine: '#2B4FC4',
+  mine: '#0C1926',
   onMine: '#FFFFFF',
 
-  accent: '#5B84FF',
-  accentSoft: 'rgba(91,132,255,0.16)',
-  accentOnMine: '#C7D6FF',
+  accent: '#2145E6',
+  accentSoft: '#E4EAFD',
+  accentOnMine: '#9DB4FF',
 
-  danger: '#FF6F55',
-  dangerSoft: 'rgba(255,111,85,0.16)',
+  danger: '#D5442F',
+  dangerSoft: '#FBE6E1',
 };
-

@@ -8,7 +8,8 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { colors, radius, shadow, space } from '../../theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { brand, colors, radius, shadow, space } from '../../theme';
 
 const DASH_COUNT = 26;
 const TEAR_MS = 280;
@@ -21,7 +22,7 @@ const TOOTH_GAP = [2, 3, 1, 4, 2, 1, 3];
 type TicketProps = {
   children: ReactNode;
   stub?: ReactNode;
-  tone?: 'light' | 'ink';
+  tone?: 'light' | 'ink' | 'brand';
   notches?: boolean;
   torn?: boolean;
   cutColor?: string;
@@ -41,7 +42,8 @@ export default function Ticket({
   style,
   accessibilityLabel,
 }: TicketProps) {
-  const ink = tone === 'ink';
+  const ink = tone !== 'light';
+  const toneBg = tone === 'brand' ? brand[0] : tone === 'ink' ? colors.ink : colors.surface;
   const tear = useRef(new Animated.Value(torn ? 1 : 0)).current;
 
   const mounted = useRef(false);
@@ -64,6 +66,15 @@ export default function Ticket({
 
   const content = (
     <>
+      {tone === 'brand' ? (
+        <LinearGradient
+          colors={brand}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0.35, y: 1 }}
+          style={[StyleSheet.absoluteFill, styles.fill]}
+          pointerEvents="none"
+        />
+      ) : null}
       <View style={styles.main}>{children}</View>
 
       {stub ? (
@@ -121,7 +132,7 @@ export default function Ticket({
                   styles.curtain,
                   {
                     left: tear.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
-                    backgroundColor: ink ? colors.ink : colors.surface,
+                    backgroundColor: toneBg,
                   },
                 ]}
               />
@@ -134,7 +145,11 @@ export default function Ticket({
   );
 
   if (!onPress) {
-    return <View style={[styles.card, ink ? styles.ink : styles.light, style]}>{content}</View>;
+    return (
+      <View style={[styles.card, ink ? styles.ink : styles.light, ink && { backgroundColor: toneBg }, style]}>
+        {content}
+      </View>
+    );
   }
 
   return (
@@ -145,6 +160,7 @@ export default function Ticket({
       style={({ pressed }) => [
         styles.card,
         ink ? styles.ink : styles.light,
+        ink && { backgroundColor: toneBg },
         pressed && styles.pressed,
         style,
       ]}
@@ -166,6 +182,7 @@ function Dashes({ color }: { color: string }) {
 
 const styles = StyleSheet.create({
   card: { borderRadius: radius.lg, overflow: 'visible' },
+  fill: { borderRadius: radius.lg },
   light: { backgroundColor: colors.surface, ...shadow.card },
   ink: { backgroundColor: colors.ink, ...shadow.hero },
   pressed: { opacity: 0.85 },
