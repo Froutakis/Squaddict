@@ -9,6 +9,19 @@ export type MapPin = MapCoord & {
   id: string;
   label?: string;
   color?: string;
+  badge?: string;
+  selected?: boolean;
+};
+
+export const PIN_SELECTED_SCALE = 1.35;
+
+export const PIN = {
+  width: 30,
+  height: 42,
+  tipY: 38,
+  body: 'M15 38 L4.765 21.264 A12 12 0 1 1 25.235 21.264 Z',
+  dot: { cx: 15, cy: 15, r: 4.8 },
+  shadow: { cx: 15, cy: 39, rx: 4.5, ry: 1.5 },
 };
 
 export type MapProps = {
@@ -20,6 +33,7 @@ export type MapProps = {
   interactive?: boolean;
   onPressPin?: (id: string) => void;
   onPress?: () => void;
+  insets?: { top?: number; bottom?: number };
   style?: StyleProp<ViewStyle>;
 };
 
