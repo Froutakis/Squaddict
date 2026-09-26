@@ -1,7 +1,10 @@
 import type { Coords } from "./serviceLocation";
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
-import { daysUntil, keyOf } from "../lib/datetime";
+import { dateRange, daysUntil, keyOf, type FeedWhen } from "../lib/datetime";
+import { searchPattern } from "../lib/search";
+
+export type { FeedWhen };
 import { toEventTags, type EventTag } from "../lib/tags";
 import type { RsvpStatus } from "./serviceEvents";
 
@@ -10,6 +13,7 @@ export type FeedEvent = {
   title: string;
   date: string;
   startTime?: string;
+  endTime?: string;
   location?: string;
   lat: number;
   lng: number;
@@ -37,6 +41,9 @@ export type FeedFilters = {
   center?: Coords | null;
   radiusKm?: number;
   tags?: EventTag[];
+  when?: FeedWhen | null;
+  groupIds?: string[];
+  search?: string;
 };
 
 export type FeedPage = {
@@ -67,7 +74,7 @@ export function distanceKm(a: Coords, b: Coords): number {
 }
 
 const FEED_FIELDS =
-  "id, title, date, start_time, location, lat, lng, place_label, tags, group_id, " +
+  "id, title, date, start_time, end_time, location, lat, lng, place_label, tags, group_id, " +
   "groups(name, handle, bio, member_count), event_attendees(user_id, status)";
 
 function score(event: FeedEvent, radiusKm: number, tags: EventTag[]): number {
@@ -112,6 +119,21 @@ export async function getFeed(filters: FeedFilters = {}, page = 0): Promise<Feed
 
   if (filters.tags?.length) query = query.overlaps("tags", filters.tags);
 
+  if (filters.when) {
+    const [first, last] = dateRange(filters.when);
+    query = query.gte("date", first).lte("date", last);
+  }
+
+  const pattern = filters.search ? searchPattern(filters.search) : null;
+  if (pattern) {
+    query = query.or(`title.ilike.${pattern},location.ilike.${pattern},place_label.ilike.${pattern}`);
+  }
+
+  if (filters.groupIds) {
+    if (filters.groupIds.length === 0) return { events: [], groups: [], hasMore: false };
+    query = query.in("group_id", filters.groupIds);
+  }
+
   const { data, error } = await query
     .order("date", { ascending: true })
     .order("start_time", { ascending: true, nullsFirst: true })
@@ -131,6 +153,7 @@ export async function getFeed(filters: FeedFilters = {}, page = 0): Promise<Feed
       title: r.title,
       date: r.date,
       startTime: r.start_time?.slice(0, 5) ?? undefined,
+      endTime: r.end_time?.slice(0, 5) ?? undefined,
       location: r.location ?? undefined,
       lat: r.lat,
       lng: r.lng,

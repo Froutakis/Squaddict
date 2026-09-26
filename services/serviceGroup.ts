@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
 import { UNIQUE_VIOLATION } from "../lib/postgres";
+import { searchPattern } from "../lib/search";
 export type Group = {
   id: string;
   handle: string;
@@ -150,10 +151,9 @@ export async function getGroupByHandle(handle: string): Promise<Group | null> {
 }
 
 export async function searchGroups(query: string, limit = 20): Promise<Array<Group>> {
-  const term = query.trim();
-  if (term.length === 0) return [];
+  const pattern = searchPattern(query);
+  if (pattern === null) return [];
 
-  const pattern = `%${term}%`;
   const { data, error } = await supabase
     .from("groups")
     .select(GROUP_FIELDS)

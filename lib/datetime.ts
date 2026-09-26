@@ -219,3 +219,19 @@ export function dayLabel(date: Date) {
     ...(date.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
   });
 }
+
+export type FeedWhen = 'today' | 'tomorrow' | 'weekend';
+
+export function dateRange(when: FeedWhen, today = new Date()): [string, string] {
+  const day = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const shift = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+
+  if (when === 'today') return [keyOf(day), keyOf(day)];
+  if (when === 'tomorrow') return [keyOf(shift(day, 1)), keyOf(shift(day, 1))];
+
+  const weekday = day.getDay();
+  if (weekday === 0) return [keyOf(day), keyOf(day)];
+
+  const saturday = weekday === 6 ? day : shift(day, 6 - weekday);
+  return [keyOf(saturday), keyOf(shift(saturday, 1))];
+}

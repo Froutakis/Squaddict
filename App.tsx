@@ -68,7 +68,7 @@ export default function App() {
         {screen === 'groups' ? (
           <GroupChatScreen user={user} onThreadChange={setThreadOpen} />
         ) : screen === 'explore' ? (
-          <ExploreScreen />
+          <ExploreScreen userId={user.id} />
         ) : screen === 'you' ? (
           <YouScreen user={user} />
         ) : (
