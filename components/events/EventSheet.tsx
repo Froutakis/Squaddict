@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Attendee, RsvpStatus } from '../../services/serviceEvents';
 import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/serviceEvents';
-import { colors, typo, radius, space, textSize } from '../../theme';
+import { colors, solidFor, typo, radius, space, textSize } from '../../theme';
 import { formatDateTime } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import { ticketCode } from '../../lib/ticket';
@@ -13,6 +14,7 @@ import Map from '../general/Map';
 import type { Group } from '../../services/serviceGroup';
 import { getCurrentCoords } from '../../services/serviceLocation';
 import { getWalkingRoute, type Route } from '../../services/serviceRoute';
+import type { LivePerson } from '../../services/serviceLiveLocation';
 
 export type SheetEvent = {
   id: string;
@@ -31,6 +33,7 @@ export type SheetEvent = {
 
 type EventSheetProps = {
   event: SheetEvent | null;
+  livePeople?: LivePerson[];
   groups?: Group[];
   sharedGroupIds?: string[];
   onShare?: (groupId: string) => Promise<void> | void;
@@ -42,6 +45,7 @@ type EventSheetProps = {
 
 export default function EventSheet({
   event,
+  livePeople = [],
   groups = [],
   sharedGroupIds = [],
   onShare,
@@ -102,7 +106,6 @@ export default function EventSheet({
 
     const target = event;
     if (!target || target.lat === undefined || target.lng === undefined) return;
-    if (Platform.OS === 'web') return;
 
     const to = { lat: target.lat, lng: target.lng };
     let cancelled = false;
@@ -197,6 +200,14 @@ export default function EventSheet({
                         lng: event.lng,
                         label: place.primary || event.title,
                       },
+                      ...livePeople.map((person) => ({
+                        id: `person-${person.id}`,
+                        lat: person.lat,
+                        lng: person.lng,
+                        label: person.name,
+                        color: solidFor(person.name),
+                        badge: person.name.trim().charAt(0).toUpperCase() || '?',
+                      })),
                     ]}
                     route={route?.points}
                     showsUserLocation
@@ -207,6 +218,12 @@ export default function EventSheet({
               ) : null}
 
               <View style={styles.header}>
+                <LinearGradient
+                  colors={['rgba(8,16,28,0.86)', 'rgba(8,16,28,0.62)', 'rgba(8,16,28,0)']}
+                  locations={[0, 0.65, 1]}
+                  style={StyleSheet.absoluteFill}
+                  pointerEvents="none"
+                />
                 <View style={styles.grabber} />
 
                 <View style={styles.topRow}>
@@ -398,7 +415,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
 
-  header: { paddingHorizontal: space.md, paddingTop: space.md, paddingBottom: space.sm },
+  header: { paddingHorizontal: space.md, paddingTop: space.md, paddingBottom: space.xl },
   canvas: {
     position: 'absolute',
     top: 0,
