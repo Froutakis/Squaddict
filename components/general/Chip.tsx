@@ -7,6 +7,7 @@ type ChipProps = {
   active?: boolean;
   onPress?: () => void;
   icon?: keyof typeof Ionicons.glyphMap;
+  trailingIcon?: keyof typeof Ionicons.glyphMap;
   mono?: boolean;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -17,6 +18,7 @@ export default function Chip({
   active = false,
   onPress,
   icon,
+  trailingIcon,
   mono = false,
   disabled = false,
   style,
@@ -29,6 +31,9 @@ export default function Chip({
       <Text style={[styles.label, mono && styles.mono, active && styles.labelActive]} numberOfLines={1}>
         {label}
       </Text>
+      {trailingIcon ? (
+        <Ionicons name={trailingIcon} size={12} color={active ? '#FFFFFF' : colors.textSoft} />
+      ) : null}
     </>
   );
 
