@@ -6,7 +6,6 @@ import type { EventPhoto, MyEvent, RsvpStatus } from '../services/serviceEvents'
 import { getUserById } from '../services/serviceUser';
 import { getGroupsForUser } from '../services/serviceGroup';
 import { clearRsvp, getEventCovers, getMyEvents, setRsvp } from '../services/serviceEvents';
-import { getFeed } from '../services/serviceFeed';
 import { signImages } from '../services/serviceMedia';
 import { mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
 import { colors, typo, layout, space } from '../theme';
@@ -37,10 +36,9 @@ import {
   type PhotoSource,
 } from '../components/events/EventPhotos';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
+import { useLiveLocations } from '../components/events/useLiveLocations';
 import EventFormSheet from '../components/events/EventFormSheet';
 import GroupFormSheet from '../components/group/GroupFormSheet';
-import GroupCard, { type CardGroup } from '../components/group/GroupCard';
-import GroupScreen from './GroupScreen';
 
 const RENEW_TICK_MS = 5 * 60 * 1000;
 
@@ -95,9 +93,6 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const [addingPhoto, setAddingPhoto] = useState<MyEvent | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
-  const [feedGroups, setFeedGroups] = useState<CardGroup[]>([]);
-  const [following, setFollowing] = useState<Record<string, true>>({});
-  const [profileGroup, setProfileGroup] = useState<Group | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,16 +100,6 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     readJson<Record<string, true>>(userPrefix(user.id) + 'checkedin').then((stored) => {
       if (!cancelled && stored) setCheckedIn(stored);
     });
-
-    readJson<Record<string, true>>(userPrefix(user.id) + 'following').then((stored) => {
-      if (!cancelled && stored) setFollowing(stored);
-    });
-
-    getFeed()
-      .then((page) => {
-        if (!cancelled) setFeedGroups(page.groups);
-      })
-      .catch(() => {});
 
     return () => {
       cancelled = true;
@@ -144,15 +129,6 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     const next = { ...checkedIn, [eventId]: true as const };
     setCheckedIn(next);
     writeJson(userPrefix(user.id) + 'checkedin', next);
-  }
-
-  function toggleFollow(groupId: string) {
-    const next = { ...following };
-    if (next[groupId]) delete next[groupId];
-    else next[groupId] = true;
-
-    setFollowing(next);
-    writeJson(userPrefix(user.id) + 'following', next);
   }
 
   const load = useCallback(
@@ -219,17 +195,6 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     if (createNonce > 0) openNewEvent(selectedDate);
   }, [createNonce]);
 
-  function openProfile(card: CardGroup) {
-    setProfileGroup({
-      id: card.id,
-      handle: card.handle,
-      name: card.name,
-      bio: card.bio,
-      avatarUrl: null,
-      memberCount: card.memberCount,
-    });
-  }
-
   function openNewEvent(date: string | null) {
     setEditEvent(null);
     setFormDate(date);
@@ -241,11 +206,15 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const dayMode = selectedDate !== null;
   const visible = groupId ? events.filter((e) => e.groupId === groupId) : events;
   const upcoming = visible.filter((e) => e.date >= today);
-  const upNextEvent = dayMode ? undefined : upcoming[0];
+  const upNextEvent = dayMode ? undefined : upcoming.find((e) => e.myStatus !== 'out');
   const liveEvent = dayMode
     ? undefined
-    : visible.find((e) => isHappeningNow(e.date, e.startTime, e.endTime, now));
+    : visible.find(
+        (e) => e.myStatus !== 'out' && isHappeningNow(e.date, e.startTime, e.endTime, now),
+      );
   const heroEvent = liveEvent ?? upNextEvent;
+  const sharingEvent = liveEvent?.myStatus === 'in' ? liveEvent : undefined;
+  const livePeople = useLiveLocations(sharingEvent?.id, { id: user.id, name: displayName });
   const pool = dayMode
     ? visible.filter((e) => e.date === selectedDate)
     : upcoming.filter((e) => e.id !== heroEvent?.id);
@@ -485,42 +454,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
           </View>
         ) : null}
 
-        {feedGroups.length > 0 ? (
-          <View>
-            <SectionHead title="Pareas you crossed" meta="Where you met" />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.row}
-            >
-              {feedGroups.map((group) => (
-                <GroupCard
-                  key={group.id}
-                  group={group}
-                  following={following[group.id] === true}
-                  onPress={() => openProfile(group)}
-                  onFollow={() => toggleFollow(group.id)}
-                />
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
-
       </>
-    );
-  }
-
-  if (profileGroup) {
-    return (
-      <GroupScreen
-        group={profileGroup}
-        userId={user.id}
-        onBack={() => setProfileGroup(null)}
-        onLeave={() => {
-          setProfileGroup(null);
-          load();
-        }}
-      />
     );
   }
 
@@ -567,6 +501,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
 
       <EventSheet
         event={openEvent}
+        livePeople={openEvent !== null && openEvent.id === sharingEvent?.id ? livePeople : undefined}
         currentUserId={user.id}
         onClose={() => setOpenEvent(null)}
         onChanged={async () => setEvents(await getMyEvents(user.id))}
