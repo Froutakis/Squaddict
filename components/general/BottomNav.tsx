@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, typo, layout, radius, shadow, space } from '../../theme';
+import Glass from './Glass';
 
 export type NavTab = 'home' | 'explore' | 'groups' | 'you';
 
@@ -28,7 +29,7 @@ type BottomNavProps = {
 export default function BottomNav({ active, onNavigate, onCreate }: BottomNavProps) {
   return (
     <View style={styles.dock} pointerEvents="box-none">
-      <View style={styles.pill}>
+      <Glass style={styles.pill}>
         {SLOTS.map(function (slot) {
           if (slot.kind === 'create') {
             return (
@@ -78,7 +79,7 @@ export default function BottomNav({ active, onNavigate, onCreate }: BottomNavPro
             </Pressable>
           );
         })}
-      </View>
+      </Glass>
     </View>
   );
 }
@@ -96,19 +97,10 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: layout.column,
     height: 66,
-    borderRadius: radius.xl,
     paddingHorizontal: space.xs,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#0C1926',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 12,
   },
 
   slot: { width: 56, alignItems: 'center', justifyContent: 'center', gap: 4 },
