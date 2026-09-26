@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import {
   Animated,
   Easing,
+  Platform,
   Pressable,
   StyleSheet,
   View,
@@ -155,7 +156,7 @@ export default function Ticket({
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      accessibilityRole={Platform.OS === 'web' && stub ? undefined : 'button'}
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         styles.card,

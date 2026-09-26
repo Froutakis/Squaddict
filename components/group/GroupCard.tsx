@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, radius, shadow, space, textSize, tracking, typo } from '../../theme';
 import Monogram from '../general/Monogram';
 
@@ -17,6 +17,7 @@ export type CardGroup = {
 type GroupCardProps = {
   group: CardGroup;
   following?: boolean;
+  member?: boolean;
   saving?: boolean;
   reason?: string;
   onPress?: () => void;
@@ -31,6 +32,7 @@ function plural(count: number, one: string, many: string) {
 export default function GroupCard({
   group,
   following = false,
+  member = false,
   saving = false,
   reason,
   onPress,
@@ -50,7 +52,7 @@ export default function GroupCard({
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityRole={onPress && !(Platform.OS === 'web' && onFollow && !member) ? 'button' : undefined}
       accessibilityLabel={label}
       style={({ pressed }) => [styles.card, pressed && onPress ? styles.pressed : null, style]}
     >
@@ -78,7 +80,9 @@ export default function GroupCard({
           {stats.join(' · ')}
         </Text>
 
-        {onFollow ? (
+        {member ? (
+          <Text style={styles.memberText}>Member</Text>
+        ) : onFollow ? (
           <Pressable
             onPress={onFollow}
             disabled={saving}
@@ -143,4 +147,5 @@ const styles = StyleSheet.create({
   },
   followText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
   followingText: { color: colors.success, ...typo.semi, fontSize: textSize.base },
+  memberText: { color: colors.textFaint, ...typo.semi, fontSize: textSize.base },
 });
