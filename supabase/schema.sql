@@ -120,6 +120,7 @@ create index if not exists events_group_date_idx   on public.events (group_id, d
 create index if not exists events_public_geo_idx   on public.events (date, lat, lng) where is_public;
 create index if not exists event_attendees_event_idx on public.event_attendees (event_id);
 create index if not exists event_photos_event_idx  on public.event_photos (event_id, created_at desc);
+create index if not exists event_photos_path_idx   on public.event_photos (path);
 create index if not exists message_mentions_user_idx on public.message_mentions (user_id);
 create index if not exists message_reactions_message_idx on public.message_reactions (message_id);
 create index if not exists messages_group_created_idx on public.messages (group_id, created_at);
@@ -728,7 +729,7 @@ create or replace function public.update_squad_look(
 )
 returns public.groups language plpgsql security definer set search_path to 'public' as $function$
 declare
-  prefix text := '%/storage/v1/object/public/squads/' || p_group_id::text || '/%';
+  pattern text := '^https://[a-z0-9]+\.supabase\.co/storage/v1/object/public/squads/' || p_group_id::text || '/[A-Za-z0-9_.-]+$';
   result public.groups;
 begin
   if not exists (
@@ -738,9 +739,10 @@ begin
     raise exception 'Only members can change how the squad looks.';
   end if;
 
-  if (p_avatar_url    is not null and p_avatar_url    not like prefix)
-  or (p_banner_url    is not null and p_banner_url    not like prefix)
-  or (p_wallpaper_url is not null and p_wallpaper_url not like prefix) then
+  if (p_avatar_url    is not null and p_avatar_url    !~ pattern)
+  or (p_banner_url    is not null and p_banner_url    !~ pattern)
+  or (p_wallpaper_url is not null and p_wallpaper_url !~ pattern)
+  or position('..' in coalesce(p_avatar_url,'') || coalesce(p_banner_url,'') || coalesce(p_wallpaper_url,'')) > 0 then
     raise exception 'Squad images must be uploaded to this squad.';
   end if;
 
