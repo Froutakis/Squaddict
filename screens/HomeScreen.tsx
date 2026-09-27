@@ -226,6 +226,9 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
       name: card.name,
       bio: card.bio,
       avatarUrl: null,
+      bannerUrl: null,
+      wallpaperUrl: null,
+      memoriesPublic: false,
       memberCount: card.memberCount,
     });
   }

@@ -1,16 +1,22 @@
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
 import { UNIQUE_VIOLATION } from "../lib/postgres";
+import type { SquadLook } from "../lib/squadLook";
+
 export type Group = {
   id: string;
   handle: string;
   name: string;
   bio: string | null;
   avatarUrl: string | null;
+  bannerUrl: string | null;
+  wallpaperUrl: string | null;
+  memoriesPublic: boolean;
   memberCount: number;
 };
 
-const GROUP_FIELDS = "id, handle, name, bio, avatar_url, member_count";
+const GROUP_FIELDS =
+  "id, handle, name, bio, avatar_url, banner_url, wallpaper_url, memories_public, member_count";
 
 export const HANDLE_PATTERN = /^[a-z0-9_]{3,30}$/;
 
@@ -21,6 +27,9 @@ function toGroup(row: any): Group {
     name: row.name,
     bio: row.bio ?? null,
     avatarUrl: row.avatar_url ?? null,
+    bannerUrl: row.banner_url ?? null,
+    wallpaperUrl: row.wallpaper_url ?? null,
+    memoriesPublic: row.memories_public ?? false,
     memberCount: row.member_count ?? 0,
   };
 }
@@ -93,6 +102,37 @@ export async function updateGroupProfile(
   if (error) throw error;
 
   return toGroup(data);
+}
+
+export function lookOf(group: Group): SquadLook {
+  return {
+    avatarUrl: group.avatarUrl,
+    bannerUrl: group.bannerUrl,
+    wallpaperUrl: group.wallpaperUrl,
+    memoriesPublic: group.memoriesPublic,
+  };
+}
+
+export async function updateSquadLook(groupId: string, look: SquadLook): Promise<Group> {
+  const { data, error } = await supabase
+    .rpc("update_squad_look", {
+      p_group_id: groupId,
+      p_avatar_url: look.avatarUrl,
+      p_banner_url: look.bannerUrl,
+      p_wallpaper_url: look.wallpaperUrl,
+      p_memories_public: look.memoriesPublic,
+    })
+    .single();
+  if (error) throw error;
+
+  return toGroup(data);
+}
+
+export async function getNightsKept(groupId: string): Promise<number> {
+  const { data, error } = await supabase.rpc("squad_nights_kept", { p_group_id: groupId });
+  if (error) throw error;
+
+  return typeof data === "number" ? data : 0;
 }
 
 export async function addMember(groupId: string, userId: string): Promise<void> {
