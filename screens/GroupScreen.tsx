@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
-  ImageBackground,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -51,7 +50,6 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
   const [current, setCurrent] = useState(group);
   const [nights, setNights] = useState(0);
   const [editing, setEditing] = useState(false);
-  const [wallpaperBroken, setWallpaperBroken] = useState(false);
 
   useEffect(() => {
     setCurrent(group);
@@ -68,10 +66,6 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
       cancelled = true;
     };
   }, [group.id]);
-
-  useEffect(() => {
-    setWallpaperBroken(false);
-  }, [current.wallpaperUrl]);
 
   const refreshNights = useCallback(
     function refreshNights() {
@@ -170,23 +164,9 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
   }
 
   const count = members.length > 0 ? members.length : group.memberCount;
-  const wallpaper = current.wallpaperUrl && !wallpaperBroken ? current.wallpaperUrl : null;
 
   return (
     <SafeAreaView style={styles.screen}>
-      {wallpaper ? (
-        <ImageBackground
-          source={{ uri: wallpaper }}
-          style={StyleSheet.absoluteFill}
-          resizeMode="cover"
-          onError={function () {
-            setWallpaperBroken(true);
-          }}
-        >
-          <View style={styles.veil} />
-        </ImageBackground>
-      ) : null}
-
       <View style={styles.column}>
         <ScrollView contentContainerStyle={styles.content}>
           <SquadHero group={current} memberCount={count} nights={nights} onBack={onBack} />
@@ -322,7 +302,6 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: paper.bg },
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
-  veil: { flex: 1, backgroundColor: 'rgba(237,240,245,0.85)' },
   editLook: {
     flexDirection: 'row',
     alignItems: 'center',

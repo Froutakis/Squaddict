@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import type { Group } from '../../services/serviceGroup';
 import { nightsLabel } from '../../lib/squadLook';
 import Monogram from '../general/Monogram';
+import ImageViewer from '../general/ImageViewer';
 import { paper, radius, space, textSize, typo } from '../../theme';
 
 const BANNER_HEIGHT = 170;
@@ -23,6 +24,7 @@ function plural(count: number, one: string, many: string) {
 
 export default function SquadHero({ group, memberCount, nights, onBack }: SquadHeroProps) {
   const [bannerBroken, setBannerBroken] = useState(false);
+  const [viewing, setViewing] = useState<'banner' | 'avatar' | null>(null);
 
   useEffect(() => {
     setBannerBroken(false);
@@ -34,14 +36,24 @@ export default function SquadHero({ group, memberCount, nights, onBack }: SquadH
     <View>
       <View style={styles.banner}>
         {banner ? (
-          <Image
-            source={{ uri: banner }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-            onError={function () {
-              setBannerBroken(true);
+          <Pressable
+            onPress={function () {
+              setViewing('banner');
             }}
-          />
+            accessibilityRole="imagebutton"
+            accessibilityLabel={`${group.name} banner`}
+            accessibilityHint="Opens the full image"
+            style={StyleSheet.absoluteFill}
+          >
+            <Image
+              source={{ uri: banner }}
+              style={StyleSheet.absoluteFill}
+              resizeMode="cover"
+              onError={function () {
+                setBannerBroken(true);
+              }}
+            />
+          </Pressable>
         ) : (
           <LinearGradient colors={['#1B2A44', '#3A2E3F']} style={StyleSheet.absoluteFill} />
         )}
@@ -63,7 +75,21 @@ export default function SquadHero({ group, memberCount, nights, onBack }: SquadH
       </View>
 
       <View style={styles.avatar}>
-        <Monogram name={group.name} size={AVATAR} ring={4} uri={group.avatarUrl} />
+        {group.avatarUrl ? (
+          <Pressable
+            onPress={function () {
+              setViewing('avatar');
+            }}
+            accessibilityRole="imagebutton"
+            accessibilityLabel={`${group.name} photo`}
+            accessibilityHint="Opens the full image"
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Monogram name={group.name} size={AVATAR} ring={4} uri={group.avatarUrl} />
+          </Pressable>
+        ) : (
+          <Monogram name={group.name} size={AVATAR} ring={4} />
+        )}
       </View>
 
       <View style={styles.identity}>
@@ -75,6 +101,14 @@ export default function SquadHero({ group, memberCount, nights, onBack }: SquadH
         </Text>
         {group.bio ? <Text style={styles.bio}>{group.bio}</Text> : null}
       </View>
+
+      <ImageViewer
+        uri={viewing === 'banner' ? banner : viewing === 'avatar' ? group.avatarUrl : null}
+        label={viewing === 'banner' ? `${group.name} banner` : `${group.name} photo`}
+        onClose={function () {
+          setViewing(null);
+        }}
+      />
     </View>
   );
 }

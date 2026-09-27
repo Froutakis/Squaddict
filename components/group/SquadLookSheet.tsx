@@ -10,7 +10,6 @@ import { colors, radius, space, textSize, typo } from '../../theme';
 const ROWS: { kind: SquadImageKind; label: string; hint: string }[] = [
   { kind: 'avatar', label: 'Photo', hint: 'Round, next to the name everywhere.' },
   { kind: 'banner', label: 'Banner', hint: 'The cover across the top of the profile.' },
-  { kind: 'wallpaper', label: 'Wallpaper', hint: 'Behind the whole profile page.' },
 ];
 
 type Busy = SquadImageKind | 'memories' | null;
