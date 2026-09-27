@@ -29,6 +29,7 @@ export type FeedGroup = {
   handle: string;
   name: string;
   bio: string | null;
+  avatarUrl: string | null;
   memberCount: number;
   openEvents: number;
 };
@@ -68,7 +69,7 @@ export function distanceKm(a: Coords, b: Coords): number {
 
 const FEED_FIELDS =
   "id, title, date, start_time, location, lat, lng, place_label, tags, group_id, " +
-  "groups(name, handle, bio, member_count), event_attendees(user_id, status)";
+  "groups(name, handle, bio, avatar_url, member_count), event_attendees(user_id, status)";
 
 function score(event: FeedEvent, radiusKm: number, tags: EventTag[]): number {
   const near =
@@ -170,6 +171,7 @@ export async function getFeed(filters: FeedFilters = {}, page = 0): Promise<Feed
       handle: event.groupHandle,
       name: event.groupName,
       bio: byId.get(event.id)?.groups?.bio ?? null,
+      avatarUrl: byId.get(event.id)?.groups?.avatar_url ?? null,
       memberCount: byId.get(event.id)?.groups?.member_count ?? 0,
       openEvents: 1,
     });

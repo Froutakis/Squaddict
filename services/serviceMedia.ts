@@ -160,10 +160,10 @@ export async function uploadSquadImage(
 export async function removeSquadImage(url: string | null): Promise<void> {
   if (!url) return;
 
-  const path = squadPathFromUrl(url);
-  if (!path) return;
-
   try {
+    const path = squadPathFromUrl(url);
+    if (!path) return;
+
     const { error } = await supabase.storage.from(SQUADS_BUCKET).remove([path]);
     if (error) throw error;
   } catch (problem) {

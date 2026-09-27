@@ -106,10 +106,10 @@ export async function updateGroupProfile(
 
 export function lookOf(group: Group): SquadLook {
   return {
-    avatarUrl: group.avatarUrl,
-    bannerUrl: group.bannerUrl,
-    wallpaperUrl: group.wallpaperUrl,
-    memoriesPublic: group.memoriesPublic,
+    avatarUrl: group.avatarUrl ?? null,
+    bannerUrl: group.bannerUrl ?? null,
+    wallpaperUrl: group.wallpaperUrl ?? null,
+    memoriesPublic: group.memoriesPublic ?? false,
   };
 }
 
@@ -167,15 +167,15 @@ export async function getMembers(groupId: string) {
   return data;
 }
 
-export async function getGroupById(id: string): Promise<Group> {
+export async function getGroupById(groupId: string): Promise<Group | null> {
   const { data, error } = await supabase
     .from("groups")
     .select(GROUP_FIELDS)
-    .eq("id", id)
-    .single();
+    .eq("id", groupId)
+    .maybeSingle();
   if (error) throw error;
 
-  return toGroup(data);
+  return data ? toGroup(data) : null;
 }
 
 export async function getGroupByHandle(handle: string): Promise<Group | null> {

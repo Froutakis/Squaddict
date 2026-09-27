@@ -28,7 +28,13 @@ export function squadPathFromUrl(url: string): string | null {
   if (at < 0) return null;
 
   const path = url.slice(at + PUBLIC_MARKER.length).split('?')[0];
-  return path.length > 0 ? decodeURIComponent(path) : null;
+  if (path.length === 0) return null;
+
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return null;
+  }
 }
 
 export function urlOf(look: SquadLook, kind: SquadImageKind): string | null {
