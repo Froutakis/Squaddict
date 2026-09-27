@@ -111,6 +111,10 @@ export default function App() {
             createNonce={createNonce}
             focusEventId={focusEventId}
             onFocusHandled={() => setFocusEventId(null)}
+            onOpenChat={(groupId) => {
+              setChatTarget({ groupId, nonce: Date.now() });
+              setScreen('groups');
+            }}
           />
         )}
       </View>

@@ -4,7 +4,8 @@ import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } f
 import type { Group } from '../services/serviceGroup';
 import type { EventPhoto, MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getUserById } from '../services/serviceUser';
-import { getGroupsForUser } from '../services/serviceGroup';
+import { getGroupsForUser, getMemberProfiles } from '../services/serviceGroup';
+import type { Person } from '../lib/people';
 import {
   checkIn as saveCheckIn,
   clearRsvp,
@@ -54,6 +55,7 @@ type HomeScreenProps = {
   createNonce?: number;
   focusEventId?: string | null;
   onFocusHandled?: () => void;
+  onOpenChat?: (groupId: string) => void;
 };
 
 function planLine(event: MyEvent): string {
@@ -84,6 +86,7 @@ export default function HomeScreen({
   createNonce = 0,
   focusEventId = null,
   onFocusHandled,
+  onOpenChat,
 }: HomeScreenProps) {
   const { signed, signPaths, dropSigned } = useSignedImages();
   const [displayName, setDisplayName] = useState('');
@@ -95,6 +98,7 @@ export default function HomeScreen({
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
+  const [members, setMembers] = useState<Person[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [formDate, setFormDate] = useState<string | null>(null);
@@ -180,6 +184,27 @@ export default function HomeScreen({
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setMembers([]);
+    if (!groupId) return;
+
+    let cancelled = false;
+
+    getMemberProfiles(groupId)
+      .then((people) => {
+        if (!cancelled) setMembers(people);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId]);
+
+  useEffect(() => {
+    if (groupId && groups.length > 0 && !groups.some((g) => g.id === groupId)) setGroupId(null);
+  }, [groups, groupId]);
 
   function applyRsvp(list: MyEvent[], eventId: string, status: RsvpStatus | null): MyEvent[] {
     return list.map(function (event) {
@@ -389,6 +414,21 @@ export default function HomeScreen({
       );
     }
 
+    const activeGroup = groups.find((g) => g.id === groupId);
+    if (activeGroup && visible.length === 0) {
+      return (
+        <View style={styles.state}>
+          <Text style={styles.stateTitle}>Quiet in {activeGroup.name}</Text>
+          <Text style={styles.stateBody}>
+            No plans here yet. Throw one out and see who bites.
+          </Text>
+          <View style={styles.stateButton}>
+            <Button title="Propose a plan" onPress={() => openNewEvent(null)} />
+          </View>
+        </View>
+      );
+    }
+
     return (
       <>
         {!dayMode ? (
@@ -544,7 +584,10 @@ export default function HomeScreen({
           avatarUrl={avatarUrl}
           groups={groups}
           groupId={groupId}
+          members={members}
           onGroupSelect={setGroupId}
+          onChat={onOpenChat}
+          onPlan={() => openNewEvent(selectedDate)}
         />
         {renderBody()}
       </ScrollView>
@@ -561,7 +604,7 @@ export default function HomeScreen({
       <EventFormSheet
         visible={showCreate}
         groups={groups}
-        defaultGroupId={null}
+        defaultGroupId={groupId}
         defaultDate={formDate ?? today}
         event={editEvent}
         onClose={() => {

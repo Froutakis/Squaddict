@@ -13,10 +13,10 @@ type Slot =
   | { kind: 'create' };
 
 const SLOTS: Slot[] = [
-  { kind: 'tab', key: 'home', label: 'Today', icon: 'ticket-outline', iconActive: 'ticket' },
+  { kind: 'tab', key: 'home', label: 'Parea', icon: 'people-outline', iconActive: 'people' },
   { kind: 'tab', key: 'explore', label: 'Explore', icon: 'compass-outline', iconActive: 'compass' },
   { kind: 'create' },
-  { kind: 'tab', key: 'groups', label: 'Parea', icon: 'chatbubbles-outline', iconActive: 'chatbubbles' },
+  { kind: 'tab', key: 'groups', label: 'Chats', icon: 'chatbubbles-outline', iconActive: 'chatbubbles' },
   { kind: 'tab', key: 'you', label: 'You', icon: 'person-outline', iconActive: 'person' },
 ];
 
