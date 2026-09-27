@@ -23,6 +23,7 @@ export type CardEvent = {
   goingCount: number;
   distanceKm?: number;
   coverUrl?: string | null;
+  friendsGoing?: Person[];
 };
 
 export type EventCardAction = 'none' | 'rsvp' | 'request';
@@ -36,6 +37,13 @@ type EventCardProps = {
   onRsvp?: (status: RsvpStatus | null) => void;
   onRequest?: () => void;
 };
+
+export function friendsLine(people: Person[]): string {
+  const first = (person: Person) => person.name.split(' ')[0] || person.name;
+  if (people.length === 1) return `${first(people[0])} is going`;
+  if (people.length === 2) return `${first(people[0])} & ${first(people[1])} are going`;
+  return `${first(people[0])}, ${first(people[1])} +${people.length - 2} going`;
+}
 
 function statusOf(myStatus?: RsvpStatus): { state: PunchState; label: string } {
   if (myStatus === 'in') return { state: 'in', label: "You're in" };
@@ -60,6 +68,26 @@ export default function EventCard({
   const hasFaces = event.going.length > 0;
   const [coverFailed, setCoverFailed] = useState(false);
   const cover = coverFailed ? null : event.coverUrl ?? null;
+  const friends = event.friendsGoing ?? [];
+
+  function friendsRow(onPhoto: boolean) {
+    if (friends.length === 0) return null;
+
+    return (
+      <View style={styles.friends}>
+        <AttendeeStack
+          people={friends}
+          size={18}
+          max={3}
+          onDark={onPhoto}
+          ringColor={onPhoto ? 'rgba(12,25,38,0.6)' : undefined}
+        />
+        <Text style={[styles.friendsText, onPhoto && styles.friendsTextOnPhoto]} numberOfLines={1}>
+          {friendsLine(friends)}
+        </Text>
+      </View>
+    );
+  }
 
   const meta = [
     event.startTime,
@@ -110,6 +138,8 @@ export default function EventCard({
               {meta}
             </Text>
           ) : null}
+
+          {friendsRow(false)}
         </View>
       </View>
       )}
@@ -138,6 +168,7 @@ export default function EventCard({
         <Text style={styles.coverMeta} numberOfLines={1}>
           {[`${weekdayShort(event.date)} ${String(day).padStart(2, '0')}`, meta].filter(Boolean).join(' · ')}
         </Text>
+        {friendsRow(true)}
       </View>
     );
   }
@@ -246,6 +277,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   meta: { color: colors.textSoft, ...typo.mono, fontSize: textSize.small },
+
+  friends: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: 4 },
+  friendsText: { flexShrink: 1, color: colors.primary, ...typo.semi, fontSize: textSize.small },
+  friendsTextOnPhoto: { color: '#FFFFFF' },
 
   stub: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   status: { color: colors.textSoft, ...typo.semi, fontSize: textSize.small },

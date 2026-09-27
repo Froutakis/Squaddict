@@ -16,6 +16,7 @@ import {
   DEFAULT_RADIUS_KM,
   getFeed,
   getHighlights,
+  getPareaGoing,
   type FeedEvent,
   type FeedGroup,
   type FeedHighlight,
@@ -28,6 +29,7 @@ import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import { getCurrentCoords, type Coords, type LocationState } from '../services/serviceLocation';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
+import type { Person } from '../lib/people';
 import { colors, typo, layout, radius, shadow, space, textSize } from '../theme';
 import Chip from '../components/general/Chip';
 import SectionHead from '../components/general/SectionHead';
@@ -59,8 +61,9 @@ const WHEN_OPTIONS: { key: FeedWhen; label: string }[] = [
 const NAV_CLEARANCE = 110;
 const SEARCH_DELAY_MS = 300;
 
-function toCardData(event: FeedEvent): CardEvent {
+function toCardData(event: FeedEvent, friendsGoing?: Person[]): CardEvent {
   return {
+    friendsGoing,
     id: event.id,
     title: event.title,
     date: event.date,
@@ -148,6 +151,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<FeedHighlight[]>([]);
+  const [friendsGoing, setFriendsGoing] = useState<Record<string, Person[]>>({});
   const { signed, signPaths, dropSigned } = useSignedImages();
 
   const followedIds = Object.keys(following).sort().join(',');
@@ -215,6 +219,18 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
       cancelled = true;
     };
   }, [userId]);
+
+  const loadFriendsGoing = useCallback(function loadFriendsGoing() {
+    getPareaGoing()
+      .then((plans) =>
+        setFriendsGoing(Object.fromEntries(plans.map((plan) => [plan.event.id, plan.friends]))),
+      )
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadFriendsGoing();
+  }, [loadFriendsGoing]);
 
   const load = useCallback(
     async function load(nextPage: number, append: boolean) {
@@ -563,7 +579,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
             {live.map((event) => (
               <View key={event.id} style={styles.liveCard}>
                 <EventCard
-                  event={toCardData(event)}
+                  event={toCardData(event, friendsGoing[event.id])}
                   action="rsvp"
                   saving={savingId === event.id}
                   onPress={() => setOpenEvent(toSheetEvent(event))}
@@ -718,7 +734,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
           <View style={styles.popWrap} pointerEvents="box-none">
             <PopIn key={selected.id} style={styles.popCard}>
               <EventCard
-                event={toCardData(selected)}
+                event={toCardData(selected, friendsGoing[selected.id])}
                 action="rsvp"
                 saving={savingId === selected.id}
                 onPress={() => setOpenEvent(toSheetEvent(selected))}
@@ -758,7 +774,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
         renderItem={({ item }) => (
           <View style={styles.item}>
             <EventCard
-              event={toCardData(item)}
+              event={toCardData(item, friendsGoing[item.id])}
               action="rsvp"
               saving={savingId === item.id}
               onPress={() => setOpenEvent(toSheetEvent(item))}
@@ -774,6 +790,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
             onRefresh={() => {
               setRefreshing(true);
               load(0, false);
+              loadFriendsGoing();
             }}
             tintColor={colors.primary}
           />

@@ -7,6 +7,7 @@ import { searchPattern } from "../lib/search";
 export type { FeedWhen };
 import { toEventTags, type EventTag } from "../lib/tags";
 import type { EventPhoto, MyEvent, RsvpStatus } from "./serviceEvents";
+import type { Person } from "../lib/people";
 
 export type FeedEvent = {
   id: string;
@@ -259,6 +260,50 @@ export async function getHighlights(
         bio: r.group_bio,
         memberCount: r.member_count,
       },
+    };
+  });
+}
+
+export type PareaGoing = {
+  event: MyEvent;
+  friends: Person[];
+  viaGroupIds: string[];
+  goingCount: number;
+};
+
+// Public plans of other squads that people from your squads are in on.
+export async function getPareaGoing(): Promise<PareaGoing[]> {
+  const { data, error } = await supabase.rpc("parea_going");
+  if (error) throw error;
+
+  return ((data ?? []) as any[]).map(function (r) {
+    return {
+      event: {
+        id: r.event_id,
+        groupId: r.group_id,
+        groupName: r.group_name,
+        title: r.title,
+        date: r.date,
+        startTime: r.start_time?.slice(0, 5) ?? undefined,
+        endTime: r.end_time?.slice(0, 5) ?? undefined,
+        location: r.location ?? undefined,
+        placeLabel: r.place_label ?? undefined,
+        description: r.description ?? undefined,
+        lat: r.lat ?? undefined,
+        lng: r.lng ?? undefined,
+        coverUrl: r.cover_url ?? null,
+        createdBy: "",
+        isPublic: true,
+        tags: [],
+        going: [],
+      },
+      friends: ((r.friends ?? []) as any[]).map((f) => ({
+        id: f.id,
+        name: f.name ?? "",
+        avatarUrl: f.avatarUrl ?? null,
+      })),
+      viaGroupIds: r.via_groups ?? [],
+      goingCount: r.going_count ?? 0,
     };
   });
 }

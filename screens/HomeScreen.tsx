@@ -5,6 +5,7 @@ import type { Group } from '../services/serviceGroup';
 import type { EventPhoto, MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getUserById } from '../services/serviceUser';
 import { getGroupsForUser, getMemberProfiles } from '../services/serviceGroup';
+import { getPareaGoing, type PareaGoing } from '../services/serviceFeed';
 import type { Person } from '../lib/people';
 import {
   checkIn as saveCheckIn,
@@ -100,6 +101,8 @@ export default function HomeScreen({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
   const [members, setMembers] = useState<Person[]>([]);
+  const [going, setGoing] = useState<PareaGoing[]>([]);
+  const [goingSaving, setGoingSaving] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [formDate, setFormDate] = useState<string | null>(null);
@@ -163,12 +166,14 @@ export default function HomeScreen({
       setError(null);
 
       try {
-        const [profile, myGroups, myEvents] = await Promise.all([
+        const [profile, myGroups, myEvents, friendsPlans] = await Promise.all([
           getUserById(user.id),
           getGroupsForUser(user.id),
           getMyEvents(user.id),
+          getPareaGoing().catch(() => [] as PareaGoing[]),
         ]);
 
+        setGoing(friendsPlans);
         setDisplayName(profile?.name ?? '');
         setAvatarUrl(profile?.avatarUrl ?? null);
         setGroups(myGroups);
@@ -246,12 +251,36 @@ export default function HomeScreen({
   useEffect(() => {
     if (!focusEventId) return;
 
-    const target = events.find((event) => event.id === focusEventId);
+    const target =
+      events.find((event) => event.id === focusEventId) ??
+      going.find((one) => one.event.id === focusEventId)?.event;
     if (!target) return;
 
     setOpenEvent(target);
     onFocusHandled?.();
-  }, [focusEventId, events]);
+  }, [focusEventId, events, going]);
+
+  // Answering a friend's plan moves it out of this list and into your week.
+  async function answerFriendsPlan(eventId: string, status: RsvpStatus | null) {
+    if (!status) return;
+
+    setGoingSaving(eventId);
+    setRsvpError(null);
+
+    try {
+      await setRsvp(eventId, status);
+      const [myEvents, friendsPlans] = await Promise.all([
+        getMyEvents(user.id),
+        getPareaGoing().catch(() => going),
+      ]);
+      setEvents(myEvents);
+      setGoing(friendsPlans);
+    } catch {
+      setRsvpError('Could not save your answer. Try again.');
+    } finally {
+      setGoingSaving(null);
+    }
+  }
 
   function openNewEvent(date: string | null) {
     setEditEvent(null);
@@ -293,6 +322,11 @@ export default function HomeScreen({
           (e.date < today || !e.startTime || e.startTime <= clockNow) &&
           !(e.id === liveEvent?.id && e.id === heroEvent?.id),
       );
+  const friendsPlans = dayMode
+    ? []
+    : groupId
+      ? going.filter((plan) => plan.viaGroupIds.includes(groupId))
+      : going;
   const nights = useMemo(
     () => toMemoryNights(visible, coverPhotos, today).slice(0, MEMORY_LIMIT),
     [visible, coverPhotos, today],
@@ -424,7 +458,7 @@ export default function HomeScreen({
     }
 
     const activeGroup = groups.find((g) => g.id === groupId);
-    if (activeGroup && visible.length === 0) {
+    if (activeGroup && visible.length === 0 && friendsPlans.length === 0) {
       return (
         <View style={styles.state}>
           <Text style={styles.stateTitle}>Quiet in {activeGroup.name}</Text>
@@ -481,6 +515,31 @@ export default function HomeScreen({
               onRsvp={(status) => handleRsvp(heroEvent.id, status)}
             />
             {photoError ? <Text style={styles.error}>{photoError}</Text> : null}
+            </View>
+          </View>
+        ) : null}
+
+        {friendsPlans.length > 0 ? (
+          <View>
+            <SectionHead
+              title="Your parea is going"
+              meta={friendsPlans.length > 1 ? `${friendsPlans.length} plans` : undefined}
+            />
+            <View style={styles.body}>
+              {friendsPlans.map((plan) => (
+                <EventCard
+                  key={plan.event.id}
+                  event={{
+                    ...toCardData(plan.event, plan.event.coverUrl),
+                    goingCount: plan.goingCount,
+                    friendsGoing: plan.friends,
+                  }}
+                  action="rsvp"
+                  saving={goingSaving === plan.event.id}
+                  onPress={() => setOpenEvent(plan.event)}
+                  onRsvp={(status) => answerFriendsPlan(plan.event.id, status)}
+                />
+              ))}
             </View>
           </View>
         ) : null}
@@ -637,7 +696,14 @@ export default function HomeScreen({
         livePeople={openEvent !== null && openEvent.id === sharingEvent?.id ? livePeople : undefined}
         currentUserId={user.id}
         onClose={() => setOpenEvent(null)}
-        onChanged={async () => setEvents(await getMyEvents(user.id))}
+        onChanged={async () => {
+          const [myEvents, friendsPlans] = await Promise.all([
+            getMyEvents(user.id),
+            getPareaGoing().catch(() => going),
+          ]);
+          setEvents(myEvents);
+          setGoing(friendsPlans);
+        }}
         onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
         onEdit={(e) => {
           const mine = events.find((one) => one.id === e.id);

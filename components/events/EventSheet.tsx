@@ -10,9 +10,7 @@ import { placeLines } from '../../lib/place';
 import { ticketCode } from '../../lib/ticket';
 import AttendeeSheet from './AttendeeSheet';
 import EventPhotos from './EventPhotos';
-import ShareToSquadSheet from './ShareToSquadSheet';
 import Map from '../general/Map';
-import type { Group } from '../../services/serviceGroup';
 import { getCurrentCoords } from '../../services/serviceLocation';
 import { getWalkingRoute, type Route } from '../../services/serviceRoute';
 import type { LivePerson } from '../../services/serviceLiveLocation';
@@ -37,9 +35,6 @@ export type SheetEvent = {
 type EventSheetProps = {
   event: SheetEvent | null;
   livePeople?: LivePerson[];
-  groups?: Group[];
-  sharedGroupIds?: string[];
-  onShare?: (groupId: string) => Promise<void> | void;
   currentUserId: string;
   onClose: () => void;
   onChanged: () => void | Promise<void>;
@@ -50,31 +45,13 @@ type EventSheetProps = {
 export default function EventSheet({
   event,
   livePeople = [],
-  groups = [],
-  sharedGroupIds = [],
-  onShare,
   currentUserId,
   onClose,
   onChanged,
   onEdit,
   onPhotosChanged,
 }: EventSheetProps) {
-  const [sharing, setSharing] = useState(false);
   const [roster, setRoster] = useState(false);
-  const [sharingId, setSharingId] = useState<string | null>(null);
-
-  async function share(groupId: string) {
-    if (!onShare || sharingId !== null) return;
-
-    setSharingId(groupId);
-    try {
-      await onShare(groupId);
-      setSharing(false);
-    } finally {
-      setSharingId(null);
-    }
-  }
-
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -340,18 +317,6 @@ export default function EventSheet({
                   </View>
                 ) : null}
 
-                {onShare && event.isMember === false ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Share this to a parea"
-                    onPress={() => setSharing(true)}
-                    style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
-                  >
-                    <Ionicons name="arrow-redo-outline" size={17} color={colors.primary} />
-                    <Text style={styles.actionText}>Share to a parea</Text>
-                  </Pressable>
-                ) : null}
-
                 {isOwner ? (
                   confirming ? (
                     <View style={styles.confirmRow}>
@@ -409,17 +374,6 @@ export default function EventSheet({
 
       <AttendeeSheet visible={roster} attendees={attendees} onClose={() => setRoster(false)} />
 
-      <ShareToSquadSheet
-        visible={sharing}
-        groups={groups}
-        eventTitle={event?.title ?? ''}
-        savingId={sharingId}
-        sharedIds={sharedGroupIds}
-        onPick={share}
-        onClose={() => {
-          if (sharingId === null) setSharing(false);
-        }}
-      />
     </Modal>
   );
 }
@@ -518,19 +472,6 @@ const styles = StyleSheet.create({
   },
   description: { color: colors.text, ...typo.medium, fontSize: textSize.base, lineHeight: 20 },
 
-  action: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.xs,
-    paddingVertical: space.sm,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bg,
-  },
-  actionPressed: { opacity: 0.7 },
-  actionText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
 
   error: { color: colors.danger, ...typo.medium, fontSize: textSize.body },
 
