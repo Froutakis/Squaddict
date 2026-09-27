@@ -27,6 +27,7 @@
     "test-pagination": "tsx --env-file=.env debug/test-pagination.ts",
     "test-location": "tsx debug/test-location.ts",
     "test-squad-look": "tsx debug/test-squad-look.ts",
+    "test-acting": "tsx debug/test-acting.ts",
     "listen": "tsx --env-file=.env debug/listen.ts",
     "send": "tsx --env-file=.env debug/send.ts",
     "seed": "tsx --env-file=.env debug/seed.ts"
