@@ -1050,6 +1050,11 @@ export default function GroupChatScreen({
           setGroupScreen(false);
           closeGroup();
         }}
+        onChange={function (fresh) {
+          setGroups(function (prev) {
+            return prev.map((g) => (g.id === fresh.id ? fresh : g));
+          });
+        }}
       />
     );
   }

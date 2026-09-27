@@ -16,9 +16,16 @@ type SquadMemoriesProps = {
   userId: string;
   member: boolean;
   nights: number;
+  onPhotosChanged?: () => void;
 };
 
-export default function SquadMemories({ group, userId, member, nights }: SquadMemoriesProps) {
+export default function SquadMemories({
+  group,
+  userId,
+  member,
+  nights,
+  onPhotosChanged,
+}: SquadMemoriesProps) {
   const [memories, setMemories] = useState<SquadMemory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +102,10 @@ export default function SquadMemories({ group, userId, member, nights }: SquadMe
     try {
       const result = await capture(source, { id: adding.event.id, groupId: adding.event.groupId });
       setAdding(null);
-      if (result) setNonce((n) => n + 1);
+      if (result) {
+        setNonce((n) => n + 1);
+        onPhotosChanged?.();
+      }
     } catch (problem) {
       setError(messageFor(problem));
       setAdding(null);

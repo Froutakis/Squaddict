@@ -225,7 +225,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
       handle: card.handle,
       name: card.name,
       bio: card.bio,
-      avatarUrl: null,
+      avatarUrl: card.avatarUrl ?? null,
       bannerUrl: null,
       wallpaperUrl: null,
       memoriesPublic: false,

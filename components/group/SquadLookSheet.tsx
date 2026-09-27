@@ -25,18 +25,21 @@ type SquadLookSheetProps = {
 export default function SquadLookSheet({ visible, group, onClose, onChange }: SquadLookSheetProps) {
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
+  const [brokenUrl, setBrokenUrl] = useState<Partial<Record<SquadImageKind, string>>>({});
 
   const look = lookOf(group);
 
   async function save(next: SquadLook, uploaded: string | null, replaced: string | null) {
+    let saved: Group;
     try {
-      const saved = await updateSquadLook(group.id, next);
-      onChange(saved);
-      await removeSquadImage(replaced);
+      saved = await updateSquadLook(group.id, next);
     } catch (problem) {
       await removeSquadImage(uploaded);
       throw problem;
     }
+
+    onChange(saved);
+    await removeSquadImage(replaced);
   }
 
   async function change(kind: SquadImageKind) {
@@ -104,11 +107,23 @@ export default function SquadLookSheet({ visible, group, onClose, onChange }: Sq
           {ROWS.map(function (row) {
             const url = urlOf(look, row.kind);
             const working = busy === row.kind;
+            const showImage = url !== null && brokenUrl[row.kind] !== url;
 
             return (
               <View key={row.kind} style={styles.row}>
                 <View style={[styles.thumb, row.kind === 'avatar' && styles.thumbRound]}>
-                  {url ? <Image source={{ uri: url }} style={styles.thumbImage} resizeMode="cover" /> : null}
+                  {showImage ? (
+                    <Image
+                      source={{ uri: url }}
+                      style={styles.thumbImage}
+                      resizeMode="cover"
+                      onError={function () {
+                        setBrokenUrl(function (prev) {
+                          return { ...prev, [row.kind]: url };
+                        });
+                      }}
+                    />
+                  ) : null}
                 </View>
 
                 <View style={styles.rowText}>

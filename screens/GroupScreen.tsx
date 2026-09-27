@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
@@ -15,6 +15,7 @@ import SquadMemories from '../components/group/SquadMemories';
 import SquadLookSheet from '../components/group/SquadLookSheet';
 import Monogram from '../components/general/Monogram';
 import {
+  getGroupById,
   getInviteCode,
   getMembers,
   getNightsKept,
@@ -34,9 +35,10 @@ type GroupScreenProps = {
   userId: string;
   onBack: () => void;
   onLeave?: () => void;
+  onChange?: (group: Group) => void;
 };
 
-export default function GroupScreen({ group, userId, onBack, onLeave }: GroupScreenProps) {
+export default function GroupScreen({ group, userId, onBack, onLeave, onChange }: GroupScreenProps) {
   const [members, setMembers] = useState<Member[]>([]);
   const [code, setCode] = useState<string | null>(null);
   const [member, setMember] = useState(false);
@@ -56,8 +58,31 @@ export default function GroupScreen({ group, userId, onBack, onLeave }: GroupScr
   }, [group]);
 
   useEffect(() => {
+    let cancelled = false;
+    getGroupById(group.id)
+      .then(function (fresh) {
+        if (!cancelled && fresh) setCurrent(fresh);
+      })
+      .catch(function () {});
+    return function cleanup() {
+      cancelled = true;
+    };
+  }, [group.id]);
+
+  useEffect(() => {
     setWallpaperBroken(false);
   }, [current.wallpaperUrl]);
+
+  const refreshNights = useCallback(
+    function refreshNights() {
+      return getNightsKept(group.id)
+        .then(function (count) {
+          setNights(count);
+        })
+        .catch(function () {});
+    },
+    [group.id],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -181,7 +206,13 @@ export default function GroupScreen({ group, userId, onBack, onLeave }: GroupScr
           ) : null}
 
           {loading ? null : (
-            <SquadMemories group={current} userId={userId} member={member} nights={nights} />
+            <SquadMemories
+              group={current}
+              userId={userId}
+              member={member}
+              nights={nights}
+              onPhotosChanged={refreshNights}
+            />
           )}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -279,7 +310,10 @@ export default function GroupScreen({ group, userId, onBack, onLeave }: GroupScr
         onClose={function () {
           setEditing(false);
         }}
-        onChange={setCurrent}
+        onChange={function (fresh) {
+          setCurrent(fresh);
+          onChange?.(fresh);
+        }}
       />
     </SafeAreaView>
   );
