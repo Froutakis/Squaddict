@@ -881,7 +881,6 @@ create policy "remove squad look" on storage.objects
 -- ─── acting squad ──────────────────────────────────────────────────────
 
 drop trigger if exists profiles_acting_group_guard on public.profiles;
-drop function if exists public.guard_acting_group();
 alter table public.profiles drop column if exists acting_group_id;
 
 create table if not exists public.user_prefs (
