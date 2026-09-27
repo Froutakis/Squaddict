@@ -518,7 +518,10 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
       <GroupScreen
         group={profileGroup}
         userId={user.id}
-        onBack={() => setProfileGroup(null)}
+        onBack={() => {
+          setProfileGroup(null);
+          load();
+        }}
         onLeave={() => {
           setProfileGroup(null);
           load();

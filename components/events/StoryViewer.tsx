@@ -248,7 +248,12 @@ export default function StoryViewer({
   const place = placeLines(event.location, event.placeLabel);
   const size = groupSizes[event.groupId] ?? 0;
   const going = event.going ?? [];
-  const wereIn = size > 0 ? `${going.length} of ${size} were in` : `${going.length} were in`;
+  const wereIn =
+    size > 0
+      ? `${going.length} of ${size} were in`
+      : going.length > 0
+        ? `${going.length} were in`
+        : '';
   const tint = solidFor(event.groupName);
 
   function pressIn() {
@@ -373,9 +378,11 @@ export default function StoryViewer({
               <View style={styles.stubRow}>
                 <Punch state={event.myStatus === 'in' ? 'in' : 'out'} size={22} />
                 {going.length > 0 ? <AttendeeStack people={going} size={22} max={3} /> : null}
-                <Text style={styles.were} numberOfLines={1}>
-                  {wereIn}
-                </Text>
+                {wereIn ? (
+                  <Text style={styles.were} numberOfLines={1}>
+                    {wereIn}
+                  </Text>
+                ) : null}
                 <View style={styles.spacer} />
                 {event.myStatus === 'in' ? (
                   <Pressable

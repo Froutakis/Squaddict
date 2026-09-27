@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
+  ImageBackground,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -9,10 +10,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import { GroupMonogram } from '../components/chat/GroupPicker';
+import SquadHero from '../components/group/SquadHero';
+import SquadMemories from '../components/group/SquadMemories';
+import SquadLookSheet from '../components/group/SquadLookSheet';
+import Monogram from '../components/general/Monogram';
 import {
   getInviteCode,
   getMembers,
+  getNightsKept,
   leaveGroup,
   rotateInviteCode,
   type Group,
@@ -31,10 +36,6 @@ type GroupScreenProps = {
   onLeave?: () => void;
 };
 
-function plural(count: number, one: string, many: string) {
-  return `${count} ${count === 1 ? one : many}`;
-}
-
 export default function GroupScreen({ group, userId, onBack, onLeave }: GroupScreenProps) {
   const [members, setMembers] = useState<Member[]>([]);
   const [code, setCode] = useState<string | null>(null);
@@ -45,6 +46,30 @@ export default function GroupScreen({ group, userId, onBack, onLeave }: GroupScr
   const [rotating, setRotating] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [current, setCurrent] = useState(group);
+  const [nights, setNights] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [wallpaperBroken, setWallpaperBroken] = useState(false);
+
+  useEffect(() => {
+    setCurrent(group);
+  }, [group]);
+
+  useEffect(() => {
+    setWallpaperBroken(false);
+  }, [current.wallpaperUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getNightsKept(group.id)
+      .then(function (count) {
+        if (!cancelled) setNights(count);
+      })
+      .catch(function () {});
+    return function cleanup() {
+      cancelled = true;
+    };
+  }, [group.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,39 +145,44 @@ export default function GroupScreen({ group, userId, onBack, onLeave }: GroupScr
   }
 
   const count = members.length > 0 ? members.length : group.memberCount;
+  const wallpaper = current.wallpaperUrl && !wallpaperBroken ? current.wallpaperUrl : null;
 
   return (
     <SafeAreaView style={styles.screen}>
+      {wallpaper ? (
+        <ImageBackground
+          source={{ uri: wallpaper }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+          onError={function () {
+            setWallpaperBroken(true);
+          }}
+        >
+          <View style={styles.veil} />
+        </ImageBackground>
+      ) : null}
+
       <View style={styles.column}>
-        <View style={styles.header}>
-          <Pressable
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel="Back to the conversation"
-            style={roundButtonStyle}
-          >
-            <Ionicons name="chevron-back" size={20} color={paper.ink} />
-          </Pressable>
-
-          <GroupMonogram name={group.name} size={32} />
-
-          <Text style={styles.title} numberOfLines={1}>
-            {group.name}
-          </Text>
-        </View>
-
         <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.identity}>
-            <GroupMonogram name={group.name} size={76} />
+          <SquadHero group={current} memberCount={count} nights={nights} onBack={onBack} />
 
-            <Text style={styles.name} numberOfLines={2}>
-              {group.name}
-            </Text>
-            <Text style={styles.handle}>@{group.handle}</Text>
-            <Text style={styles.count}>{plural(count, 'member', 'members')}</Text>
+          {member ? (
+            <Pressable
+              onPress={function () {
+                setEditing(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Edit look"
+              style={({ pressed }) => [styles.editLook, pressed && styles.pressed]}
+            >
+              <Ionicons name="color-palette-outline" size={16} color={paper.accent} />
+              <Text style={styles.editLookText}>Edit look</Text>
+            </Pressable>
+          ) : null}
 
-            {group.bio ? <Text style={styles.bio}>{group.bio}</Text> : null}
-          </View>
+          {loading ? null : (
+            <SquadMemories group={current} userId={userId} member={member} nights={nights} />
+          )}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -195,7 +225,7 @@ export default function GroupScreen({ group, userId, onBack, onLeave }: GroupScr
 
                 {members.map((member) => (
                   <View key={member.id} style={styles.member}>
-                    <GroupMonogram name={member.name} size={34} />
+                    <Monogram name={member.name} size={34} />
                     <Text style={styles.memberName} numberOfLines={1}>
                       {member.name}
                     </Text>
@@ -242,58 +272,37 @@ export default function GroupScreen({ group, userId, onBack, onLeave }: GroupScr
           )}
         </ScrollView>
       </View>
+
+      <SquadLookSheet
+        visible={editing}
+        group={current}
+        onClose={function () {
+          setEditing(false);
+        }}
+        onChange={setCurrent}
+      />
     </SafeAreaView>
   );
-}
-
-function roundButtonStyle({ pressed }: { pressed: boolean }) {
-  return pressed ? [styles.round, styles.pressed] : styles.round;
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: paper.bg },
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
-  header: {
+  veil: { flex: 1, backgroundColor: 'rgba(237,240,245,0.85)' },
+  editLook: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.sm,
-    paddingHorizontal: space.md,
-    paddingTop: space.sm,
-    paddingBottom: space.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: paper.line,
-  },
-  round: {
-    width: 32,
-    height: 32,
-    marginLeft: -4,
+    alignSelf: 'flex-start',
+    gap: space.xs,
+    paddingVertical: space.xs,
+    paddingHorizontal: space.sm,
     borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: paper.accentSoft,
   },
+  editLookText: { color: paper.accent, ...typo.semi, fontSize: textSize.body },
   pressed: { opacity: 0.6 },
-  title: { flex: 1, color: paper.ink, ...typo.semi, fontSize: textSize.lead },
 
   content: { padding: space.md, gap: space.md, paddingBottom: space.xl },
-
-  identity: { alignItems: 'center', gap: 3, paddingVertical: space.md },
-  name: {
-    marginTop: space.sm,
-    color: paper.ink,
-    ...typo.display,
-    fontSize: textSize.hero,
-    textAlign: 'center',
-  },
-  handle: { color: paper.accent, ...typo.mono, fontSize: textSize.body },
-  count: { color: paper.inkFaint, ...typo.medium, fontSize: textSize.small },
-  bio: {
-    marginTop: space.sm,
-    color: paper.inkSoft,
-    ...typo.regular,
-    fontSize: textSize.base,
-    lineHeight: 21,
-    textAlign: 'center',
-  },
 
   loader: { marginVertical: space.xl },
   error: { color: paper.danger, ...typo.medium, fontSize: textSize.body },

@@ -61,7 +61,10 @@ export default function YouScreen({ user }: YouScreenProps) {
       <GroupScreen
         group={profileGroup}
         userId={user.id}
-        onBack={() => setProfileGroup(null)}
+        onBack={() => {
+          setProfileGroup(null);
+          load();
+        }}
         onLeave={() => {
           setProfileGroup(null);
           load();

@@ -1,0 +1,116 @@
+import { useEffect, useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import type { Group } from '../../services/serviceGroup';
+import { nightsLabel } from '../../lib/squadLook';
+import Monogram from '../general/Monogram';
+import { paper, radius, space, textSize, typo } from '../../theme';
+
+const BANNER_HEIGHT = 170;
+const AVATAR = 84;
+
+type SquadHeroProps = {
+  group: Group;
+  memberCount: number;
+  nights: number;
+  onBack: () => void;
+};
+
+function plural(count: number, one: string, many: string) {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+export default function SquadHero({ group, memberCount, nights, onBack }: SquadHeroProps) {
+  const [bannerBroken, setBannerBroken] = useState(false);
+
+  useEffect(() => {
+    setBannerBroken(false);
+  }, [group.bannerUrl]);
+
+  const banner = group.bannerUrl && !bannerBroken ? group.bannerUrl : null;
+
+  return (
+    <View>
+      <View style={styles.banner}>
+        {banner ? (
+          <Image
+            source={{ uri: banner }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+            onError={function () {
+              setBannerBroken(true);
+            }}
+          />
+        ) : (
+          <LinearGradient colors={['#1B2A44', '#3A2E3F']} style={StyleSheet.absoluteFill} />
+        )}
+
+        <Pressable
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={({ pressed }) => [styles.back, pressed && styles.pressed]}
+        >
+          <Ionicons name="chevron-back" size={20} color={paper.ink} />
+        </Pressable>
+
+        {nights > 0 ? (
+          <View style={styles.tag}>
+            <Text style={styles.tagText}>{nightsLabel(nights).toUpperCase()} ON THIS WALL</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.avatar}>
+        <Monogram name={group.name} size={AVATAR} ring={4} uri={group.avatarUrl} />
+      </View>
+
+      <View style={styles.identity}>
+        <Text style={styles.name} numberOfLines={2}>
+          {group.name}
+        </Text>
+        <Text style={styles.handle}>
+          @{group.handle} · {plural(memberCount, 'member', 'members')}
+        </Text>
+        {group.bio ? <Text style={styles.bio}>{group.bio}</Text> : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  banner: {
+    height: BANNER_HEIGHT,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: paper.mine,
+  },
+  back: {
+    position: 'absolute',
+    top: space.sm,
+    left: space.sm,
+    width: 34,
+    height: 34,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: { opacity: 0.6 },
+  tag: {
+    position: 'absolute',
+    right: space.sm,
+    bottom: space.sm,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xxs,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  tagText: { color: '#FFFFFF', ...typo.bold, fontSize: textSize.caption, letterSpacing: 1 },
+  avatar: { marginTop: -AVATAR / 2, marginLeft: space.md },
+  identity: { gap: 3, paddingTop: space.sm },
+  name: { color: paper.ink, ...typo.display, fontSize: textSize.hero },
+  handle: { color: paper.inkFaint, ...typo.mono, fontSize: textSize.body },
+  bio: { color: paper.inkSoft, ...typo.medium, fontSize: textSize.base, lineHeight: 20, marginTop: space.xxs },
+});
