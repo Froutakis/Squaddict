@@ -231,6 +231,66 @@ begin
   end loop;
 end $$;
 
+-- Extras for the newer features. Each part runs only if its SQL file has been
+-- applied (memories.sql, event_covers.sql, follows.sql).
+do $$
+declare
+  demo_squads uuid[] := array(select md5('squaddict-demo-squad-' || n)::uuid from generate_series(1, 6) n);
+  demo_people uuid[] := array(select md5('squaddict-demo-user-' || n)::uuid from generate_series(1, 12) n);
+begin
+  perform setseed(0.7);
+
+  -- Covers: a photo behind most demo tickets.
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'events' and column_name = 'cover_url') then
+    execute $sql$
+      update public.events e
+         set cover_url = 'https://picsum.photos/seed/' || left(md5(e.title), 10) || '/1280/720'
+       where e.group_id = any($1)
+         and random() < 0.7
+    $sql$ using demo_squads;
+  end if;
+
+  -- Check-ins: most demo people who are in on tonight's plans are already there.
+  if to_regclass('public.event_checkins') is not null then
+    execute $sql$
+      insert into public.event_checkins (event_id, user_id, checked_in_at)
+      select a.event_id, a.user_id, now() - (random() * interval '2 hours')
+        from public.event_attendees a
+        join public.events e on e.id = a.event_id
+       where e.group_id = any($1)
+         and a.user_id = any($2)
+         and a.status = 'in'
+         and e.date = current_date
+         and random() < 0.6
+      on conflict do nothing
+    $sql$ using demo_squads, demo_people;
+  end if;
+
+  -- Follows: every real account follows the two "stranger" squads,
+  -- and demo people follow squads they are not in.
+  if to_regclass('public.group_follows') is not null then
+    execute $sql$
+      insert into public.group_follows (group_id, user_id)
+      select g, p.id
+        from unnest($1[5:6]) g
+        cross join public.profiles p
+       where p.id <> all($2)
+      on conflict do nothing
+    $sql$ using demo_squads, demo_people;
+
+    execute $sql$
+      insert into public.group_follows (group_id, user_id)
+      select g, p
+        from unnest($1) g
+        cross join unnest($2) p
+       where not exists (select 1 from public.group_members m where m.group_id = g and m.user_id = p)
+         and random() < 0.35
+      on conflict do nothing
+    $sql$ using demo_squads, demo_people;
+  end if;
+end $$;
+
 commit;
 
 select g.name as squad,
