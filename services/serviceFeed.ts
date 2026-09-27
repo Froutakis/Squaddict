@@ -36,6 +36,7 @@ export type FeedGroup = {
   name: string;
   bio: string | null;
   memberCount: number;
+  followerCount?: number;
   openEvents: number;
 };
 
@@ -77,7 +78,7 @@ export function distanceKm(a: Coords, b: Coords): number {
 
 const FEED_FIELDS =
   "id, title, date, start_time, end_time, location, lat, lng, place_label, tags, group_id, cover_url, " +
-  "groups(name, handle, bio, member_count), event_attendees(user_id, status)";
+  "groups(name, handle, bio, member_count, follower_count), event_attendees(user_id, status)";
 
 function score(event: FeedEvent, radiusKm: number, tags: EventTag[]): number {
   const near =
@@ -86,6 +87,50 @@ function score(event: FeedEvent, radiusKm: number, tags: EventTag[]): number {
   const soon = Math.max(0, 14 - daysUntil(event.date)) * 0.1;
 
   return near + overlap + soon;
+}
+
+function toFeedEvent(r: any, userId: string, isMember: boolean, center: Coords | null): FeedEvent {
+  const answers = (r.event_attendees ?? []) as { user_id: string; status: string }[];
+  const mine = answers.find((a) => a.user_id === userId)?.status;
+
+  return {
+    id: r.id,
+    title: r.title,
+    date: r.date,
+    startTime: r.start_time?.slice(0, 5) ?? undefined,
+    endTime: r.end_time?.slice(0, 5) ?? undefined,
+    location: r.location ?? undefined,
+    lat: r.lat,
+    lng: r.lng,
+    placeLabel: r.place_label ?? "",
+    distanceKm: center ? distanceKm(center, { lat: r.lat, lng: r.lng }) : undefined,
+    tags: toEventTags(r.tags),
+    groupId: r.group_id,
+    groupName: r.groups?.name ?? "Squad",
+    groupHandle: r.groups?.handle ?? "",
+    goingCount: answers.filter((a) => a.status === "in").length,
+    myStatus: mine === "in" || mine === "out" ? mine : undefined,
+    isMember,
+    coverUrl: r.cover_url ?? null,
+  };
+}
+
+// A squad's upcoming public plans, for its profile page.
+export async function getGroupPublicEvents(groupId: string): Promise<FeedEvent[]> {
+  const user = await requireUser();
+
+  const { data, error } = await supabase
+    .from("events")
+    .select(FEED_FIELDS)
+    .eq("group_id", groupId)
+    .eq("is_public", true)
+    .gte("date", keyOf(new Date()))
+    .order("date", { ascending: true })
+    .order("start_time", { ascending: true, nullsFirst: true })
+    .limit(20);
+  if (error) throw error;
+
+  return ((data ?? []) as any[]).map((r) => toFeedEvent(r, user.id, false, null));
 }
 
 export async function getFeed(filters: FeedFilters = {}, page = 0): Promise<FeedPage> {
@@ -146,31 +191,9 @@ export async function getFeed(filters: FeedFilters = {}, page = 0): Promise<Feed
   const hasMore = rows.length > FEED_PAGE_SIZE;
   const pageRows = rows.slice(0, FEED_PAGE_SIZE);
 
-  const events: FeedEvent[] = pageRows.map(function (r) {
-    const answers = (r.event_attendees ?? []) as { user_id: string; status: string }[];
-    const mine = answers.find((a) => a.user_id === user.id)?.status;
-
-    return {
-      id: r.id,
-      title: r.title,
-      date: r.date,
-      startTime: r.start_time?.slice(0, 5) ?? undefined,
-      endTime: r.end_time?.slice(0, 5) ?? undefined,
-      location: r.location ?? undefined,
-      lat: r.lat,
-      lng: r.lng,
-      placeLabel: r.place_label ?? "",
-      distanceKm: center ? distanceKm(center, { lat: r.lat, lng: r.lng }) : undefined,
-      tags: toEventTags(r.tags),
-      groupId: r.group_id,
-      groupName: r.groups?.name ?? "Squad",
-      groupHandle: r.groups?.handle ?? "",
-      goingCount: answers.filter((a) => a.status === "in").length,
-      myStatus: mine === "in" || mine === "out" ? mine : undefined,
-      isMember: myGroups.has(r.group_id),
-      coverUrl: r.cover_url ?? null,
-    };
-  });
+  const events: FeedEvent[] = pageRows.map((r) =>
+    toFeedEvent(r, user.id, myGroups.has(r.group_id), center),
+  );
 
   const preferred = filters.tags ?? [];
   const near = center
@@ -197,6 +220,7 @@ export async function getFeed(filters: FeedFilters = {}, page = 0): Promise<Feed
       name: event.groupName,
       bio: byId.get(event.id)?.groups?.bio ?? null,
       memberCount: byId.get(event.id)?.groups?.member_count ?? 0,
+      followerCount: byId.get(event.id)?.groups?.follower_count ?? 0,
       openEvents: 1,
     });
   });

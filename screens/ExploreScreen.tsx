@@ -24,7 +24,14 @@ import {
 } from '../services/serviceFeed';
 import { isHappeningNow } from '../lib/datetime';
 import { useNow } from '../components/home/useNow';
-import { getGroupsForUser, searchGroups, type Group } from '../services/serviceGroup';
+import {
+  followGroup,
+  getFollowedIds,
+  getGroupsForUser,
+  searchGroups,
+  unfollowGroup,
+  type Group,
+} from '../services/serviceGroup';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import { getCurrentCoords, type Coords, type LocationState } from '../services/serviceLocation';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
@@ -36,7 +43,7 @@ import SectionHead from '../components/general/SectionHead';
 import ListEmpty from '../components/home/ListEmpty';
 import GroupCard, { type CardGroup } from '../components/group/GroupCard';
 import { userPrefix } from '../components/chat/cache';
-import { readJson, writeJson } from '../lib/store';
+import { readJson, removeKey } from '../lib/store';
 import GroupScreen from './GroupScreen';
 import Glass from '../components/general/Glass';
 import PopIn from '../components/general/PopIn';
@@ -205,9 +212,24 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   useEffect(() => {
     let cancelled = false;
 
-    readJson<Record<string, true>>(userPrefix(userId) + 'following').then((stored) => {
-      if (!cancelled && stored) setFollowing(stored);
-    });
+    // Follows used to live on the phone; carry any old ones over once.
+    async function loadFollows() {
+      const legacyKey = userPrefix(userId) + 'following';
+      const legacy = await readJson<Record<string, true>>(legacyKey);
+      const ids = await getFollowedIds();
+
+      const missing = Object.keys(legacy ?? {}).filter((id) => !ids.includes(id));
+      if (missing.length > 0) {
+        await Promise.all(missing.map((id) => followGroup(id).catch(() => {})));
+      }
+      if (legacy) await removeKey(legacyKey);
+
+      if (!cancelled) {
+        setFollowing(Object.fromEntries([...ids, ...missing].map((id) => [id, true as const])));
+      }
+    }
+
+    loadFollows().catch(() => {});
 
     getGroupsForUser(userId)
       .then((mine) => {
@@ -303,13 +325,23 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
     });
   }
 
-  function toggleFollow(groupId: string) {
+  async function toggleFollow(groupId: string) {
+    const previous = following;
+    const wasFollowing = following[groupId] === true;
     const next = { ...following };
-    if (next[groupId]) delete next[groupId];
+    if (wasFollowing) delete next[groupId];
     else next[groupId] = true;
 
     setFollowing(next);
-    writeJson(userPrefix(userId) + 'following', next);
+    setError(null);
+
+    try {
+      if (wasFollowing) await unfollowGroup(groupId);
+      else await followGroup(groupId);
+    } catch {
+      setFollowing(previous);
+      setError('Could not update who you follow. Try again.');
+    }
   }
 
   function openProfile(card: CardGroup) {
@@ -320,6 +352,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
       bio: card.bio,
       avatarUrl: null,
       memberCount: card.memberCount,
+      followerCount: card.followerCount,
     });
   }
 
@@ -651,6 +684,9 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
         group={profileGroup}
         userId={userId}
         onBack={() => setProfileGroup(null)}
+        following={following[profileGroup.id] === true}
+        onToggleFollow={() => toggleFollow(profileGroup.id)}
+        nights={highlights.filter((night) => night.group.id === profileGroup.id)}
         onLeave={() => {
           setProfileGroup(null);
           load(0, false);
