@@ -18,8 +18,16 @@ import { layout, paper, typo, radius, shadow, space } from '../../theme';
 import GroupSelect from '../general/GroupSelect';
 import Monogram from '../general/Monogram';
 
-export function GroupMonogram({ name, size = 44 }: { name: string; size?: number }) {
-  return <Monogram name={name} size={size} />;
+export function GroupMonogram({
+  name,
+  size = 44,
+  uri,
+}: {
+  name: string;
+  size?: number;
+  uri?: string | null;
+}) {
+  return <Monogram name={name} size={size} uri={uri} />;
 }
 
 function stampFor(iso: string) {
@@ -187,7 +195,7 @@ export default function GroupPicker({
                 {}
                 {index > 0 ? <View style={styles.divider} /> : null}
 
-                <GroupMonogram name={group.name} />
+                <GroupMonogram name={group.name} uri={group.avatarUrl} />
 
                 <View style={styles.rowText}>
                   <Text style={styles.name} numberOfLines={1}>

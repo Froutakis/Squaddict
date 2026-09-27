@@ -1058,6 +1058,7 @@ export default function GroupChatScreen({
       <View style={styles.column}>
         <ChatHeader
           name={activeGroup.name}
+          avatarUrl={activeGroup.avatarUrl}
           memberCount={memberCount}
           online={online}
           onBack={closeGroup}

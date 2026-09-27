@@ -14,6 +14,7 @@ import { paper, typo, radius, space } from '../../theme';
 type ChatHeaderProps = {
   name: string;
   withName?: string;
+  avatarUrl?: string | null;
   memberCount: number;
   online: number;
   onBack: () => void;
@@ -25,6 +26,7 @@ type ChatHeaderProps = {
 export default function ChatHeader({
   name,
   withName,
+  avatarUrl,
   memberCount,
   online,
   onBack,
@@ -50,7 +52,7 @@ export default function ChatHeader({
           </View>
         </View>
       ) : (
-        <GroupMonogram name={name} size={32} />
+        <GroupMonogram name={name} size={32} uri={avatarUrl} />
       )}
 
       <View style={styles.text}>

@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { radius, solidFor, typo } from '../../theme';
 
 export function initialsFor(name: string) {
@@ -17,6 +18,7 @@ type MonogramProps = {
   ringColor?: string;
   color?: string;
   style?: StyleProp<ViewStyle>;
+  uri?: string | null;
   children?: React.ReactNode;
 };
 
@@ -29,8 +31,17 @@ export default function Monogram({
   ringColor = '#FFFFFF',
   color,
   style,
+  uri,
   children,
 }: MonogramProps) {
+  const [broken, setBroken] = useState(false);
+
+  useEffect(() => {
+    setBroken(false);
+  }, [uri]);
+
+  const photo = uri && !broken ? uri : null;
+
   return (
     <View
       style={[
@@ -45,11 +56,21 @@ export default function Monogram({
         style,
       ]}
     >
-      {children ?? (
-        <Text style={[styles.text, { fontSize: Math.round(size * 0.36) }]}>
-          {initials ?? initialsFor(name)}
-        </Text>
-      )}
+      {children ??
+        (photo ? (
+          <Image
+            source={{ uri: photo }}
+            style={{ width: size, height: size }}
+            resizeMode="cover"
+            onError={function () {
+              setBroken(true);
+            }}
+          />
+        ) : (
+          <Text style={[styles.text, { fontSize: Math.round(size * 0.36) }]}>
+            {initials ?? initialsFor(name)}
+          </Text>
+        ))}
     </View>
   );
 }

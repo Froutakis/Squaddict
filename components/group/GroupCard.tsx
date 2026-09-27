@@ -12,6 +12,7 @@ export type CardGroup = {
   memberCount: number;
   openEvents?: number;
   followerCount?: number;
+  avatarUrl?: string | null;
 };
 
 type GroupCardProps = {
@@ -55,7 +56,7 @@ export default function GroupCard({
       style={({ pressed }) => [styles.card, pressed && onPress ? styles.pressed : null, style]}
     >
       <View style={styles.head}>
-        <Monogram name={group.name} size={38} square />
+        <Monogram name={group.name} size={38} square uri={group.avatarUrl} />
 
         <View style={styles.headText}>
           <Text style={styles.name} numberOfLines={1}>
