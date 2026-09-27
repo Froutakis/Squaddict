@@ -230,6 +230,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
       wallpaperUrl: null,
       memoriesPublic: false,
       memberCount: card.memberCount,
+      createdAt: '',
     });
   }
 

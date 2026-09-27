@@ -13,10 +13,11 @@ export type Group = {
   wallpaperUrl: string | null;
   memoriesPublic: boolean;
   memberCount: number;
+  createdAt: string;
 };
 
 const GROUP_FIELDS =
-  "id, handle, name, bio, avatar_url, banner_url, wallpaper_url, memories_public, member_count";
+  "id, handle, name, bio, avatar_url, banner_url, wallpaper_url, memories_public, member_count, created_at";
 
 export const HANDLE_PATTERN = /^[a-z0-9_]{3,30}$/;
 
@@ -31,6 +32,7 @@ function toGroup(row: any): Group {
     wallpaperUrl: row.wallpaper_url ?? null,
     memoriesPublic: row.memories_public ?? false,
     memberCount: row.member_count ?? 0,
+    createdAt: row.created_at ?? '',
   };
 }
 

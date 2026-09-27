@@ -33,3 +33,22 @@ export async function updateDisplayName(id: string, newName: string): Promise<vo
     .eq("id", id);
   if (error) throw error;
 }
+
+export async function getActingGroupId(userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("acting_group_id")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) throw error;
+
+  return (data as { acting_group_id: string | null } | null)?.acting_group_id ?? null;
+}
+
+export async function setActingGroup(userId: string, groupId: string | null): Promise<void> {
+  const { error } = await supabase
+    .from("profiles")
+    .update({ acting_group_id: groupId })
+    .eq("id", userId);
+  if (error) throw error;
+}
