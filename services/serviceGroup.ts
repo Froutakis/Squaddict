@@ -13,7 +13,7 @@ export type Group = {
   followerCount?: number;
 };
 
-const GROUP_FIELDS = "id, handle, name, bio, avatar_url, member_count, follower_count";
+const GROUP_FIELDS = "id, handle, name, bio, avatar_url, member_count, parea_follower_count";
 
 export const HANDLE_PATTERN = /^[a-z0-9_]{3,30}$/;
 
@@ -25,12 +25,12 @@ function toGroup(row: any): Group {
     bio: row.bio ?? null,
     avatarUrl: row.avatar_url ?? null,
     memberCount: row.member_count ?? 0,
-    followerCount: row.follower_count ?? 0,
+    followerCount: row.parea_follower_count ?? 0,
   };
 }
 
 export async function getFollowedIds(): Promise<string[]> {
-  const { data, error } = await supabase.from("group_follows").select("group_id");
+  const { data, error } = await supabase.from("parea_follows").select("group_id");
   if (error) throw error;
 
   return (data ?? []).map((row: { group_id: string }) => row.group_id);
@@ -40,7 +40,7 @@ export async function followGroup(groupId: string): Promise<void> {
   const user = await requireUser();
 
   const { error } = await supabase
-    .from("group_follows")
+    .from("parea_follows")
     .upsert({ group_id: groupId, user_id: user.id }, { onConflict: "group_id,user_id", ignoreDuplicates: true });
   if (error) throw error;
 }
@@ -49,7 +49,7 @@ export async function unfollowGroup(groupId: string): Promise<void> {
   const user = await requireUser();
 
   const { error } = await supabase
-    .from("group_follows")
+    .from("parea_follows")
     .delete()
     .eq("group_id", groupId)
     .eq("user_id", user.id);

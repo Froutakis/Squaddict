@@ -269,9 +269,9 @@ begin
 
   -- Follows: every real account follows the two "stranger" squads,
   -- and demo people follow squads they are not in.
-  if to_regclass('public.group_follows') is not null then
+  if to_regclass('public.parea_follows') is not null then
     execute $sql$
-      insert into public.group_follows (group_id, user_id)
+      insert into public.parea_follows (group_id, user_id)
       select g, p.id
         from unnest($1[5:6]) g
         cross join public.profiles p
@@ -280,7 +280,7 @@ begin
     $sql$ using demo_squads, demo_people;
 
     execute $sql$
-      insert into public.group_follows (group_id, user_id)
+      insert into public.parea_follows (group_id, user_id)
       select g, p
         from unnest($1) g
         cross join unnest($2) p

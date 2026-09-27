@@ -78,7 +78,7 @@ export function distanceKm(a: Coords, b: Coords): number {
 
 const FEED_FIELDS =
   "id, title, date, start_time, end_time, location, lat, lng, place_label, tags, group_id, cover_url, " +
-  "groups(name, handle, bio, member_count, follower_count), event_attendees(user_id, status)";
+  "groups(name, handle, bio, member_count, parea_follower_count), event_attendees(user_id, status)";
 
 function score(event: FeedEvent, radiusKm: number, tags: EventTag[]): number {
   const near =
@@ -228,7 +228,7 @@ export async function getFeed(filters: FeedFilters = {}, page = 0): Promise<Feed
       name: event.groupName,
       bio: byId.get(event.id)?.groups?.bio ?? null,
       memberCount: byId.get(event.id)?.groups?.member_count ?? 0,
-      followerCount: byId.get(event.id)?.groups?.follower_count ?? 0,
+      followerCount: byId.get(event.id)?.groups?.parea_follower_count ?? 0,
       openEvents: 1,
     });
   });
