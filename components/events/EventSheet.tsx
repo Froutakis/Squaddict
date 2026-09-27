@@ -5,10 +5,11 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Attendee, RsvpStatus } from '../../services/serviceEvents';
 import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/serviceEvents';
 import { colors, solidFor, typo, radius, space, textSize } from '../../theme';
-import { formatDateTime } from '../../lib/datetime';
+import { formatDateTime, keyOf } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import { ticketCode } from '../../lib/ticket';
 import AttendeeSheet from './AttendeeSheet';
+import EventPhotos from './EventPhotos';
 import ShareToSquadSheet from './ShareToSquadSheet';
 import Map from '../general/Map';
 import type { Group } from '../../services/serviceGroup';
@@ -18,6 +19,8 @@ import type { LivePerson } from '../../services/serviceLiveLocation';
 
 export type SheetEvent = {
   id: string;
+  groupId?: string;
+  isPublic?: boolean;
   groupName: string;
   title: string;
   date: string;
@@ -41,6 +44,7 @@ type EventSheetProps = {
   onClose: () => void;
   onChanged: () => void | Promise<void>;
   onEdit?: (event: SheetEvent) => void;
+  onPhotosChanged?: () => void;
 };
 
 export default function EventSheet({
@@ -53,6 +57,7 @@ export default function EventSheet({
   onClose,
   onChanged,
   onEdit,
+  onPhotosChanged,
 }: EventSheetProps) {
   const [sharing, setSharing] = useState(false);
   const [roster, setRoster] = useState(false);
@@ -168,6 +173,7 @@ export default function EventSheet({
 
   const myStatus = attendees.find((a) => a.id === currentUserId)?.status;
   const isOwner = event?.createdBy !== undefined && event.createdBy === currentUserId;
+  const started = event !== null && event.date <= keyOf(new Date());
 
   return (
     <Modal
@@ -319,6 +325,20 @@ export default function EventSheet({
                 ) : null}
 
                 {error ? <Text style={styles.error}>{error}</Text> : null}
+
+                {started && event.groupId ? (
+                  <View style={styles.photos}>
+                    <EventPhotos
+                      key={event.id}
+                      eventId={event.id}
+                      groupId={event.groupId}
+                      currentUserId={currentUserId}
+                      canAdd={myStatus === 'in'}
+                      shareable={event.isPublic === true}
+                      onChanged={onPhotosChanged}
+                    />
+                  </View>
+                ) : null}
 
                 {onShare && event.isMember === false ? (
                   <Pressable
@@ -490,6 +510,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
     paddingBottom: space.lg,
+  },
+  photos: {
+    padding: space.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
   },
   description: { color: colors.text, ...typo.medium, fontSize: textSize.base, lineHeight: 20 },
 

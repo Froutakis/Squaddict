@@ -36,6 +36,7 @@ type EventPhotoRow = {
   width: number;
   height: number;
   created_at: string;
+  in_explore?: boolean | null;
 };
 
 type EventRowWithJoins = EventRow & {
@@ -76,6 +77,7 @@ export type EventPhoto = {
   width: number;
   height: number;
   createdAt: string;
+  inExplore: boolean;
 };
 
 export type RsvpStatus = "in" | "out";
@@ -279,6 +281,7 @@ function toEventPhoto(r: EventPhotoRow): EventPhoto {
     width: r.width,
     height: r.height,
     createdAt: r.created_at,
+    inExplore: r.in_explore ?? false,
   };
 }
 
@@ -317,6 +320,7 @@ export async function getEventCovers(eventIds: string[]): Promise<Record<string,
 export async function addEventPhoto(
     event: { id: string; groupId: string },
     image: PickedImage,
+    inExplore = false,
 ): Promise<EventPhoto> {
     const user = await requireUser();
 
@@ -333,6 +337,7 @@ export async function addEventPhoto(
             path: attachment.path,
             width: attachment.width,
             height: attachment.height,
+            in_explore: inExplore,
         })
         .select()
         .single();
@@ -353,6 +358,11 @@ export async function addEventPhoto(
     return toEventPhoto(data as EventPhotoRow);
 }
 
+export async function setPhotoInExplore(photoId: string, shown: boolean): Promise<void> {
+    const { error } = await supabase.rpc("set_photo_in_explore", { photo_id: photoId, shown });
+    if (error) throw error;
+}
+
 export async function removeEventPhoto(photo: EventPhoto): Promise<void> {
     const { error } = await supabase
         .from("event_photos")
@@ -361,4 +371,29 @@ export async function removeEventPhoto(photo: EventPhoto): Promise<void> {
     if (error) throw error;
 
     await removeImage(photo.path);
+}
+
+export async function getCheckins(eventIds: string[]): Promise<Record<string, string[]>> {
+    if (eventIds.length === 0) return {};
+
+    const { data, error } = await supabase
+        .from("event_checkins")
+        .select("event_id, user_id")
+        .in("event_id", eventIds);
+    if (error) throw error;
+
+    const byEvent: Record<string, string[]> = {};
+    for (const row of data as { event_id: string; user_id: string }[]) {
+        (byEvent[row.event_id] ??= []).push(row.user_id);
+    }
+    return byEvent;
+}
+
+export async function checkIn(eventId: string): Promise<void> {
+    const user = await requireUser();
+
+    const { error } = await supabase
+        .from("event_checkins")
+        .upsert({ event_id: eventId, user_id: user.id }, { onConflict: "event_id,user_id", ignoreDuplicates: true });
+    if (error) throw error;
 }

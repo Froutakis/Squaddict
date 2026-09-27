@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { SignedMap } from '../chat/media';
 import { readJson, writeJson } from '../../lib/store';
@@ -22,24 +22,36 @@ const BUBBLE = 66;
 
 type MemoriesBarProps = {
   userId: string;
+  title?: string;
+  meta?: string;
+  scope?: 'home' | 'explore';
   nights: MemoryNight[];
   groupSizes: Record<string, number>;
   signed: SignedMap;
   signPaths: (paths: string[]) => void;
   onImageError: (path: string) => void;
-  onPhotosChanged: () => void;
+  onPhotosChanged?: () => void;
+  onOpenGroup?: (night: MemoryNight) => void;
 };
 
 export default function MemoriesBar({
   userId,
+  title = 'Nights filed',
+  meta,
+  scope = 'home',
   nights,
   groupSizes,
   signed,
   signPaths,
   onImageError,
   onPhotosChanged,
+  onOpenGroup,
 }: MemoriesBarProps) {
   const [seen, setSeen] = useState<SeenNights>({});
+  const [loadedSeen, setLoadedSeen] = useState(false);
+  // What the row hides. It only catches up with `seen` when the viewer closes,
+  // so the list the viewer is walking through never shrinks under it.
+  const [hidden, setHidden] = useState<SeenNights>({});
   const [open, setOpen] = useState<number | null>(null);
   const [adding, setAdding] = useState<MemoryNight | null>(null);
   const [busy, setBusy] = useState(false);
@@ -53,14 +65,19 @@ export default function MemoriesBar({
   useEffect(() => {
     let cancelled = false;
 
-    readJson<SeenNights>(seenNightsKey(userId)).then(function (stored) {
-      if (!cancelled && stored) setSeen(stored);
+    readJson<SeenNights>(seenNightsKey(userId, scope)).then(function (stored) {
+      if (cancelled) return;
+      if (stored) {
+        setSeen(stored);
+        setHidden(stored);
+      }
+      setLoadedSeen(true);
     });
 
     return function cleanup() {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, scope]);
 
   const handleSeen = useCallback(function handleSeen(eventId: string) {
     setSeen(function (prev) {
@@ -70,10 +87,12 @@ export default function MemoriesBar({
 
   const closeViewer = useCallback(
     function closeViewer() {
+      const kept = pruneSeen(seenRef.current, nightsRef.current);
       setOpen(null);
-      writeJson(seenNightsKey(userId), pruneSeen(seenRef.current, nightsRef.current));
+      setHidden(kept);
+      writeJson(seenNightsKey(userId, scope), kept);
     },
-    [userId],
+    [userId, scope],
   );
 
   const handleAddYours = useCallback(
@@ -85,7 +104,15 @@ export default function MemoriesBar({
     [closeViewer],
   );
 
-  async function pick(source: PhotoSource) {
+  const handleOpenGroup = useCallback(
+    function handleOpenGroup(night: MemoryNight) {
+      closeViewer();
+      onOpenGroup?.(night);
+    },
+    [closeViewer, onOpenGroup],
+  );
+
+  async function pick(source: PhotoSource, inExplore: boolean) {
     if (!adding || busy) return;
 
     setBusy(true);
@@ -95,9 +122,9 @@ export default function MemoriesBar({
       const result = await capture(source, {
         id: adding.event.id,
         groupId: adding.event.groupId,
-      });
+      }, inExplore);
       setAdding(null);
-      if (result) onPhotosChanged();
+      if (result) onPhotosChanged?.();
     } catch (problem) {
       setError(messageFor(problem));
       setAdding(null);
@@ -106,18 +133,23 @@ export default function MemoriesBar({
     }
   }
 
-  if (nights.length === 0) return null;
+  const unseen = useMemo(
+    () => nights.filter((night) => !hidden[night.event.id]),
+    [nights, hidden],
+  );
+
+  if (!loadedSeen || unseen.length === 0) return null;
 
   return (
     <View>
-      <SectionHead title="Nights filed" />
+      <SectionHead title={title} meta={meta} />
 
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.row}
       >
-        {nights.map(function (night, index) {
+        {unseen.map(function (night, index) {
           const url = signed[night.cover.path]?.url;
           const watched = Boolean(seen[night.event.id]);
 
@@ -163,7 +195,7 @@ export default function MemoriesBar({
       <StoryViewer
         key={open ?? 'closed'}
         visible={open !== null}
-        nights={nights}
+        nights={unseen}
         startIndex={open ?? 0}
         groupSizes={groupSizes}
         signed={signed}
@@ -171,11 +203,13 @@ export default function MemoriesBar({
         onImageError={onImageError}
         onSeen={handleSeen}
         onAddYours={handleAddYours}
+        onOpenGroup={onOpenGroup ? handleOpenGroup : undefined}
         onClose={closeViewer}
       />
 
       <PhotoSourceSheet
         visible={adding !== null}
+        shareable={adding?.event.isPublic === true}
         onClose={function () {
           if (!busy) setAdding(null);
         }}

@@ -5,9 +5,14 @@ import type { Group } from '../services/serviceGroup';
 import type { EventPhoto, MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getUserById } from '../services/serviceUser';
 import { getGroupsForUser } from '../services/serviceGroup';
-import { clearRsvp, getEventCovers, getMyEvents, setRsvp } from '../services/serviceEvents';
-import { signImages } from '../services/serviceMedia';
-import { mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
+import {
+  checkIn as saveCheckIn,
+  clearRsvp,
+  getCheckins,
+  getEventCovers,
+  getMyEvents,
+  setRsvp,
+} from '../services/serviceEvents';
 import { colors, typo, layout, space } from '../theme';
 import {
   countdownLabel,
@@ -19,8 +24,10 @@ import {
 } from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
 import { useNow } from '../components/home/useNow';
-import { userPrefix } from '../components/chat/cache';
-import { readJson, writeJson } from '../lib/store';
+import MemoriesBar from '../components/home/MemoriesBar';
+import { useSignedImages } from '../components/home/useSignedImages';
+import PhotoPrompt from '../components/home/PhotoPrompt';
+import { MEMORY_LIMIT, toMemoryNights } from '../components/home/memories';
 import DayFilterRow from '../components/home/DayFilterRow';
 import ListEmpty from '../components/home/ListEmpty';
 import SectionHead from '../components/general/SectionHead';
@@ -78,6 +85,7 @@ export default function HomeScreen({
   focusEventId = null,
   onFocusHandled,
 }: HomeScreenProps) {
+  const { signed, signPaths, dropSigned } = useSignedImages();
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -93,28 +101,16 @@ export default function HomeScreen({
   const [openEvent, setOpenEvent] = useState<SheetEvent | null>(null);
   const [editEvent, setEditEvent] = useState<MyEvent | null>(null);
   const [rsvpError, setRsvpError] = useState<string | null>(null);
-  const [checkedIn, setCheckedIn] = useState<Record<string, true>>({});
+  const [checkins, setCheckins] = useState<Record<string, string[]>>({});
+  const [posted, setPosted] = useState<Record<string, true>>({});
   const [coverPhotos, setCoverPhotos] = useState<Record<string, EventPhoto>>({});
-  const [signed, setSigned] = useState<SignedMap>({});
   const [clock, setClock] = useState(0);
   const [photoNonce, setPhotoNonce] = useState(0);
   const [addingPhoto, setAddingPhoto] = useState<MyEvent | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    readJson<Record<string, true>>(userPrefix(user.id) + 'checkedin').then((stored) => {
-      if (!cancelled && stored) setCheckedIn(stored);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user.id]);
-
-  async function pickPhoto(source: PhotoSource) {
+  async function pickPhoto(source: PhotoSource, inExplore: boolean) {
     const target = addingPhoto;
     if (!target || photoBusy) return;
 
@@ -122,9 +118,12 @@ export default function HomeScreen({
     setPhotoError(null);
 
     try {
-      const result = await capture(source, { id: target.id, groupId: target.groupId });
+      const result = await capture(source, { id: target.id, groupId: target.groupId }, inExplore);
       setAddingPhoto(null);
-      if (result) setPhotoNonce((n) => n + 1);
+      if (result) {
+        setPosted((prev) => ({ ...prev, [target.id]: true }));
+        setPhotoNonce((n) => n + 1);
+      }
     } catch (problem) {
       setPhotoError(messageFor(problem));
       setAddingPhoto(null);
@@ -133,10 +132,24 @@ export default function HomeScreen({
     }
   }
 
-  function checkIn(eventId: string) {
-    const next = { ...checkedIn, [eventId]: true as const };
-    setCheckedIn(next);
-    writeJson(userPrefix(user.id) + 'checkedin', next);
+  async function checkIn(eventId: string) {
+    const previous = checkins;
+    const here = checkins[eventId] ?? [];
+    if (here.includes(user.id)) return;
+
+    setPhotoError(null);
+    setCheckins({ ...checkins, [eventId]: [...here, user.id] });
+
+    try {
+      await saveCheckIn(eventId);
+    } catch {
+      setCheckins(previous);
+      setPhotoError('Could not check you in. Try again.');
+    }
+  }
+
+  function isCheckedIn(eventId: string) {
+    return checkins[eventId]?.includes(user.id) ?? false;
   }
 
   const load = useCallback(
@@ -223,7 +236,10 @@ export default function HomeScreen({
   const now = useNow();
   const today = keyOf(new Date());
   const dayMode = selectedDate !== null;
-  const visible = groupId ? events.filter((e) => e.groupId === groupId) : events;
+  const visible = useMemo(
+    () => (groupId ? events.filter((e) => e.groupId === groupId) : events),
+    [events, groupId],
+  );
   const upcoming = visible.filter((e) => e.date >= today);
   const upNextEvent = dayMode ? undefined : upcoming.find((e) => e.myStatus !== 'out');
   const liveEvent = dayMode
@@ -239,8 +255,25 @@ export default function HomeScreen({
     : upcoming.filter((e) => e.id !== heroEvent?.id);
   const waiting = pool.filter((e) => e.myStatus === undefined);
   const later = pool.filter((e) => e.myStatus !== undefined);
-  const wantsPhoto = visible.find(
-    (e) => e.myStatus === 'in' && inPhotoWindow(e.date, e.startTime, e.endTime),
+  const clockNow = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const recent = visible.filter((e) => inPhotoWindow(e.date, e.startTime, e.endTime, now));
+  const recentIds = recent.map((e) => e.id).sort().join(',');
+  const wantsPhoto = dayMode
+    ? undefined
+    : recent.find(
+        (e) =>
+          e.myStatus === 'in' &&
+          !posted[e.id] &&
+          (e.date < today || !e.startTime || e.startTime <= clockNow) &&
+          !(e.id === liveEvent?.id && e.id === heroEvent?.id),
+      );
+  const nights = useMemo(
+    () => toMemoryNights(visible, coverPhotos, today).slice(0, MEMORY_LIMIT),
+    [visible, coverPhotos, today],
+  );
+  const groupSizes = useMemo(
+    () => Object.fromEntries(groups.map((g) => [g.id, g.memberCount])),
+    [groups],
   );
 
   const pastIds = events
@@ -248,6 +281,22 @@ export default function HomeScreen({
     .map((e) => e.id)
     .sort()
     .join(',');
+
+  useEffect(() => {
+    if (recentIds === '') return;
+
+    let cancelled = false;
+
+    getCheckins(recentIds.split(','))
+      .then((byEvent) => {
+        if (!cancelled) setCheckins(byEvent);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [recentIds]);
 
   useEffect(() => {
     const tick = setInterval(() => setClock((c) => c + 1), RENEW_TICK_MS);
@@ -276,22 +325,8 @@ export default function HomeScreen({
   }, [pastIds, photoNonce]);
 
   useEffect(() => {
-    const paths = Object.values(coverPhotos).map((photo) => photo.path);
-    const missing = pathsToSign(paths, signed, Date.now());
-    if (missing.length === 0) return;
-
-    let cancelled = false;
-
-    signImages(missing)
-      .then((fresh) => {
-        if (!cancelled) setSigned((prev) => mergeSigned(prev, fresh));
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [coverPhotos, signed, clock]);
+    signPaths(Object.values(coverPhotos).map((photo) => photo.path));
+  }, [coverPhotos, signed, clock, signPaths]);
 
   const covers = useMemo(() => {
     const byDate: Record<string, string> = {};
@@ -356,6 +391,17 @@ export default function HomeScreen({
 
     return (
       <>
+        {!dayMode ? (
+          <MemoriesBar
+            userId={user.id}
+            nights={nights}
+            groupSizes={groupSizes}
+            signed={signed}
+            signPaths={signPaths}
+            onImageError={dropSigned}
+            onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
+          />
+        ) : null}
 
         {heroEvent ? (
           <View>
@@ -377,11 +423,10 @@ export default function HomeScreen({
                   ? liveLabel(liveEvent.date, liveEvent.startTime, liveEvent.endTime, now)
                   : undefined
               }
-              checkedIn={checkedIn[heroEvent.id] === true}
+              checkedIn={isCheckedIn(heroEvent.id)}
+              hereCount={checkins[heroEvent.id]?.length ?? 0}
               onCheckIn={() => checkIn(heroEvent.id)}
-              onAddPhoto={
-                checkedIn[heroEvent.id] === true ? () => setAddingPhoto(heroEvent) : undefined
-              }
+              onAddPhoto={isCheckedIn(heroEvent.id) ? () => setAddingPhoto(heroEvent) : undefined}
               onPress={() => setOpenEvent(heroEvent)}
               onRsvp={(status) => handleRsvp(heroEvent.id, status)}
             />
@@ -390,7 +435,21 @@ export default function HomeScreen({
           </View>
         ) : null}
 
-    
+        {wantsPhoto ? (
+          <View style={styles.body}>
+            <PhotoPrompt
+              title={wantsPhoto.title}
+              groupName={wantsPhoto.groupName}
+              live={isHappeningNow(wantsPhoto.date, wantsPhoto.startTime, wantsPhoto.endTime, now)}
+              hereCount={checkins[wantsPhoto.id]?.length ?? 0}
+              onAdd={() => {
+                setPhotoError(null);
+                setAddingPhoto(wantsPhoto);
+              }}
+            />
+            {photoError && !heroEvent ? <Text style={styles.error}>{photoError}</Text> : null}
+          </View>
+        ) : null}
 
         <View style={styles.body}>
           <CalendarCard
@@ -492,6 +551,7 @@ export default function HomeScreen({
 
       <PhotoSourceSheet
         visible={addingPhoto !== null}
+        shareable={addingPhoto?.isPublic === true}
         onClose={() => {
           if (!photoBusy) setAddingPhoto(null);
         }}
@@ -525,6 +585,7 @@ export default function HomeScreen({
         currentUserId={user.id}
         onClose={() => setOpenEvent(null)}
         onChanged={async () => setEvents(await getMyEvents(user.id))}
+        onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
         onEdit={(e) => {
           const mine = events.find((one) => one.id === e.id);
           if (!mine) return;

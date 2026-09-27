@@ -6,7 +6,7 @@ import { searchPattern } from "../lib/search";
 
 export type { FeedWhen };
 import { toEventTags, type EventTag } from "../lib/tags";
-import type { RsvpStatus } from "./serviceEvents";
+import type { EventPhoto, MyEvent, RsvpStatus } from "./serviceEvents";
 
 export type FeedEvent = {
   id: string;
@@ -199,4 +199,64 @@ export async function getFeed(filters: FeedFilters = {}, page = 0): Promise<Feed
   });
 
   return { events: near, groups: [...groups.values()], hasMore };
+}
+
+export type FeedHighlight = {
+  event: MyEvent;
+  cover: EventPhoto;
+  goingCount: number;
+  group: Omit<FeedGroup, "openEvents">;
+};
+
+export async function getHighlights(
+  center: Coords | null = null,
+  radiusKm: number = DEFAULT_RADIUS_KM,
+): Promise<FeedHighlight[]> {
+  const { data, error } = await supabase.rpc("explore_highlights", {
+    center_lat: center?.lat ?? null,
+    center_lng: center?.lng ?? null,
+    radius_km: center ? radiusKm : null,
+  });
+  if (error) throw error;
+
+  return ((data ?? []) as any[]).map(function (r) {
+    return {
+      event: {
+        id: r.event_id,
+        groupId: r.group_id,
+        groupName: r.group_name,
+        title: r.title,
+        date: r.date,
+        startTime: r.start_time?.slice(0, 5) ?? undefined,
+        endTime: r.end_time?.slice(0, 5) ?? undefined,
+        location: r.location ?? undefined,
+        placeLabel: r.place_label ?? undefined,
+        description: r.description ?? undefined,
+        lat: r.lat ?? undefined,
+        lng: r.lng ?? undefined,
+        createdBy: "",
+        isPublic: r.is_public,
+        tags: [],
+        going: [],
+      },
+      cover: {
+        id: r.cover_id,
+        eventId: r.event_id,
+        userId: r.cover_user_id,
+        path: r.cover_path,
+        width: r.cover_width,
+        height: r.cover_height,
+        createdAt: r.cover_created,
+        inExplore: true,
+      },
+      goingCount: r.going_count,
+      group: {
+        id: r.group_id,
+        handle: r.group_handle,
+        name: r.group_name,
+        bio: r.group_bio,
+        memberCount: r.member_count,
+      },
+    };
+  });
 }

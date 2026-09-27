@@ -5,6 +5,8 @@ import { colors, sun } from '../../theme';
 export type MemoryNight = {
   event: MyEvent;
   cover: EventPhoto;
+  // Set for Explore highlights, where strangers cannot list who was in.
+  goingCount?: number;
 };
 
 export type SeenNights = Record<string, true>;
@@ -33,8 +35,8 @@ export function ringFor(night: MemoryNight, seen: boolean): string {
   return seen ? colors.border : colors.primary;
 }
 
-export function seenNightsKey(userId: string): string {
-  return userPrefix(userId) + 'seen:nights';
+export function seenNightsKey(userId: string, scope: 'home' | 'explore' = 'home'): string {
+  return userPrefix(userId) + (scope === 'home' ? 'seen:nights' : 'seen:highlights');
 }
 
 export function markSeen(seen: SeenNights, eventId: string): SeenNights {

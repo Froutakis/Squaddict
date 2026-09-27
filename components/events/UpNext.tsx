@@ -24,6 +24,7 @@ type UpNextProps = {
   live?: boolean;
   liveText?: string;
   checkedIn?: boolean;
+  hereCount?: number;
   onCheckIn?: () => void;
   onAddPhoto?: () => void;
 };
@@ -36,6 +37,7 @@ export default function UpNext({
   live = false,
   liveText,
   checkedIn = false,
+  hereCount = 0,
   onCheckIn,
   onAddPhoto,
 }: UpNextProps) {
@@ -64,7 +66,9 @@ export default function UpNext({
           {checkedIn ? "You're here" : event.myStatus === 'in' ? "You're in" : 'You passed'}
         </Text>
         {checkedIn ? (
-          <Text style={styles.change}>Punched at the door</Text>
+          <Text style={styles.change}>
+            {hereCount > 1 ? `${hereCount} of ${event.going.length} here` : 'Punched at the door'}
+          </Text>
         ) : (
           <Pressable
             onPress={() => onRsvp(null)}

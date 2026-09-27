@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
@@ -15,8 +15,10 @@ import {
 import {
   DEFAULT_RADIUS_KM,
   getFeed,
+  getHighlights,
   type FeedEvent,
   type FeedGroup,
+  type FeedHighlight,
   type FeedWhen,
 } from '../services/serviceFeed';
 import { isHappeningNow } from '../lib/datetime';
@@ -39,6 +41,8 @@ import PopIn from '../components/general/PopIn';
 import DropdownChip from '../components/general/DropdownChip';
 import MapView from '../components/general/Map';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
+import MemoriesBar from '../components/home/MemoriesBar';
+import { useSignedImages } from '../components/home/useSignedImages';
 
 const RADII = [5, 10, 25, 50];
 
@@ -142,6 +146,8 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [highlights, setHighlights] = useState<FeedHighlight[]>([]);
+  const { signed, signPaths, dropSigned } = useSignedImages();
 
   const followedIds = Object.keys(following).sort().join(',');
   const followFilter = followingOnly ? followedIds : null;
@@ -248,6 +254,31 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
     if (locationState === 'asking') return;
     load(0, false);
   }, [load, locationState]);
+
+  useEffect(() => {
+    if (locationState === 'asking') return;
+
+    let cancelled = false;
+
+    getHighlights(center, radiusKm)
+      .then((found) => {
+        if (cancelled) return;
+        setHighlights(found);
+        signPaths(found.map((night) => night.cover.path));
+      })
+      .catch(() => {
+        if (!cancelled) setHighlights([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [center, radiusKm, locationState, signPaths]);
+
+  const highlightSizes = useMemo(
+    () => Object.fromEntries(highlights.map((night) => [night.group.id, night.group.memberCount])),
+    [highlights],
+  );
 
   function toggleTag(tag: EventTag) {
     setTags(function (current) {
@@ -501,6 +532,24 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const header = (
     <View style={styles.header}>
       {controls}
+
+      {search === '' && !liveOnly ? (
+        <MemoriesBar
+          userId={userId}
+          scope="explore"
+          title="Last nights out"
+          meta="Shared by pareas nearby"
+          nights={highlights}
+          groupSizes={highlightSizes}
+          signed={signed}
+          signPaths={signPaths}
+          onImageError={dropSigned}
+          onOpenGroup={(night) => {
+            const found = highlights.find((one) => one.event.id === night.event.id);
+            if (found) openProfile(found.group);
+          }}
+        />
+      ) : null}
 
       {live.length > 0 && !liveOnly ? (
         <View>

@@ -1,26 +1,35 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import {
   addEventPhoto,
   getEventPhotos,
   removeEventPhoto,
+  setPhotoInExplore,
   type EventPhoto,
 } from '../../services/serviceEvents';
 import { pickImage, prepareImage, signImages, takePhoto } from '../../services/serviceMedia';
 import type { SignedMap } from '../chat/media';
+import { readJson, writeJson } from '../../lib/store';
 import { colors, typo, radius, space, textSize } from '../../theme';
 
 const TILE = 72;
 
 export type PhotoSource = 'camera' | 'library';
 
-export async function capture(source: PhotoSource, event: { id: string; groupId: string }) {
+// Last answer to "Show in Explore", so people who share keep sharing.
+const EXPLORE_SHARE_KEY = 'squaddict:photos:explore';
+
+export async function capture(
+  source: PhotoSource,
+  event: { id: string; groupId: string },
+  inExplore = false,
+) {
   const picked = source === 'camera' ? await takePhoto() : await pickImage();
   if (!picked) return null;
 
   const ready = await prepareImage(picked);
-  const photo = await addEventPhoto(event, ready);
+  const photo = await addEventPhoto(event, ready, inExplore);
   const fresh = await signImages([photo.path]);
 
   return { photo, signed: fresh };
@@ -44,18 +53,42 @@ export function messageFor(problem: unknown) {
 type PhotoSourceSheetProps = {
   visible: boolean;
   title?: string;
+  shareable?: boolean;
   onClose: () => void;
-  onPick: (source: PhotoSource) => void;
+  onPick: (source: PhotoSource, inExplore: boolean) => void;
   onRemove?: () => void;
 };
 
 export function PhotoSourceSheet({
   visible,
   title = 'Add a photo',
+  shareable = false,
   onClose,
   onPick,
   onRemove,
 }: PhotoSourceSheetProps) {
+  const [share, setShare] = useState(false);
+
+  useEffect(() => {
+    if (!visible || !shareable) return;
+
+    let cancelled = false;
+    readJson<boolean>(EXPLORE_SHARE_KEY).then((stored) => {
+      if (!cancelled) setShare(stored === true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, shareable]);
+
+  function toggleShare(next: boolean) {
+    setShare(next);
+    writeJson(EXPLORE_SHARE_KEY, next);
+  }
+
+  const inExplore = shareable && share;
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
@@ -64,7 +97,7 @@ export function PhotoSourceSheet({
           <Text style={styles.sheetTitle}>{title}</Text>
 
           <Pressable
-            onPress={() => onPick('camera')}
+            onPress={() => onPick('camera', inExplore)}
             accessibilityRole="button"
             accessibilityLabel="Take a photo"
             style={({ pressed }) => [styles.option, pressed && styles.pressed]}
@@ -80,7 +113,7 @@ export function PhotoSourceSheet({
           </Pressable>
 
           <Pressable
-            onPress={() => onPick('library')}
+            onPress={() => onPick('library', inExplore)}
             accessibilityRole="button"
             accessibilityLabel="Choose from library"
             style={({ pressed }) => [styles.option, pressed && styles.pressed]}
@@ -94,6 +127,23 @@ export function PhotoSourceSheet({
             </View>
             <Ionicons name="chevron-forward" size={17} color={colors.textFaint} />
           </Pressable>
+
+          {shareable ? (
+            <View style={styles.shareRow}>
+              <View style={styles.optionText}>
+                <Text style={styles.optionTitle}>Show in Explore</Text>
+                <Text style={styles.optionBody}>
+                  Anyone nearby can see it. You can hide it again anytime.
+                </Text>
+              </View>
+              <Switch
+                value={share}
+                onValueChange={toggleShare}
+                accessibilityLabel="Show this photo in Explore"
+                trackColor={{ true: colors.primary, false: colors.border }}
+              />
+            </View>
+          ) : null}
 
           {onRemove ? (
             <Pressable
@@ -131,6 +181,7 @@ type EventPhotosProps = {
   groupId: string;
   currentUserId: string;
   canAdd: boolean;
+  shareable?: boolean;
   onChanged?: () => void;
 };
 
@@ -139,6 +190,7 @@ export default function EventPhotos({
   groupId,
   currentUserId,
   canAdd,
+  shareable = false,
   onChanged,
 }: EventPhotosProps) {
   const [photos, setPhotos] = useState<EventPhoto[]>([]);
@@ -176,13 +228,13 @@ export default function EventPhotos({
     };
   }, [eventId]);
 
-  async function handleAdd(source: PhotoSource) {
+  async function handleAdd(source: PhotoSource, inExplore: boolean) {
     setAsking(false);
     setError(null);
     setBusy(true);
 
     try {
-      const added = await capture(source, { id: eventId, groupId });
+      const added = await capture(source, { id: eventId, groupId }, inExplore);
       if (!added) return;
 
       setPhotos((current) => [...current, added.photo]);
@@ -207,6 +259,21 @@ export default function EventPhotos({
       setError('Could not remove that photo.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function toggleExplore(photo: EventPhoto) {
+    const shown = !photo.inExplore;
+    const flip = (row: EventPhoto) => (row.id === photo.id ? { ...row, inExplore: shown } : row);
+
+    setError(null);
+    setPhotos((current) => current.map(flip));
+
+    try {
+      await setPhotoInExplore(photo.id, shown);
+    } catch {
+      setPhotos((current) => current.map((row) => (row.id === photo.id ? photo : row)));
+      setError('Could not change that photo.');
     }
   }
 
@@ -249,6 +316,27 @@ export default function EventPhotos({
                 <View style={styles.image} />
               )}
 
+              {photo.userId === currentUserId && shareable ? (
+                <Pressable
+                  onPress={() => toggleExplore(photo)}
+                  disabled={busy}
+                  accessibilityRole="switch"
+                  accessibilityLabel="Show in Explore"
+                  accessibilityState={{ checked: photo.inExplore, disabled: busy }}
+                  style={({ pressed }) => [
+                    styles.globe,
+                    photo.inExplore && styles.globeOn,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Ionicons
+                    name={photo.inExplore ? 'globe' : 'globe-outline'}
+                    size={12}
+                    color="#FFFFFF"
+                  />
+                </Pressable>
+              ) : null}
+
               {photo.userId === currentUserId ? (
                 <Pressable
                   onPress={() => handleRemove(photo)}
@@ -272,7 +360,16 @@ export default function EventPhotos({
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <PhotoSourceSheet visible={asking} onClose={() => setAsking(false)} onPick={handleAdd} />
+      {shareable && photos.some((photo) => photo.userId === currentUserId) ? (
+        <Text style={styles.hint}>Tap the globe on your photos to show them in Explore.</Text>
+      ) : null}
+
+      <PhotoSourceSheet
+        visible={asking}
+        shareable={shareable}
+        onClose={() => setAsking(false)}
+        onPick={handleAdd}
+      />
     </View>
   );
 }
@@ -319,6 +416,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  globe: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    width: 20,
+    height: 20,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(12,25,38,0.62)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  globeOn: { backgroundColor: colors.primary },
+  hint: { color: colors.textFaint, ...typo.medium, fontSize: textSize.caption },
+  shareRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.bg,
+  },
   empty: { color: colors.textFaint, ...typo.medium, fontSize: textSize.body },
   error: { color: colors.danger, ...typo.medium, fontSize: textSize.body },
 
