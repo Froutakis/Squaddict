@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -32,6 +32,7 @@ export default function YouScreen({ user }: YouScreenProps) {
   const [actingId, setActingId] = useState<string | null>(null);
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [nights, setNights] = useState(0);
+  const [reloads, setReloads] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
@@ -39,9 +40,12 @@ export default function YouScreen({ user }: YouScreenProps) {
   const [expanded, setExpanded] = useState(false);
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
   const [groupForm, setGroupForm] = useState<'create' | 'join' | null>(null);
+  const switchSeq = useRef(0);
 
   const load = useCallback(
     async function load() {
+      const seq = switchSeq.current;
+
       getUnreadCounts()
         .then(setUnread)
         .catch(function () {
@@ -52,17 +56,18 @@ export default function YouScreen({ user }: YouScreenProps) {
         const [profile, myGroups, stored] = await Promise.all([
           getUserById(user.id),
           getGroupsForUser(user.id),
-          getActingGroupId(user.id),
+          getActingGroupId(user.id).catch(() => null),
         ]);
 
         setDisplayName(profile?.name ?? '');
         setGroups(myGroups);
-        setActingId(stored);
+        if (switchSeq.current === seq) setActingId(stored);
         setError(null);
       } catch {
         setError('Could not load your pareas.');
       } finally {
         setLoading(false);
+        setReloads((n) => n + 1);
       }
     },
     [user.id],
@@ -90,11 +95,12 @@ export default function YouScreen({ user }: YouScreenProps) {
     return function cleanup() {
       cancelled = true;
     };
-  }, [acting?.id]);
+  }, [acting?.id, reloads]);
 
   async function switchTo(group: Group) {
     if (switching) return;
 
+    switchSeq.current += 1;
     const previous = actingId;
     setActingId(group.id);
     setSwitchError(null);
