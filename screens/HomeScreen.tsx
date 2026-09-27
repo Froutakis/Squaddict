@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { User as AuthUser } from '@supabase/supabase-js';
-import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  AppState,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import type { Group } from '../services/serviceGroup';
 import type { EventPhoto, MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getUserById } from '../services/serviceUser';
@@ -50,6 +59,8 @@ import EventFormSheet from '../components/events/EventFormSheet';
 import GroupFormSheet from '../components/group/GroupFormSheet';
 
 const RENEW_TICK_MS = 5 * 60 * 1000;
+// Coming back to the app refreshes the week, at most once a minute.
+const RESUME_REFRESH_MS = 60 * 1000;
 
 type HomeScreenProps = {
   user: AuthUser;
@@ -160,10 +171,15 @@ export default function HomeScreen({
     return checkins[eventId]?.includes(user.id) ?? false;
   }
 
+  const [refreshing, setRefreshing] = useState(false);
+  const lastLoad = useRef(0);
+
+  // `quiet` keeps what is on screen while it reloads (pull to refresh, coming back).
   const load = useCallback(
-    async function load() {
-      setLoading(true);
+    async function load(quiet = false) {
+      if (!quiet) setLoading(true);
       setError(null);
+      lastLoad.current = Date.now();
 
       try {
         const [profile, myGroups, myEvents, friendsPlans] = await Promise.all([
@@ -179,9 +195,10 @@ export default function HomeScreen({
         setGroups(myGroups);
         setEvents(myEvents);
       } catch {
-        setError("Couldn't load your week");
+        if (!quiet) setError("Couldn't load your week");
       } finally {
         setLoading(false);
+        setRefreshing(false);
       }
     },
     [user.id],
@@ -189,6 +206,21 @@ export default function HomeScreen({
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  function refresh() {
+    setRefreshing(true);
+    setPhotoNonce((n) => n + 1);
+    load(true);
+  }
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' || Date.now() - lastLoad.current < RESUME_REFRESH_MS) return;
+      setPhotoNonce((n) => n + 1);
+      load(true);
+    });
+    return () => sub.remove();
   }, [load]);
 
   useEffect(() => {
@@ -358,7 +390,7 @@ export default function HomeScreen({
     return () => {
       cancelled = true;
     };
-  }, [recentIds]);
+  }, [recentIds, photoNonce]);
 
   useEffect(() => {
     const tick = setInterval(() => setClock((c) => c + 1), RENEW_TICK_MS);
@@ -423,7 +455,7 @@ export default function HomeScreen({
           <Text style={styles.stateTitle}>{error}</Text>
           <Text style={styles.stateBody}>The connection dropped. Your plans are still there.</Text>
           <View style={styles.stateButton}>
-            <Button title="Try again" onPress={load} />
+            <Button title="Try again" onPress={() => load()} />
           </View>
         </View>
       );
@@ -647,7 +679,12 @@ export default function HomeScreen({
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />
+        }
+      >
         <HomeHeader
           displayName={displayName}
           avatarUrl={avatarUrl}

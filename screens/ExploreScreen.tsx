@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   Pressable,
   RefreshControl,
@@ -293,6 +294,18 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
     if (locationState === 'asking') return;
     load(0, false);
   }, [load, locationState]);
+
+  const lastResume = useRef(Date.now());
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' || Date.now() - lastResume.current < 60 * 1000) return;
+      lastResume.current = Date.now();
+      load(0, false);
+      loadFriendsGoing();
+    });
+    return () => sub.remove();
+  }, [load, loadFriendsGoing]);
 
   useEffect(() => {
     if (locationState === 'asking') return;
