@@ -11,6 +11,12 @@ import {
   type SignedMap,
 } from "../components/chat/media";
 import { supabase } from "./supabaseClient";
+import {
+  SQUADS_BUCKET,
+  squadImagePath,
+  squadPathFromUrl,
+  type SquadImageKind,
+} from "../lib/squadLook";
 
 const BUCKET = "chat";
 
@@ -95,10 +101,12 @@ async function readBytes(uri: string): Promise<ArrayBuffer> {
   return await new File(uri).arrayBuffer();
 }
 
-export async function uploadImage(
+async function uploadTo(
+  bucket: string,
   path: string,
   image: PickedImage,
-): Promise<Attachment> {
+  upsert: boolean,
+): Promise<void> {
   const bytes = await readBytes(image.uri);
 
   const problem = uploadRejection(bytes.byteLength);
@@ -106,12 +114,13 @@ export async function uploadImage(
     throw new Error(problem);
   }
 
-  const { error } = await supabase.storage.from(BUCKET).upload(path, bytes, {
+  const { error } = await supabase.storage.from(bucket).upload(path, bytes, {
     contentType: "image/jpeg",
-    upsert: true,
+    upsert,
   });
   if (error) {
     console.error("[squaddict] το ανέβασμα απέρριψε:", {
+      bucket,
       path,
       bytes: bytes.byteLength,
       name: (error as any).name,
@@ -120,6 +129,13 @@ export async function uploadImage(
     });
     throw error;
   }
+}
+
+export async function uploadImage(
+  path: string,
+  image: PickedImage,
+): Promise<Attachment> {
+  await uploadTo(BUCKET, path, image, true);
 
   return {
     path,
@@ -127,6 +143,32 @@ export async function uploadImage(
     width: image.width,
     height: image.height,
   };
+}
+
+export async function uploadSquadImage(
+  groupId: string,
+  kind: SquadImageKind,
+  picked: PickedImage,
+): Promise<string> {
+  const image = await prepareImage(picked);
+  const path = squadImagePath(groupId, kind, Date.now());
+  await uploadTo(SQUADS_BUCKET, path, image, false);
+
+  return supabase.storage.from(SQUADS_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+export async function removeSquadImage(url: string | null): Promise<void> {
+  if (!url) return;
+
+  const path = squadPathFromUrl(url);
+  if (!path) return;
+
+  try {
+    const { error } = await supabase.storage.from(SQUADS_BUCKET).remove([path]);
+    if (error) throw error;
+  } catch (problem) {
+    console.error("[squaddict] η εικόνα της παρέας δεν σβήστηκε:", problem);
+  }
 }
 
 export async function signImages(paths: string[]): Promise<SignedMap> {

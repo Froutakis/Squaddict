@@ -4,6 +4,8 @@ import { requireUser } from "./serviceAuth";
 import { toEventTags, type EventTag } from "../lib/tags";
 import { newId } from "../lib/ids";
 import { removeImage, uploadImage, type PickedImage } from "./serviceMedia";
+import { keyOf } from "../lib/datetime";
+import { toSquadMemories, type SquadMemory } from "../lib/squadLook";
 
 type EventRow = {
   id: string;
@@ -117,6 +119,20 @@ function toAttendee(a: AttendeeRow): Attendee {
   };
 }
 
+function toMyEvent(r: EventRowWithJoins, userId: string): MyEvent {
+    const answers = r.event_attendees ?? [];
+    const mine = answers.find((a) => a.user_id === userId)?.status;
+
+    return {
+        ...toEvent(r),
+        groupName: r.groups?.name ?? "Squad",
+        myStatus: mine === "in" || mine === "out" ? mine : undefined,
+        going: answers
+            .filter((a) => a.status === "in")
+            .map((a) => ({ id: a.user_id, name: a.profiles?.display_name ?? "" })),
+    };
+}
+
 function toColumns(input: NewEvent) {
   const columns: Record<string, unknown> = {
     title: input.title,
@@ -196,19 +212,7 @@ export async function getMyEvents(userId: string): Promise<MyEvent[]> {
         .order("start_time", { ascending: true, nullsFirst: true });
     if (error) throw error;
 
-    return (data as EventRowWithJoins[]).map((r) => {
-        const answers = r.event_attendees ?? [];
-        const mine = answers.find((a) => a.user_id === userId)?.status;
-
-        return {
-            ...toEvent(r),
-            groupName: r.groups?.name ?? "Squad",
-            myStatus: mine === "in" || mine === "out" ? mine : undefined,
-            going: answers
-                .filter((a) => a.status === "in")
-                .map((a) => ({ id: a.user_id, name: a.profiles?.display_name ?? "" })),
-        };
-    });
+    return (data as EventRowWithJoins[]).map((r) => toMyEvent(r, userId));
 }
 
 export async function deleteEvent(eventId: string): Promise<void> {
@@ -307,6 +311,30 @@ export async function getEventCovers(eventIds: string[]): Promise<Record<string,
         if (!covers[row.event_id]) covers[row.event_id] = toEventPhoto(row);
     }
     return covers;
+}
+
+export async function getGroupMemories(groupId: string, userId: string): Promise<SquadMemory[]> {
+    const today = keyOf(new Date());
+
+    const { data, error } = await supabase
+        .from("events")
+        .select("*, groups(name), event_attendees(user_id, status, profiles(display_name))")
+        .eq("group_id", groupId)
+        .lt("date", today)
+        .order("date", { ascending: false });
+    if (error) throw error;
+
+    const events = (data as EventRowWithJoins[]).map((r) => toMyEvent(r, userId));
+    if (events.length === 0) return [];
+
+    const { data: photoRows, error: photoError } = await supabase
+        .from("event_photos")
+        .select("*")
+        .in("event_id", events.map((e) => e.id))
+        .order("created_at", { ascending: true });
+    if (photoError) throw photoError;
+
+    return toSquadMemories(events, (photoRows as EventPhotoRow[]).map(toEventPhoto), today);
 }
 
 export async function addEventPhoto(
