@@ -2,7 +2,7 @@ import type { Coords } from "./serviceLocation";
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
 import { dateRange, daysUntil, keyOf, type FeedWhen } from "../lib/datetime";
-import { searchPattern } from "../lib/search";
+import { searchTerm } from "../lib/search";
 
 export type { FeedWhen };
 import { toEventTags, type EventTag } from "../lib/tags";
@@ -171,9 +171,17 @@ export async function getFeed(filters: FeedFilters = {}, page = 0): Promise<Feed
     query = query.gte("date", first).lte("date", last);
   }
 
-  const pattern = filters.search ? searchPattern(filters.search) : null;
-  if (pattern) {
-    query = query.or(`title.ilike.${pattern},location.ilike.${pattern},place_label.ilike.${pattern}`);
+  // Accent- and case-insensitive: "καφε" finds "Καφές" (see supabase/search.sql).
+  const term = filters.search ? searchTerm(filters.search) : null;
+  if (term) {
+    const { data: found, error: searchError } = await supabase.rpc("search_public_event_ids", {
+      needle: term,
+    });
+    if (searchError) throw searchError;
+
+    const ids = (found ?? []) as string[];
+    if (ids.length === 0) return { events: [], groups: [], hasMore: false };
+    query = query.in("id", ids);
   }
 
   if (filters.groupIds) {

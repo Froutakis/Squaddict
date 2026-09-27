@@ -1,7 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
 import { UNIQUE_VIOLATION } from "../lib/postgres";
-import { searchPattern } from "../lib/search";
+import { searchTerm } from "../lib/search";
 import type { Person } from "../lib/people";
 export type Group = {
   id: string;
@@ -181,15 +181,10 @@ export async function getGroupByHandle(handle: string): Promise<Group | null> {
 }
 
 export async function searchGroups(query: string, limit = 20): Promise<Array<Group>> {
-  const pattern = searchPattern(query);
-  if (pattern === null) return [];
+  const term = searchTerm(query);
+  if (term === null) return [];
 
-  const { data, error } = await supabase
-    .from("groups")
-    .select(GROUP_FIELDS)
-    .or(`handle.ilike.${pattern},name.ilike.${pattern}`)
-    .order("member_count", { ascending: false })
-    .limit(limit);
+  const { data, error } = await supabase.rpc("search_groups_folded", { needle: term, lim: limit });
   if (error) throw error;
 
   return (data ?? []).map(toGroup);
