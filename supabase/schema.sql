@@ -877,3 +877,45 @@ create policy "remove squad look" on storage.objects
       select g::text from public.my_group_ids() g
     )
   );
+
+-- ─── acting squad ──────────────────────────────────────────────────────
+
+alter table public.profiles
+  add column if not exists acting_group_id uuid references public.groups(id) on delete set null;
+
+create or replace function public.guard_acting_group()
+returns trigger language plpgsql security definer set search_path to 'public' as $function$
+begin
+  if new.acting_group_id is not null
+     and new.acting_group_id is distinct from old.acting_group_id
+     and not exists (
+       select 1 from public.group_members
+        where group_id = new.acting_group_id
+          and user_id  = new.id
+     ) then
+    raise exception 'You can only act as a squad you are in.';
+  end if;
+  return new;
+end;
+$function$;
+
+drop trigger if exists profiles_acting_group_guard on public.profiles;
+create trigger profiles_acting_group_guard
+  before update on public.profiles
+  for each row execute function public.guard_acting_group();
+
+create or replace function public.clear_acting_group()
+returns trigger language plpgsql security definer set search_path to 'public' as $function$
+begin
+  update public.profiles
+     set acting_group_id = null
+   where id = old.user_id
+     and acting_group_id = old.group_id;
+  return old;
+end;
+$function$;
+
+drop trigger if exists group_members_clear_acting on public.group_members;
+create trigger group_members_clear_acting
+  after delete on public.group_members
+  for each row execute function public.clear_acting_group();
