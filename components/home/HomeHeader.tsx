@@ -6,6 +6,7 @@ import { colors, space, textSize, typo } from '../../theme';
 
 type HomeHeaderProps = {
   displayName: string;
+  avatarUrl?: string | null;
   groups: Group[];
   groupId: string | null;
   onGroupSelect: (groupId: string | null) => void;
@@ -13,6 +14,7 @@ type HomeHeaderProps = {
 
 export default function HomeHeader({
   displayName,
+  avatarUrl = null,
   groups,
   groupId,
   onGroupSelect,
@@ -27,6 +29,7 @@ export default function HomeHeader({
           groupId={groupId}
           onSelect={onGroupSelect}
           allAvatarLabel={displayName}
+          allAvatarUrl={avatarUrl}
         />
       </View>
     </View>

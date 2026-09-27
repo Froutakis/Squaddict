@@ -10,7 +10,9 @@ import {
 } from 'react-native';
 import type { User as AuthUser } from '@supabase/supabase-js';
 import { logout } from '../services/serviceAuth';
-import { getUserById } from '../services/serviceUser';
+import { clearAvatar, getUserById, setAvatar } from '../services/serviceUser';
+import { pickImage, takePhoto } from '../services/serviceMedia';
+import { messageFor, PhotoSourceSheet, type PhotoSource } from '../components/events/EventPhotos';
 import { getGroupsForUser, type Group } from '../services/serviceGroup';
 import Monogram, { initialsFor } from '../components/general/Monogram';
 import SectionHead from '../components/general/SectionHead';
@@ -20,12 +22,18 @@ import GroupFormSheet from '../components/group/GroupFormSheet';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, shadow, typo, layout, space, textSize } from '../theme';
 
+const AVATAR_SIZE = 88;
+
 type YouScreenProps = {
   user: AuthUser;
 };
 
 export default function YouScreen({ user }: YouScreenProps) {
   const [displayName, setDisplayName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [askingAvatar, setAskingAvatar] = useState(false);
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +49,7 @@ export default function YouScreen({ user }: YouScreenProps) {
         ]);
 
         setDisplayName(profile?.name ?? '');
+        setAvatarUrl(profile?.avatarUrl ?? null);
         setGroups(myGroups);
         setError(null);
       } catch {
@@ -55,6 +64,39 @@ export default function YouScreen({ user }: YouScreenProps) {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function changeAvatar(source: PhotoSource) {
+    setAskingAvatar(false);
+    setAvatarError(null);
+
+    const options = { square: true };
+    const picked = source === 'camera' ? await takePhoto(options) : await pickImage(options);
+    if (!picked) return;
+
+    setAvatarBusy(true);
+    try {
+      setAvatarUrl(await setAvatar(user.id, picked, avatarUrl));
+    } catch (problem) {
+      setAvatarError(messageFor(problem));
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  async function removeAvatar() {
+    setAskingAvatar(false);
+    setAvatarError(null);
+    setAvatarBusy(true);
+
+    try {
+      await clearAvatar(user.id, avatarUrl);
+      setAvatarUrl(null);
+    } catch (problem) {
+      setAvatarError(messageFor(problem));
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   if (profileGroup) {
     return (
@@ -74,13 +116,34 @@ export default function YouScreen({ user }: YouScreenProps) {
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.crest}>
-          <Monogram name={displayName} initials={initialsFor(displayName)} size={72} />
+          <Pressable
+            onPress={() => setAskingAvatar(true)}
+            disabled={avatarBusy}
+            accessibilityRole="button"
+            accessibilityLabel={avatarUrl ? 'Change your photo' : 'Add a photo of you'}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Monogram
+              name={displayName}
+              uri={avatarUrl}
+              initials={initialsFor(displayName)}
+              size={AVATAR_SIZE}
+            />
+            <View style={styles.cameraBadge}>
+              {avatarBusy ? (
+                <ActivityIndicator size="small" color={colors.textOnBrand} />
+              ) : (
+                <Ionicons name="camera" size={15} color={colors.textOnBrand} />
+              )}
+            </View>
+          </Pressable>
           <Text style={styles.name} numberOfLines={1}>
             {displayName}
           </Text>
           <Text style={styles.since}>
             {groups.length === 1 ? 'In 1 parea' : `In ${groups.length} pareas`}
           </Text>
+          {avatarError ? <Text style={styles.error}>{avatarError}</Text> : null}
         </View>
 
         <SectionHead title="Your pareas" />
@@ -150,6 +213,14 @@ export default function YouScreen({ user }: YouScreenProps) {
         </View>
       </ScrollView>
 
+      <PhotoSourceSheet
+        visible={askingAvatar}
+        title={avatarUrl ? 'Change your photo' : 'Add a photo of you'}
+        onClose={() => setAskingAvatar(false)}
+        onPick={changeAvatar}
+        onRemove={avatarUrl ? removeAvatar : undefined}
+      />
+
       <GroupFormSheet
         visible={groupForm !== null}
         initialMode={groupForm ?? 'create'}
@@ -176,6 +247,19 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: space.lg, gap: space.sm },
 
   crest: { alignItems: 'center', gap: space.xs, paddingHorizontal: space.lg },
+  cameraBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2.5,
+    borderColor: colors.bg,
+    backgroundColor: colors.primary,
+  },
   name: {
     marginTop: space.xs,
     color: colors.text,

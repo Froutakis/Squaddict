@@ -164,7 +164,7 @@ export default function ChatComposer({
                     ];
                   }}
                 >
-                  <GroupMonogram name={member.name} size={24} />
+                  <GroupMonogram name={member.name} uri={member.avatarUrl} size={24} />
                   <Text style={styles.suggestionName} numberOfLines={1}>
                     {member.name}
                   </Text>

@@ -178,10 +178,28 @@ export function applyMention(
   return { text: before + inserted + after, cursor: before.length + inserted.length };
 }
 
-export function toMembers(names: Record<string, string>): Person[] {
+export function directoryOf(people: Person[]): {
+  names: Record<string, string>;
+  avatars: Record<string, string | null>;
+} {
+  const names: Record<string, string> = {};
+  const avatars: Record<string, string | null> = {};
+
+  for (const person of people) {
+    names[person.id] = person.name;
+    avatars[person.id] = person.avatarUrl ?? null;
+  }
+
+  return { names, avatars };
+}
+
+export function toMembers(
+  names: Record<string, string>,
+  avatars: Record<string, string | null> = {},
+): Person[] {
   return Object.keys(names)
     .map(function (id) {
-      return { id, name: names[id] ?? '' };
+      return { id, name: names[id] ?? '', avatarUrl: avatars[id] ?? null };
     })
     .filter(function (member) {
       return member.name.trim().length > 0;

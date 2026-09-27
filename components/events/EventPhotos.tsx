@@ -43,17 +43,25 @@ export function messageFor(problem: unknown) {
 
 type PhotoSourceSheetProps = {
   visible: boolean;
+  title?: string;
   onClose: () => void;
   onPick: (source: PhotoSource) => void;
+  onRemove?: () => void;
 };
 
-export function PhotoSourceSheet({ visible, onClose, onPick }: PhotoSourceSheetProps) {
+export function PhotoSourceSheet({
+  visible,
+  title = 'Add a photo',
+  onClose,
+  onPick,
+  onRemove,
+}: PhotoSourceSheetProps) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.grabber} />
-          <Text style={styles.sheetTitle}>Add a photo</Text>
+          <Text style={styles.sheetTitle}>{title}</Text>
 
           <Pressable
             onPress={() => onPick('camera')}
@@ -86,6 +94,23 @@ export function PhotoSourceSheet({ visible, onClose, onPick }: PhotoSourceSheetP
             </View>
             <Ionicons name="chevron-forward" size={17} color={colors.textFaint} />
           </Pressable>
+
+          {onRemove ? (
+            <Pressable
+              onPress={onRemove}
+              accessibilityRole="button"
+              accessibilityLabel="Remove photo"
+              style={({ pressed }) => [styles.option, pressed && styles.pressed]}
+            >
+              <View style={styles.optionIcon}>
+                <Ionicons name="trash-outline" size={20} color={colors.danger} />
+              </View>
+              <View style={styles.optionText}>
+                <Text style={[styles.optionTitle, styles.removeText]}>Remove photo</Text>
+                <Text style={styles.optionBody}>Show your initials instead</Text>
+              </View>
+            </Pressable>
+          ) : null}
 
           <Pressable
             onPress={onClose}
@@ -343,6 +368,7 @@ const styles = StyleSheet.create({
   optionText: { flex: 1, minWidth: 0, gap: 1 },
   optionTitle: { color: colors.text, ...typo.semi, fontSize: textSize.base },
   optionBody: { color: colors.textFaint, ...typo.medium, fontSize: textSize.small },
+  removeText: { color: colors.danger },
   cancel: {
     marginTop: space.xs,
     paddingVertical: space.sm,

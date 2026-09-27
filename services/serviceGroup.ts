@@ -2,6 +2,7 @@ import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
 import { UNIQUE_VIOLATION } from "../lib/postgres";
 import { searchPattern } from "../lib/search";
+import type { Person } from "../lib/people";
 export type Group = {
   id: string;
   handle: string;
@@ -120,7 +121,7 @@ export async function leaveGroup(groupId: string): Promise<void> {
 export async function getMembers(groupId: string) {
   const { data, error } = await supabase
     .from("group_members")
-    .select("user_id, profiles(display_name)")
+    .select("user_id, profiles(display_name, avatar_url)")
     .eq("group_id", groupId)
     .order("display_name", { referencedTable: "profiles" });
   if (error) throw error;
@@ -202,12 +203,20 @@ export async function joinByInviteCode(inviteCode: string): Promise<Group> {
   return toGroup(data);
 }
 
-export async function getMemberNames(groupId: string): Promise<Record<string, string>> {
+export async function getMemberProfiles(groupId: string): Promise<Person[]> {
   const members = await getMembers(groupId);
 
+  return (members as any[]).map((m) => ({
+    id: m.user_id,
+    name: m.profiles?.display_name ?? "",
+    avatarUrl: m.profiles?.avatar_url ?? null,
+  }));
+}
+
+export async function getMemberNames(groupId: string): Promise<Record<string, string>> {
   const names: Record<string, string> = {};
-  for (const m of members as any[]) {
-    names[m.user_id] = m.profiles?.display_name ?? "";
+  for (const person of await getMemberProfiles(groupId)) {
+    names[person.id] = person.name;
   }
   return names;
 }

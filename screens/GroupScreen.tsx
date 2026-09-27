@@ -22,6 +22,7 @@ import { layout, paper, typo, radius, space, textSize } from '../theme';
 type Member = {
   id: string;
   name: string;
+  avatarUrl: string | null;
 };
 
 type GroupScreenProps = {
@@ -61,6 +62,7 @@ export default function GroupScreen({ group, userId, onBack, onLeave }: GroupScr
         list = (rows as any[]).map((row) => ({
           id: row.user_id,
           name: row.profiles?.display_name ?? 'Someone',
+          avatarUrl: row.profiles?.avatar_url ?? null,
         }));
         mine = list.some((person) => person.id === userId);
       } catch {
@@ -195,7 +197,7 @@ export default function GroupScreen({ group, userId, onBack, onLeave }: GroupScr
 
                 {members.map((member) => (
                   <View key={member.id} style={styles.member}>
-                    <GroupMonogram name={member.name} size={34} />
+                    <GroupMonogram name={member.name} uri={member.avatarUrl} size={34} />
                     <Text style={styles.memberName} numberOfLines={1}>
                       {member.name}
                     </Text>

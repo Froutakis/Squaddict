@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useState } from 'react';
+import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { radius, solidFor, typo } from '../../theme';
 
 export function initialsFor(name: string) {
@@ -10,6 +11,7 @@ export function initialsFor(name: string) {
 
 type MonogramProps = {
   name: string;
+  uri?: string | null;
   size?: number;
   initials?: string;
   square?: boolean;
@@ -22,6 +24,7 @@ type MonogramProps = {
 
 export default function Monogram({
   name,
+  uri,
   size = 40,
   initials,
   square = false,
@@ -31,6 +34,9 @@ export default function Monogram({
   style,
   children,
 }: MonogramProps) {
+  const [failedUri, setFailedUri] = useState<string | null>(null);
+  const photo = uri && uri !== failedUri ? uri : null;
+
   return (
     <View
       style={[
@@ -45,11 +51,19 @@ export default function Monogram({
         style,
       ]}
     >
-      {children ?? (
-        <Text style={[styles.text, { fontSize: Math.round(size * 0.36) }]}>
-          {initials ?? initialsFor(name)}
-        </Text>
-      )}
+      {children ??
+        (photo ? (
+          <Image
+            source={{ uri: photo }}
+            style={styles.photo}
+            accessibilityIgnoresInvertColors
+            onError={() => setFailedUri(photo)}
+          />
+        ) : (
+          <Text style={[styles.text, { fontSize: Math.round(size * 0.36) }]}>
+            {initials ?? initialsFor(name)}
+          </Text>
+        ))}
     </View>
   );
 }
@@ -57,4 +71,5 @@ export default function Monogram({
 const styles = StyleSheet.create({
   base: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   text: { color: '#FFFFFF', ...typo.semi },
+  photo: { width: '100%', height: '100%' },
 });

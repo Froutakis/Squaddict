@@ -18,8 +18,16 @@ import { layout, paper, typo, radius, shadow, space } from '../../theme';
 import GroupSelect from '../general/GroupSelect';
 import Monogram from '../general/Monogram';
 
-export function GroupMonogram({ name, size = 44 }: { name: string; size?: number }) {
-  return <Monogram name={name} size={size} />;
+export function GroupMonogram({
+  name,
+  size = 44,
+  uri,
+}: {
+  name: string;
+  size?: number;
+  uri?: string | null;
+}) {
+  return <Monogram name={name} uri={uri} size={size} />;
 }
 
 function stampFor(iso: string) {
@@ -55,6 +63,7 @@ type GroupPickerProps = {
   groupId?: string | null;
   onGroupSelect?: (groupId: string | null) => void;
   displayName?: string;
+  avatarUrl?: string | null;
   onBack?: () => void;
 };
 
@@ -68,6 +77,7 @@ export default function GroupPicker({
   onGroupSelect,
   onBack,
   displayName = '',
+  avatarUrl = null,
 }: GroupPickerProps) {
   const who = displayName || 'you';
 
@@ -111,6 +121,7 @@ export default function GroupPicker({
           groupId={groupId}
           allLabel={who}
           allAvatarLabel={displayName}
+          allAvatarUrl={avatarUrl}
           onSelect={onGroupSelect ?? function () {}}
         />
       </View>

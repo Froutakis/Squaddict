@@ -72,6 +72,7 @@ function toCardData(event: MyEvent): CardEvent {
 
 export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const [displayName, setDisplayName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [events, setEvents] = useState<MyEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,6 +145,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
         ]);
 
         setDisplayName(profile?.name ?? '');
+        setAvatarUrl(profile?.avatarUrl ?? null);
         setGroups(myGroups);
         setEvents(myEvents);
       } catch {
@@ -463,6 +465,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
       <ScrollView contentContainerStyle={styles.content}>
         <HomeHeader
           displayName={displayName}
+          avatarUrl={avatarUrl}
           groups={groups}
           groupId={groupId}
           onGroupSelect={setGroupId}

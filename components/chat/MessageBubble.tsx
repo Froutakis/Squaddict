@@ -22,6 +22,7 @@ function timeLabel(iso: string) {
 type MessageBubbleProps = {
   content: string;
   senderName: string;
+  senderAvatar?: string | null;
   createdAt: string;
   mine: boolean;
   isFirst: boolean;
@@ -49,6 +50,7 @@ const PHOTO_MAX_HEIGHT = 300;
 export default function MessageBubble({
   content,
   senderName,
+  senderAvatar,
   createdAt,
   mine,
   isFirst,
@@ -155,7 +157,7 @@ export default function MessageBubble({
     <View style={[styles.row, mine ? styles.rowMine : styles.rowOther, isFirst && styles.rowFirst]}>
       {}
       {mine ? null : isLast ? (
-        <GroupMonogram name={senderName || '?'} size={AVATAR} />
+        <GroupMonogram name={senderName || '?'} uri={senderAvatar} size={AVATAR} />
       ) : (
         <View style={styles.avatarSpacer} />
       )}

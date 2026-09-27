@@ -25,7 +25,7 @@ type EventRow = {
 type AttendeeRow = {
   user_id: string;
   status: string;
-  profiles: { display_name: string } | null;
+  profiles: { display_name: string; avatar_url: string | null } | null;
 };
 
 type EventPhotoRow = {
@@ -113,6 +113,7 @@ function toAttendee(a: AttendeeRow): Attendee {
   return {
     id: a.user_id,
     name: a.profiles?.display_name ?? "",
+    avatarUrl: a.profiles?.avatar_url ?? null,
     status: a.status === "in" ? "in" : "out",
   };
 }
@@ -190,7 +191,7 @@ export async function getMyEvents(userId: string): Promise<MyEvent[]> {
 
     const { data, error } = await supabase
         .from("events")
-        .select("*, groups(name), event_attendees(user_id, status, profiles(display_name))")
+        .select("*, groups(name), event_attendees(user_id, status, profiles(display_name, avatar_url))")
         .or(filters.join(","))
         .order("date", { ascending: true })
         .order("start_time", { ascending: true, nullsFirst: true });
@@ -206,7 +207,11 @@ export async function getMyEvents(userId: string): Promise<MyEvent[]> {
             myStatus: mine === "in" || mine === "out" ? mine : undefined,
             going: answers
                 .filter((a) => a.status === "in")
-                .map((a) => ({ id: a.user_id, name: a.profiles?.display_name ?? "" })),
+                .map((a) => ({
+                    id: a.user_id,
+                    name: a.profiles?.display_name ?? "",
+                    avatarUrl: a.profiles?.avatar_url ?? null,
+                })),
         };
     });
 }
@@ -257,7 +262,7 @@ export async function clearRsvp(eventId: string): Promise<void> {
 export async function getAttendees(eventId: string): Promise<Attendee[]> {
     const { data, error } = await supabase
         .from("event_attendees")
-        .select("user_id, status, profiles(display_name)")
+        .select("user_id, status, profiles(display_name, avatar_url)")
         .eq("event_id", eventId)
         .in("status", ["in", "out"]);
     if (error) throw error;

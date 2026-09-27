@@ -4,6 +4,7 @@ import { clearCache } from "./serviceCache";
 export type User = {
   id: string;
   name: string;
+  avatarUrl?: string | null;
   isOnline: boolean;
 }
 

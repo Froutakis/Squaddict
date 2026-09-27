@@ -24,7 +24,7 @@ export default function AttendeeSheet({ visible, attendees, onClose }: AttendeeS
           <ScrollView contentContainerStyle={styles.list}>
             {going.map((person) => (
               <View key={person.id} style={styles.row}>
-                <Monogram name={person.name || '?'} size={32} />
+                <Monogram name={person.name || '?'} uri={person.avatarUrl} size={32} />
                 <Text style={styles.name} numberOfLines={1}>
                   {person.name || 'Someone'}
                 </Text>
@@ -34,7 +34,7 @@ export default function AttendeeSheet({ visible, attendees, onClose }: AttendeeS
 
             {passed.map((person) => (
               <View key={person.id} style={styles.row}>
-                <Monogram name={person.name || '?'} size={32} />
+                <Monogram name={person.name || '?'} uri={person.avatarUrl} size={32} />
                 <Text style={[styles.name, styles.faded]} numberOfLines={1}>
                   {person.name || 'Someone'}
                 </Text>

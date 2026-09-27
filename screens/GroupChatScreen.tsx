@@ -35,7 +35,7 @@ import {
 } from '../components/chat/replies';
 import SearchOverlay from '../components/chat/SearchOverlay';
 import GroupPicker from '../components/chat/GroupPicker';
-import { mentionIds, toMembers } from '../components/chat/mentions';
+import { directoryOf, mentionIds, toMembers } from '../components/chat/mentions';
 import type { Person } from '../lib/people';
 import { dropMissingImages, restoreOutbox } from '../components/chat/cache';
 import { attachmentPath, mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
@@ -65,7 +65,7 @@ import {
   writeGroups as writeCachedGroups,
 } from '../services/serviceCache';
 import type { Group } from '../services/serviceGroup';
-import { getGroupsForUser, getMemberNames } from '../services/serviceGroup';
+import { getGroupsForUser, getMemberProfiles } from '../services/serviceGroup';
 import {
   clearReaction,
   deleteMessage,
@@ -123,10 +123,15 @@ export default function GroupChatScreen({
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [mentionCounts, setMentionCounts] = useState<Record<string, number>>({});
   const [displayName, setDisplayName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [outbox, setOutbox] = useState<OutgoingMessage[]>([]);
   const [memberCount, setMemberCount] = useState(0);
   const [members, setMembers] = useState<Person[]>([]);
+  const avatarById = useMemo(
+    () => Object.fromEntries(members.map((member) => [member.id, member.avatarUrl ?? null])),
+    [members],
+  );
   const [messagesFor, setMessagesFor] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<LocalImage | null>(null);
   const [signed, setSigned] = useState<SignedMap>({});
@@ -229,6 +234,7 @@ export default function GroupChatScreen({
         const profile = await getUserById(user.id);
         if (!cancelled && profile) {
           setDisplayName(profile.name);
+          setAvatarUrl(profile.avatarUrl ?? null);
         }
       } catch {
       }
@@ -477,10 +483,10 @@ export default function GroupChatScreen({
       }
 
       try {
-        const names = await getMemberNames(groupId);
+        const { names, avatars } = directoryOf(await getMemberProfiles(groupId));
         if (!cancelled) {
           namesRef.current = names;
-          membersRef.current = toMembers(names);
+          membersRef.current = toMembers(names, avatars);
           setMembers(membersRef.current);
           setMemberCount(Object.keys(names).length);
         }
@@ -531,13 +537,13 @@ export default function GroupChatScreen({
 
     async function openChat(groupId: string) {
       try {
-        const names = await getMemberNames(groupId);
+        const { names, avatars } = directoryOf(await getMemberProfiles(groupId));
         if (cancelled) {
           return;
         }
 
         namesRef.current = names;
-        membersRef.current = toMembers(names);
+        membersRef.current = toMembers(names, avatars);
         setMembers(membersRef.current);
         const memberIds = Object.keys(names);
         setMemberCount(memberIds.length);
@@ -958,6 +964,7 @@ export default function GroupChatScreen({
       <MessageBubble
         content={message.content}
         senderName={message.senderName}
+        senderAvatar={avatarById[message.senderId] ?? null}
         createdAt={message.createdAt}
         mine={isMine}
         isFirst={item.isFirst}
@@ -1031,6 +1038,7 @@ export default function GroupChatScreen({
           unread={unread}
           mentions={mentionCounts}
           displayName={displayName}
+          avatarUrl={avatarUrl}
           onSelect={openGroup}
           onBack={onBack}
         />
