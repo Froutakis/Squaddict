@@ -11,6 +11,13 @@ import GroupChatScreen from './screens/GroupChatScreen';
 import ExploreScreen from './screens/ExploreScreen';
 import YouScreen from './screens/YouScreen';
 import BottomNav, { type NavTab } from './components/general/BottomNav';
+import {
+  onPushOpened,
+  registerForPush,
+  showNotificationsInForeground,
+} from './services/serviceNotifications';
+
+showNotificationsInForeground();
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -19,6 +26,8 @@ export default function App() {
   const [screen, setScreen] = useState<NavTab>('home');
   const [threadOpen, setThreadOpen] = useState(false);
   const [createNonce, setCreateNonce] = useState(0);
+  const [chatTarget, setChatTarget] = useState<{ groupId: string; nonce: number } | null>(null);
+  const [focusEventId, setFocusEventId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -31,6 +40,26 @@ export default function App() {
     });
 
     return () => data.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    registerForPush().catch((problem) => {
+      console.warn('[squaddict] push registration failed:', problem);
+    });
+  }, [user?.id]);
+
+  useEffect(() => {
+    return onPushOpened(function (target) {
+      if (target.type === 'message') {
+        setChatTarget({ groupId: target.groupId, nonce: Date.now() });
+        setScreen('groups');
+      } else {
+        setFocusEventId(target.eventId);
+        setScreen('home');
+      }
+    });
   }, []);
 
   if (checkingSession) {
@@ -66,13 +95,23 @@ export default function App() {
     <View style={styles.app}>
       <View style={styles.body}>
         {screen === 'groups' ? (
-          <GroupChatScreen user={user} onThreadChange={setThreadOpen} />
+          <GroupChatScreen
+            key={chatTarget ? `chat-${chatTarget.nonce}` : 'chat'}
+            user={user}
+            initialGroupId={chatTarget?.groupId ?? null}
+            onThreadChange={setThreadOpen}
+          />
         ) : screen === 'explore' ? (
           <ExploreScreen userId={user.id} />
         ) : screen === 'you' ? (
           <YouScreen user={user} />
         ) : (
-          <HomeScreen user={user} createNonce={createNonce} />
+          <HomeScreen
+            user={user}
+            createNonce={createNonce}
+            focusEventId={focusEventId}
+            onFocusHandled={() => setFocusEventId(null)}
+          />
         )}
       </View>
 

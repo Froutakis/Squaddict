@@ -27,15 +27,32 @@
       ],
       "expo-font",
       "expo-status-bar",
-      "react-native-maps"
+      "react-native-maps",
+      [
+        "expo-notifications",
+        {
+          "color": "#2145E6"
+        }
+      ]
     ],
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF"
-      }
+      },
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8064a996-0e99-4119-8e0b-d1778ade326b"
+      }
+    },
+    "owner": "froutakis"
   }
 }

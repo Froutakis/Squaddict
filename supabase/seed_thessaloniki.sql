@@ -4,6 +4,9 @@
 
 begin;
 
+-- Seeded rows must not send push notifications (see push_notifications.sql).
+set local squaddict.skip_push = 'on';
+
 delete from public.events where 'seed' = any(tags);
 
 with grp as (

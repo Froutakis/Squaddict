@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { clearCache } from "./serviceCache";
+import { unregisterPush } from "./serviceNotifications";
 
 export type User = {
   id: string;
@@ -48,6 +49,8 @@ export async function logout() {
   if (data.user) {
     await clearCache(data.user.id);
   }
+
+  await unregisterPush().catch(() => {});
 
   const { error } = await supabase.auth.signOut();
   if (error) throw error;

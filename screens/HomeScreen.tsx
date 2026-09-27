@@ -45,6 +45,8 @@ const RENEW_TICK_MS = 5 * 60 * 1000;
 type HomeScreenProps = {
   user: AuthUser;
   createNonce?: number;
+  focusEventId?: string | null;
+  onFocusHandled?: () => void;
 };
 
 function planLine(event: MyEvent): string {
@@ -70,7 +72,12 @@ function toCardData(event: MyEvent): CardEvent {
   };
 }
 
-export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
+export default function HomeScreen({
+  user,
+  createNonce = 0,
+  focusEventId = null,
+  onFocusHandled,
+}: HomeScreenProps) {
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -196,6 +203,16 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   useEffect(() => {
     if (createNonce > 0) openNewEvent(selectedDate);
   }, [createNonce]);
+
+  useEffect(() => {
+    if (!focusEventId) return;
+
+    const target = events.find((event) => event.id === focusEventId);
+    if (!target) return;
+
+    setOpenEvent(target);
+    onFocusHandled?.();
+  }, [focusEventId, events]);
 
   function openNewEvent(date: string | null) {
     setEditEvent(null);

@@ -9,6 +9,9 @@
 
 begin;
 
+-- Seeded rows must not send push notifications (see push_notifications.sql).
+set local squaddict.skip_push = 'on';
+
 delete from public.groups
 where id in (select md5('squaddict-demo-squad-' || n)::uuid from generate_series(1, 6) n);
 
