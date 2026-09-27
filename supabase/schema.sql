@@ -880,18 +880,43 @@ create policy "remove squad look" on storage.objects
 
 -- ─── acting squad ──────────────────────────────────────────────────────
 
-alter table public.profiles
-  add column if not exists acting_group_id uuid references public.groups(id) on delete set null;
+drop trigger if exists profiles_acting_group_guard on public.profiles;
+drop function if exists public.guard_acting_group();
+alter table public.profiles drop column if exists acting_group_id;
+
+create table if not exists public.user_prefs (
+  user_id         uuid not null primary key references public.profiles(id) on delete cascade,
+  acting_group_id uuid references public.groups(id) on delete set null
+);
+
+alter table public.user_prefs enable row level security;
+
+drop policy if exists "read own prefs"   on public.user_prefs;
+drop policy if exists "create own prefs" on public.user_prefs;
+drop policy if exists "update own prefs" on public.user_prefs;
+
+create policy "read own prefs" on public.user_prefs
+  for select to authenticated
+  using (user_id = auth.uid());
+
+create policy "create own prefs" on public.user_prefs
+  for insert to authenticated
+  with check (user_id = auth.uid());
+
+create policy "update own prefs" on public.user_prefs
+  for update to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
 create or replace function public.guard_acting_group()
 returns trigger language plpgsql security definer set search_path to 'public' as $function$
 begin
   if new.acting_group_id is not null
-     and new.acting_group_id is distinct from old.acting_group_id
+     and (tg_op = 'INSERT' or new.acting_group_id is distinct from old.acting_group_id)
      and not exists (
        select 1 from public.group_members
         where group_id = new.acting_group_id
-          and user_id  = new.id
+          and user_id  = new.user_id
      ) then
     raise exception 'You can only act as a squad you are in.';
   end if;
@@ -899,17 +924,17 @@ begin
 end;
 $function$;
 
-drop trigger if exists profiles_acting_group_guard on public.profiles;
-create trigger profiles_acting_group_guard
-  before update on public.profiles
+drop trigger if exists user_prefs_acting_group_guard on public.user_prefs;
+create trigger user_prefs_acting_group_guard
+  before insert or update on public.user_prefs
   for each row execute function public.guard_acting_group();
 
 create or replace function public.clear_acting_group()
 returns trigger language plpgsql security definer set search_path to 'public' as $function$
 begin
-  update public.profiles
+  update public.user_prefs
      set acting_group_id = null
-   where id = old.user_id
+   where user_id = old.user_id
      and acting_group_id = old.group_id;
   return old;
 end;

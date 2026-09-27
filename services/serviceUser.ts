@@ -36,9 +36,9 @@ export async function updateDisplayName(id: string, newName: string): Promise<vo
 
 export async function getActingGroupId(userId: string): Promise<string | null> {
   const { data, error } = await supabase
-    .from("profiles")
+    .from("user_prefs")
     .select("acting_group_id")
-    .eq("id", userId)
+    .eq("user_id", userId)
     .maybeSingle();
   if (error) throw error;
 
@@ -47,8 +47,7 @@ export async function getActingGroupId(userId: string): Promise<string | null> {
 
 export async function setActingGroup(userId: string, groupId: string | null): Promise<void> {
   const { error } = await supabase
-    .from("profiles")
-    .update({ acting_group_id: groupId })
-    .eq("id", userId);
+    .from("user_prefs")
+    .upsert({ user_id: userId, acting_group_id: groupId }, { onConflict: "user_id" });
   if (error) throw error;
 }
