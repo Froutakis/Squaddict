@@ -771,12 +771,21 @@ $function$;
 revoke execute on function public.squad_nights_kept(uuid) from public, anon;
 grant  execute on function public.squad_nights_kept(uuid) to authenticated;
 
+create or replace function public.event_has_photo(p_event_id uuid)
+returns boolean language sql stable security definer set search_path to 'public' as $function$
+  select exists (select 1 from public.event_photos p where p.event_id = p_event_id);
+$function$;
+
+revoke execute on function public.event_has_photo(uuid) from public, anon;
+grant  execute on function public.event_has_photo(uuid) to authenticated;
+
 drop policy if exists "read past events of squads with public memories" on public.events;
 
 create policy "read past events of squads with public memories" on public.events
   for select to authenticated
   using (
     date < current_date
+    and public.event_has_photo(events.id)
     and exists (
       select 1 from public.groups g
        where g.id = events.group_id
@@ -823,6 +832,8 @@ create policy "read public memory media" on storage.objects
         join public.events e on e.id = p.event_id
         join public.groups g on g.id = e.group_id
        where p.path = storage.objects.name
+         and p.user_id = storage.objects.owner
+         and p.path like e.group_id::text || '/events/' || e.id::text || '/%'
          and e.date < current_date
          and g.memories_public
     )
