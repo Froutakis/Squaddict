@@ -9,6 +9,7 @@ import SectionHead from '../general/SectionHead';
 import StoryViewer from '../events/StoryViewer';
 import { capture, messageFor, PhotoSourceSheet, type PhotoSource } from '../events/EventPhotos';
 import {
+  isSeen,
   markSeen,
   nightLabel,
   pruneSeen,
@@ -81,7 +82,8 @@ export default function MemoriesBar({
 
   const handleSeen = useCallback(function handleSeen(eventId: string) {
     setSeen(function (prev) {
-      return markSeen(prev, eventId);
+      const night = nightsRef.current.find((one) => one.event.id === eventId);
+      return night ? markSeen(prev, night) : prev;
     });
   }, []);
 
@@ -134,7 +136,7 @@ export default function MemoriesBar({
   }
 
   const unseen = useMemo(
-    () => nights.filter((night) => !hidden[night.event.id]),
+    () => nights.filter((night) => !isSeen(hidden, night)),
     [nights, hidden],
   );
 
@@ -151,7 +153,7 @@ export default function MemoriesBar({
       >
         {unseen.map(function (night, index) {
           const url = signed[night.cover.path]?.url;
-          const watched = Boolean(seen[night.event.id]);
+          const watched = isSeen(seen, night);
 
           return (
             <Pressable

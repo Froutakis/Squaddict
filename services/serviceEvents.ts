@@ -309,7 +309,10 @@ export async function getEventPhotos(eventId: string): Promise<EventPhoto[]> {
     return (data as EventPhotoRow[]).map(toEventPhoto);
 }
 
-export async function getEventCovers(eventIds: string[]): Promise<Record<string, EventPhoto>> {
+export type EventCover = EventPhoto & { latestAt: string };
+
+// The first photo of each night, plus when its newest photo was added.
+export async function getEventCovers(eventIds: string[]): Promise<Record<string, EventCover>> {
     if (eventIds.length === 0) return {};
 
     const { data, error } = await supabase
@@ -319,9 +322,11 @@ export async function getEventCovers(eventIds: string[]): Promise<Record<string,
         .order("created_at", { ascending: true });
     if (error) throw error;
 
-    const covers: Record<string, EventPhoto> = {};
+    const covers: Record<string, EventCover> = {};
     for (const row of data as EventPhotoRow[]) {
-        if (!covers[row.event_id]) covers[row.event_id] = toEventPhoto(row);
+        const cover = covers[row.event_id];
+        if (cover) cover.latestAt = row.created_at;
+        else covers[row.event_id] = { ...toEventPhoto(row), latestAt: row.created_at };
     }
     return covers;
 }
