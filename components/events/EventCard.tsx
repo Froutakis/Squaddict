@@ -1,4 +1,5 @@
 import type { Person } from '../../lib/people';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { RsvpStatus } from '../../services/serviceEvents';
 import { colors, radius, solidFor, space, textSize, tracking, typo } from '../../theme';
@@ -21,6 +22,7 @@ export type CardEvent = {
   going: Person[];
   goingCount: number;
   distanceKm?: number;
+  coverUrl?: string | null;
 };
 
 export type EventCardAction = 'none' | 'rsvp' | 'request';
@@ -56,6 +58,8 @@ export default function EventCard({
   const place = placeLines(event.location, event.placeLabel);
 
   const hasFaces = event.going.length > 0;
+  const [coverFailed, setCoverFailed] = useState(false);
+  const cover = coverFailed ? null : event.coverUrl ?? null;
 
   const meta = [
     event.startTime,
@@ -73,7 +77,14 @@ export default function EventCard({
         : null;
 
   return (
-    <Ticket onPress={onPress} accessibilityLabel={event.title} stub={renderStub()}>
+    <Ticket
+      onPress={onPress}
+      accessibilityLabel={event.title}
+      stub={renderStub()}
+      cover={cover}
+      onCoverError={() => setCoverFailed(true)}
+    >
+      {cover ? renderCoverMain() : (
       <View style={styles.main}>
         <View style={styles.date}>
           <Text style={styles.weekday}>{weekdayShort(event.date)}</Text>
@@ -101,8 +112,35 @@ export default function EventCard({
           ) : null}
         </View>
       </View>
+      )}
     </Ticket>
   );
+
+  function renderCoverMain() {
+    return (
+      <View style={styles.coverMain}>
+        <View style={styles.groupRow}>
+          <View style={styles.coverPill}>
+            <View style={[styles.groupDot, { backgroundColor: groupColor }]} />
+            <Text style={styles.coverGroup} numberOfLines={1}>
+              {event.groupName}
+            </Text>
+          </View>
+          <View style={styles.spacer} />
+          {corner ? <Text style={styles.coverCorner}>{corner}</Text> : null}
+        </View>
+
+        <View style={styles.spacer} />
+
+        <Text style={styles.coverTitle} numberOfLines={2}>
+          {event.title}
+        </Text>
+        <Text style={styles.coverMeta} numberOfLines={1}>
+          {[`${weekdayShort(event.date)} ${String(day).padStart(2, '0')}`, meta].filter(Boolean).join(' · ')}
+        </Text>
+      </View>
+    );
+  }
 
   function renderStub() {
     if (action === 'rsvp' && onRsvp) {
@@ -152,6 +190,31 @@ export default function EventCard({
 
 const styles = StyleSheet.create({
   main: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  coverMain: { minHeight: 132, gap: 2 },
+  coverPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flexShrink: 1,
+    paddingHorizontal: space.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(12,25,38,0.45)',
+  },
+  coverGroup: { flexShrink: 1, color: '#FFFFFF', ...typo.semi, fontSize: textSize.caption },
+  coverCorner: {
+    color: 'rgba(255,255,255,0.85)',
+    ...typo.mono,
+    fontSize: 9.5,
+    letterSpacing: 1,
+  },
+  coverTitle: {
+    color: '#FFFFFF',
+    ...typo.title,
+    fontSize: textSize.heading,
+    letterSpacing: -0.3,
+  },
+  coverMeta: { color: 'rgba(255,255,255,0.82)', ...typo.mono, fontSize: textSize.small },
   spacer: { flex: 1 },
 
   date: {

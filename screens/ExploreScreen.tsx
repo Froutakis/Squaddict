@@ -72,6 +72,7 @@ function toCardData(event: FeedEvent): CardEvent {
     going: [],
     goingCount: event.goingCount,
     distanceKm: event.distanceKm,
+    coverUrl: event.coverUrl,
   };
 }
 

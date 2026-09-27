@@ -26,6 +26,7 @@ export type FeedEvent = {
   goingCount: number;
   myStatus?: RsvpStatus;
   isMember: boolean;
+  coverUrl?: string | null;
 };
 
 export type FeedGroup = {
@@ -74,7 +75,7 @@ export function distanceKm(a: Coords, b: Coords): number {
 }
 
 const FEED_FIELDS =
-  "id, title, date, start_time, end_time, location, lat, lng, place_label, tags, group_id, " +
+  "id, title, date, start_time, end_time, location, lat, lng, place_label, tags, group_id, cover_url, " +
   "groups(name, handle, bio, member_count), event_attendees(user_id, status)";
 
 function score(event: FeedEvent, radiusKm: number, tags: EventTag[]): number {
@@ -166,6 +167,7 @@ export async function getFeed(filters: FeedFilters = {}, page = 0): Promise<Feed
       goingCount: answers.filter((a) => a.status === "in").length,
       myStatus: mine === "in" || mine === "out" ? mine : undefined,
       isMember: myGroups.has(r.group_id),
+      coverUrl: r.cover_url ?? null,
     };
   });
 

@@ -66,8 +66,9 @@ function planLine(event: MyEvent): string {
   return parts.join(' · ');
 }
 
-function toCardData(event: MyEvent): CardEvent {
+function toCardData(event: MyEvent, coverUrl?: string | null): CardEvent {
   return {
+    coverUrl,
     id: event.id,
     title: event.title,
     date: event.date,
@@ -301,8 +302,10 @@ export default function HomeScreen({
     [groups],
   );
 
+  // Past nights feed the memories; today's also lend their first photo to the
+  // ticket when the plan has no cover of its own.
   const pastIds = events
-    .filter((e) => e.date < today)
+    .filter((e) => e.date <= today)
     .map((e) => e.id)
     .sort()
     .join(',');
@@ -364,6 +367,12 @@ export default function HomeScreen({
 
     return byDate;
   }, [events, coverPhotos, signed]);
+
+  function coverFor(event: MyEvent): string | null {
+    if (event.coverUrl) return event.coverUrl;
+    const photo = coverPhotos[event.id];
+    return photo ? signed[photo.path]?.url ?? null : null;
+  }
 
   function renderBody() {
     if (loading) {
@@ -457,6 +466,7 @@ export default function HomeScreen({
             <View style={styles.body}>
             <UpNext
               event={heroEvent}
+              cover={coverFor(heroEvent)}
               live={liveEvent !== undefined}
               liveText={
                 liveEvent
@@ -562,7 +572,7 @@ export default function HomeScreen({
             {waiting.map((event) => (
               <EventCard
                 key={event.id}
-                event={toCardData(event)}
+                event={toCardData(event, coverFor(event))}
                 action="rsvp"
                 onPress={() => setOpenEvent(event)}
                 onRsvp={(status) => handleRsvp(event.id, status)}
