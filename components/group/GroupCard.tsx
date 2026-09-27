@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Image, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, radius, shadow, space, textSize, tracking, typo } from '../../theme';
 import Monogram from '../general/Monogram';
 
@@ -13,6 +14,7 @@ export type CardGroup = {
   openEvents?: number;
   followerCount?: number;
   avatarUrl?: string | null;
+  bannerUrl?: string | null;
 };
 
 type GroupCardProps = {
@@ -47,6 +49,14 @@ export default function GroupCard({
 
   const label = `${group.name}, @${group.handle}, ${stats.join(', ')}`;
 
+  const [bannerBroken, setBannerBroken] = useState(false);
+
+  useEffect(() => {
+    setBannerBroken(false);
+  }, [group.bannerUrl]);
+
+  const banner = group.bannerUrl && !bannerBroken ? group.bannerUrl : null;
+
   return (
     <Pressable
       onPress={onPress}
@@ -55,6 +65,17 @@ export default function GroupCard({
       accessibilityLabel={label}
       style={({ pressed }) => [styles.card, pressed && onPress ? styles.pressed : null, style]}
     >
+      {banner ? (
+        <Image
+          source={{ uri: banner }}
+          style={styles.banner}
+          resizeMode="cover"
+          onError={function () {
+            setBannerBroken(true);
+          }}
+        />
+      ) : null}
+
       <View style={styles.head}>
         <Monogram name={group.name} size={38} square uri={group.avatarUrl} />
 
@@ -108,6 +129,16 @@ const styles = StyleSheet.create({
     ...shadow.card,
   },
   pressed: { opacity: 0.7 },
+
+  banner: {
+    height: 90,
+    marginTop: -14,
+    marginHorizontal: -14,
+    marginBottom: 12,
+    borderTopLeftRadius: radius.md,
+    borderTopRightRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+  },
 
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   headText: { flex: 1 },
