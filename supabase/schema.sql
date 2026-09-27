@@ -712,3 +712,155 @@ create policy "replace own chat media" on storage.objects
 create policy "remove own chat media" on storage.objects
   for delete to authenticated
   using (bucket_id = 'chat' and owner = auth.uid());
+
+-- ─── squad profile: look & public memories ────────────────────────────
+
+alter table public.groups add column if not exists banner_url      text;
+alter table public.groups add column if not exists wallpaper_url   text;
+alter table public.groups add column if not exists memories_public boolean not null default false;
+
+create or replace function public.update_squad_look(
+  p_group_id        uuid,
+  p_avatar_url      text,
+  p_banner_url      text,
+  p_wallpaper_url   text,
+  p_memories_public boolean
+)
+returns public.groups language plpgsql security definer set search_path to 'public' as $function$
+declare
+  prefix text := '%/storage/v1/object/public/squads/' || p_group_id::text || '/%';
+  result public.groups;
+begin
+  if not exists (
+    select 1 from public.group_members
+     where group_id = p_group_id and user_id = auth.uid()
+  ) then
+    raise exception 'Only members can change how the squad looks.';
+  end if;
+
+  if (p_avatar_url    is not null and p_avatar_url    not like prefix)
+  or (p_banner_url    is not null and p_banner_url    not like prefix)
+  or (p_wallpaper_url is not null and p_wallpaper_url not like prefix) then
+    raise exception 'Squad images must be uploaded to this squad.';
+  end if;
+
+  update public.groups
+     set avatar_url      = p_avatar_url,
+         banner_url      = p_banner_url,
+         wallpaper_url   = p_wallpaper_url,
+         memories_public = coalesce(p_memories_public, false)
+   where id = p_group_id
+  returning * into result;
+
+  return result;
+end;
+$function$;
+
+revoke execute on function public.update_squad_look(uuid, text, text, text, boolean) from public, anon;
+grant  execute on function public.update_squad_look(uuid, text, text, text, boolean) to authenticated;
+
+create or replace function public.squad_nights_kept(p_group_id uuid)
+returns integer language sql stable security definer set search_path to 'public' as $function$
+  select count(*)::integer
+    from public.events e
+   where e.group_id = p_group_id
+     and e.date < current_date
+     and exists (select 1 from public.event_photos p where p.event_id = e.id);
+$function$;
+
+revoke execute on function public.squad_nights_kept(uuid) from public, anon;
+grant  execute on function public.squad_nights_kept(uuid) to authenticated;
+
+drop policy if exists "read past events of squads with public memories" on public.events;
+
+create policy "read past events of squads with public memories" on public.events
+  for select to authenticated
+  using (
+    date < current_date
+    and exists (
+      select 1 from public.groups g
+       where g.id = events.group_id
+         and g.memories_public
+    )
+  );
+
+drop policy if exists "read public memory photos" on public.event_photos;
+
+create policy "read public memory photos" on public.event_photos
+  for select to authenticated
+  using (
+    exists (
+      select 1
+        from public.events e
+        join public.groups g on g.id = e.group_id
+       where e.id = event_photos.event_id
+         and e.date < current_date
+         and g.memories_public
+    )
+  );
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('squads', 'squads', true, 5242880,
+        array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update
+  set public             = excluded.public,
+      file_size_limit    = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "read public memory media"     on storage.objects;
+drop policy if exists "read squad look"              on storage.objects;
+drop policy if exists "upload squad look"            on storage.objects;
+drop policy if exists "replace squad look"           on storage.objects;
+drop policy if exists "remove squad look"            on storage.objects;
+
+create policy "read public memory media" on storage.objects
+  for select to authenticated
+  using (
+    bucket_id = 'chat'
+    and exists (
+      select 1
+        from public.event_photos p
+        join public.events e on e.id = p.event_id
+        join public.groups g on g.id = e.group_id
+       where p.path = storage.objects.name
+         and e.date < current_date
+         and g.memories_public
+    )
+  );
+
+create policy "read squad look" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'squads');
+
+create policy "upload squad look" on storage.objects
+  for insert to authenticated
+  with check (
+    bucket_id = 'squads'
+    and (storage.foldername(name))[1] in (
+      select g::text from public.my_group_ids() g
+    )
+  );
+
+create policy "replace squad look" on storage.objects
+  for update to authenticated
+  using (
+    bucket_id = 'squads'
+    and (storage.foldername(name))[1] in (
+      select g::text from public.my_group_ids() g
+    )
+  )
+  with check (
+    bucket_id = 'squads'
+    and (storage.foldername(name))[1] in (
+      select g::text from public.my_group_ids() g
+    )
+  );
+
+create policy "remove squad look" on storage.objects
+  for delete to authenticated
+  using (
+    bucket_id = 'squads'
+    and (storage.foldername(name))[1] in (
+      select g::text from public.my_group_ids() g
+    )
+  );
