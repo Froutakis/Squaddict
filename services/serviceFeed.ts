@@ -339,3 +339,34 @@ export async function getPareaGoing(): Promise<PareaGoing[]> {
     };
   });
 }
+
+export type PareaProfile = {
+  nightsOut: number;
+  places: string[];
+  covers: string[];
+  photos: EventPhoto[];
+};
+
+// The public side of a squad: counts, favourite spots, public covers and
+// the photos its members shared to Explore (see supabase/parea_profile.sql).
+export async function getPareaProfile(groupId: string): Promise<PareaProfile> {
+  const { data, error } = await supabase.rpc("parea_profile", { target: groupId });
+  if (error) throw error;
+
+  const row = ((data ?? []) as any[])[0] ?? {};
+  return {
+    nightsOut: row.nights_out ?? 0,
+    places: row.places ?? [],
+    covers: row.covers ?? [],
+    photos: ((row.photos ?? []) as any[]).map((p) => ({
+      id: p.id,
+      eventId: p.eventId,
+      userId: p.userId,
+      path: p.path,
+      width: p.width,
+      height: p.height,
+      createdAt: p.createdAt,
+      inExplore: true,
+    })),
+  };
+}

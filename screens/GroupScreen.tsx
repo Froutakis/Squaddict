@@ -17,14 +17,12 @@ import {
   rotateInviteCode,
   type Group,
 } from '../services/serviceGroup';
-import { colors, layout, paper, typo, radius, space, textSize } from '../theme';
+import { layout, paper, typo, radius, space, textSize } from '../theme';
 import { getGroupPublicEvents, type FeedEvent } from '../services/serviceFeed';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
-import EventCard from '../components/events/EventCard';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
-import MemoriesBar from '../components/home/MemoriesBar';
-import type { MemoryNight } from '../components/home/memories';
-import { useSignedImages } from '../components/home/useSignedImages';
+import PublicProfile from '../components/group/PublicProfile';
+import { plural } from '../lib/text';
 
 type Member = {
   id: string;
@@ -39,12 +37,7 @@ type GroupScreenProps = {
   onLeave?: () => void;
   following?: boolean;
   onToggleFollow?: () => void;
-  nights?: MemoryNight[];
 };
-
-function plural(count: number, one: string, many: string) {
-  return `${count} ${count === 1 ? one : many}`;
-}
 
 export default function GroupScreen({
   group,
@@ -53,12 +46,10 @@ export default function GroupScreen({
   onLeave,
   following = false,
   onToggleFollow,
-  nights = [],
 }: GroupScreenProps) {
   const [plans, setPlans] = useState<FeedEvent[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [openPlan, setOpenPlan] = useState<SheetEvent | null>(null);
-  const { signed, signPaths, dropSigned } = useSignedImages();
   const [members, setMembers] = useState<Member[]>([]);
   const [code, setCode] = useState<string | null>(null);
   const [member, setMember] = useState(false);
@@ -125,10 +116,6 @@ export default function GroupScreen({
     };
   }, [group.id, userId]);
 
-  useEffect(() => {
-    signPaths(nights.map((night) => night.cover.path));
-  }, [nights, signPaths]);
-
   async function answer(plan: FeedEvent, status: RsvpStatus | null) {
     setSavingId(plan.id);
     setError(null);
@@ -183,6 +170,50 @@ export default function GroupScreen({
 
   const count = members.length > 0 ? members.length : group.memberCount;
 
+  function openSheet(plan: FeedEvent) {
+    setOpenPlan({
+      id: plan.id,
+      groupName: plan.groupName,
+      title: plan.title,
+      date: plan.date,
+      startTime: plan.startTime,
+      location: plan.location,
+      placeLabel: plan.placeLabel,
+      lat: plan.lat,
+      lng: plan.lng,
+      isMember: false,
+    });
+  }
+
+  const sheet = (
+    <EventSheet
+      event={openPlan}
+      currentUserId={userId}
+      onClose={() => setOpenPlan(null)}
+      onChanged={async () => setPlans(await getGroupPublicEvents(group.id))}
+    />
+  );
+
+  // People outside the squad get its public profile instead.
+  if (!loading && !member) {
+    return (
+      <>
+        <PublicProfile
+          group={group}
+          plans={plans}
+          savingId={savingId}
+          error={error}
+          following={following}
+          onToggleFollow={onToggleFollow}
+          onBack={onBack}
+          onAnswer={answer}
+          onOpenPlan={openSheet}
+        />
+        {sheet}
+      </>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.column}>
@@ -218,93 +249,7 @@ export default function GroupScreen({
 
             {group.bio ? <Text style={styles.bio}>{group.bio}</Text> : null}
 
-            {!member && !loading && onToggleFollow ? (
-              <Pressable
-                onPress={onToggleFollow}
-                accessibilityRole="button"
-                accessibilityLabel={following ? `Unfollow ${group.name}` : `Follow ${group.name}`}
-                accessibilityState={{ selected: following }}
-                style={({ pressed }) => [
-                  styles.follow,
-                  following && styles.following,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Ionicons
-                  name={following ? 'checkmark' : 'heart-outline'}
-                  size={16}
-                  color={following ? colors.success : colors.textOnBrand}
-                />
-                <Text style={[styles.followText, following && styles.followingText]}>
-                  {following ? 'Following' : 'Follow'}
-                </Text>
-              </Pressable>
-            ) : null}
           </View>
-
-          {!member && !loading ? (
-            <>
-              {nights.length > 0 ? (
-                <MemoriesBar
-                  userId={userId}
-                  scope="explore"
-                  title="Last nights out"
-                  nights={nights}
-                  groupSizes={{ [group.id]: group.memberCount }}
-                  signed={signed}
-                  signPaths={signPaths}
-                  onImageError={dropSigned}
-                />
-              ) : null}
-
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>UPCOMING PLANS</Text>
-                {plans.length === 0 ? (
-                  <Text style={styles.hint}>
-                    Nothing open right now. Follow them to see their next plan in Explore.
-                  </Text>
-                ) : (
-                  <View style={styles.plans}>
-                    {plans.map((plan) => (
-                      <EventCard
-                        key={plan.id}
-                        event={{
-                          id: plan.id,
-                          title: plan.title,
-                          date: plan.date,
-                          startTime: plan.startTime,
-                          location: plan.location,
-                          placeLabel: plan.placeLabel,
-                          groupName: plan.groupName,
-                          myStatus: plan.myStatus,
-                          going: [],
-                          goingCount: plan.goingCount,
-                          coverUrl: plan.coverUrl,
-                        }}
-                        action="rsvp"
-                        saving={savingId === plan.id}
-                        onPress={() =>
-                          setOpenPlan({
-                            id: plan.id,
-                            groupName: plan.groupName,
-                            title: plan.title,
-                            date: plan.date,
-                            startTime: plan.startTime,
-                            location: plan.location,
-                            placeLabel: plan.placeLabel,
-                            lat: plan.lat,
-                            lng: plan.lng,
-                            isMember: false,
-                          })
-                        }
-                        onRsvp={(status) => answer(plan, status)}
-                      />
-                    ))}
-                  </View>
-                )}
-              </View>
-            </>
-          ) : null}
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -394,13 +339,6 @@ export default function GroupScreen({
           )}
         </ScrollView>
       </View>
-
-      <EventSheet
-        event={openPlan}
-        currentUserId={userId}
-        onClose={() => setOpenPlan(null)}
-        onChanged={async () => setPlans(await getGroupPublicEvents(group.id))}
-      />
     </SafeAreaView>
   );
 }
@@ -436,20 +374,6 @@ const styles = StyleSheet.create({
   content: { padding: space.md, gap: space.md, paddingBottom: space.xl },
 
   identity: { alignItems: 'center', gap: 3, paddingVertical: space.md },
-  follow: {
-    marginTop: space.sm,
-    height: 38,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: space.lg,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
-  },
-  following: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: colors.border },
-  followText: { color: colors.textOnBrand, ...typo.semi, fontSize: textSize.base },
-  followingText: { color: colors.success },
-  plans: { gap: space.sm },
   name: {
     marginTop: space.sm,
     color: paper.ink,
