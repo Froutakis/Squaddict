@@ -72,6 +72,8 @@ type HomeScreenProps = {
   onOpenChat?: (groupId: string) => void;
   chatClosedNonce?: number;
   onUnreadChange?: (total: number) => void;
+  // Set from elsewhere (You) to open Parea on one squad.
+  selectGroup?: { id: string; nonce: number } | null;
 };
 
 function planLine(event: MyEvent): string {
@@ -106,6 +108,7 @@ export default function HomeScreen({
   onOpenChat,
   chatClosedNonce = 0,
   onUnreadChange,
+  selectGroup = null,
 }: HomeScreenProps) {
   const { signed, signPaths, dropSigned } = useSignedImages();
   const [displayName, setDisplayName] = useState('');
@@ -295,6 +298,10 @@ export default function HomeScreen({
   useEffect(() => {
     if (createNonce > 0) openNewEvent(null);
   }, [createNonce]);
+
+  useEffect(() => {
+    if (selectGroup) setGroupId(selectGroup.id);
+  }, [selectGroup?.nonce]);
 
   useEffect(() => {
     if (!focusEventId) return;

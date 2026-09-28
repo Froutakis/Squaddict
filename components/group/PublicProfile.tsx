@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
   loader: { marginTop: space.lg },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   tile: {
-    width: '32.5%',
+    width: '32%',
     aspectRatio: 1,
     borderRadius: radius.sm,
     overflow: 'hidden',

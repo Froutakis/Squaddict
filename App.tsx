@@ -28,6 +28,8 @@ export default function App() {
   const [unread, setUnread] = useState(0);
   const [chatClosedNonce, setChatClosedNonce] = useState(0);
   const [focusEventId, setFocusEventId] = useState<string | null>(null);
+  const [selectGroup, setSelectGroup] = useState<{ id: string; nonce: number } | null>(null);
+  const [createNonce, setCreateNonce] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -90,7 +92,17 @@ export default function App() {
         {screen === 'explore' ? (
           <ExploreScreen userId={user.id} />
         ) : screen === 'you' ? (
-          <YouScreen user={user} />
+          <YouScreen
+            user={user}
+            onOpenParea={(groupId) => {
+              setSelectGroup({ id: groupId, nonce: Date.now() });
+              setScreen('home');
+            }}
+            onPlan={() => {
+              setCreateNonce((n) => n + 1);
+              setScreen('home');
+            }}
+          />
         ) : (
           <HomeScreen
             user={user}
@@ -99,6 +111,8 @@ export default function App() {
             onOpenChat={(groupId) => setChatTarget({ groupId, nonce: Date.now() })}
             chatClosedNonce={chatClosedNonce}
             onUnreadChange={setUnread}
+            selectGroup={selectGroup}
+            createNonce={createNonce}
           />
         )}
 
@@ -116,7 +130,16 @@ export default function App() {
       </View>
 
       {chatTarget ? null : (
-        <BottomNav active={screen} onNavigate={setScreen} badges={{ home: unread }} />
+        <BottomNav
+          active={screen}
+          onNavigate={(tab) => {
+            // One-off requests from another tab must not replay when Parea remounts.
+            setCreateNonce(0);
+            setSelectGroup(null);
+            setScreen(tab);
+          }}
+          badges={{ home: unread }}
+        />
       )}
       <StatusBar style="dark" />
     </View>

@@ -411,3 +411,13 @@ export async function checkIn(eventId: string): Promise<void> {
         .upsert({ event_id: eventId, user_id: user.id }, { onConflict: "event_id,user_id", ignoreDuplicates: true });
     if (error) throw error;
 }
+
+export async function countMyPhotos(userId: string): Promise<number> {
+    const { count, error } = await supabase
+        .from("event_photos")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId);
+    if (error) throw error;
+
+    return count ?? 0;
+}

@@ -20,6 +20,14 @@ export type PhotoSource = 'camera' | 'library';
 // Last answer to "Show in Explore", so people who share keep sharing.
 const EXPLORE_SHARE_KEY = 'squaddict:photos:explore';
 
+export async function getExploreDefault(): Promise<boolean> {
+  return (await readJson<boolean>(EXPLORE_SHARE_KEY)) === true;
+}
+
+export function setExploreDefault(share: boolean): Promise<void> {
+  return writeJson(EXPLORE_SHARE_KEY, share);
+}
+
 export async function capture(
   source: PhotoSource,
   event: { id: string; groupId: string },

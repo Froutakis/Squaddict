@@ -6,6 +6,7 @@ type ProfileRow = {
   id: string;
   display_name: string;
   avatar_url: string | null;
+  created_at?: string | null;
 };
 
 function toUser(r: ProfileRow): User {
@@ -13,6 +14,7 @@ function toUser(r: ProfileRow): User {
     id: r.id,
     name: r.display_name,
     avatarUrl: r.avatar_url,
+    joinedAt: r.created_at ?? undefined,
     isOnline: false,
   };
 }
@@ -27,6 +29,17 @@ export async function getUserById(id: string): Promise<User | null> {
   if (!data) return null;
 
   return toUser(data as ProfileRow);
+}
+
+export async function updateDisplayName(userId: string, name: string): Promise<void> {
+  const { error } = await supabase
+    .from("profiles")
+    .update({ display_name: name.trim() })
+    .eq("id", userId);
+
+  // display_name is unique across Squaddict.
+  if (error?.code === "23505") throw new Error("Someone already goes by that name. Try another.");
+  if (error) throw error;
 }
 
 export async function setAvatar(
