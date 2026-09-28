@@ -1,65 +1,34 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, typo, layout, radius, shadow, space } from '../../theme';
+import { colors, typo, layout, radius, space } from '../../theme';
 import Glass from './Glass';
 
-export type NavTab = 'home' | 'explore' | 'groups' | 'you';
+export type NavTab = 'home' | 'explore' | 'you';
 
 type Icon = keyof typeof Ionicons.glyphMap;
 
-type Slot =
-  | { kind: 'tab'; key: NavTab; label: string; icon: Icon; iconActive: Icon }
-  | { kind: 'soon'; label: string; icon: Icon }
-  | { kind: 'create' };
+type Slot = { key: NavTab; label: string; icon: Icon; iconActive: Icon };
 
+// Us, the world, me.
 const SLOTS: Slot[] = [
-  { kind: 'tab', key: 'home', label: 'Parea', icon: 'people-outline', iconActive: 'people' },
-  { kind: 'tab', key: 'explore', label: 'Explore', icon: 'compass-outline', iconActive: 'compass' },
-  { kind: 'create' },
-  { kind: 'tab', key: 'groups', label: 'Chats', icon: 'chatbubbles-outline', iconActive: 'chatbubbles' },
-  { kind: 'tab', key: 'you', label: 'You', icon: 'person-outline', iconActive: 'person' },
+  { key: 'home', label: 'Parea', icon: 'people-outline', iconActive: 'people' },
+  { key: 'explore', label: 'Explore', icon: 'compass-outline', iconActive: 'compass' },
+  { key: 'you', label: 'You', icon: 'person-outline', iconActive: 'person' },
 ];
 
 type BottomNavProps = {
   active: NavTab;
   onNavigate: (tab: NavTab) => void;
-  onCreate: () => void;
+  badges?: Partial<Record<NavTab, number>>;
 };
 
-export default function BottomNav({ active, onNavigate, onCreate }: BottomNavProps) {
+export default function BottomNav({ active, onNavigate, badges = {} }: BottomNavProps) {
   return (
     <View style={styles.dock} pointerEvents="box-none">
       <Glass style={styles.pill}>
         {SLOTS.map(function (slot) {
-          if (slot.kind === 'create') {
-            return (
-              <Pressable
-                key="create"
-                onPress={onCreate}
-                accessibilityRole="button"
-                accessibilityLabel="New plan"
-                style={({ pressed }) => [styles.create, pressed && styles.pressed]}
-              >
-                <Ionicons name="add" size={24} color={colors.textOnBrand} />
-              </Pressable>
-            );
-          }
-
-          if (slot.kind === 'soon') {
-            return (
-              <View
-                key={slot.label}
-                accessibilityLabel={`${slot.label}, not available yet`}
-                accessibilityState={{ disabled: true }}
-                style={[styles.slot, styles.soon]}
-              >
-                <Ionicons name={slot.icon} size={22} color={colors.textSoft} />
-                <Text style={styles.label}>{slot.label}</Text>
-              </View>
-            );
-          }
-
           const isActive = slot.key === active;
+          const badge = badges[slot.key] ?? 0;
 
           return (
             <Pressable
@@ -67,14 +36,21 @@ export default function BottomNav({ active, onNavigate, onCreate }: BottomNavPro
               onPress={() => onNavigate(slot.key)}
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
-              accessibilityLabel={slot.label}
+              accessibilityLabel={badge > 0 ? `${slot.label}, ${badge} unread` : slot.label}
               style={({ pressed }) => [styles.slot, pressed && styles.pressed]}
             >
-              <Ionicons
-                name={isActive ? slot.iconActive : slot.icon}
-                size={22}
-                color={isActive ? colors.primary : colors.textSoft}
-              />
+              <View>
+                <Ionicons
+                  name={isActive ? slot.iconActive : slot.icon}
+                  size={22}
+                  color={isActive ? colors.primary : colors.textSoft}
+                />
+                {badge > 0 ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+                  </View>
+                ) : null}
+              </View>
               <Text style={[styles.label, isActive && styles.labelActive]}>{slot.label}</Text>
             </Pressable>
           );
@@ -97,26 +73,31 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: layout.column,
     height: 66,
-    paddingHorizontal: space.xs,
+    paddingHorizontal: space.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
   },
 
-  slot: { width: 56, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  soon: { opacity: 0.4 },
+  slot: { width: 72, alignItems: 'center', justifyContent: 'center', gap: 4 },
   pressed: { opacity: 0.6 },
 
   label: { color: colors.textSoft, ...typo.semi, fontSize: 9.5, letterSpacing: 0.2 },
   labelActive: { color: colors.primary },
 
-  create: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -10,
+    minWidth: 17,
+    height: 17,
+    paddingHorizontal: 4,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadow.button,
+    backgroundColor: colors.danger,
+    borderWidth: 1.5,
+    borderColor: colors.surface,
   },
+  badgeText: { color: '#FFFFFF', ...typo.semi, fontSize: 9.5 },
 });

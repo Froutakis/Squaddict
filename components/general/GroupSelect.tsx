@@ -34,7 +34,7 @@ export default function GroupSelect({
   const avatarUrl = active ? active.avatarUrl : allAvatarUrl;
 
   function openPicker() {
-    trigger.current?.measureInWindow((x, y, width, height) => {
+    trigger.current?.measureInWindow((x, y, _width, height) => {
       const maxLeft = Dimensions.get('window').width - MENU_WIDTH - space.md;
       setAnchor({ top: y + height + 6, left: Math.max(space.md, Math.min(x, maxLeft)) });
       setPicker(true);
@@ -124,7 +124,7 @@ export default function GroupSelect({
 }
 
 const styles = StyleSheet.create({
-  trigger: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  trigger: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' },
   triggerText: {
     flexShrink: 1,
     color: colors.text,

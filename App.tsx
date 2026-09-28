@@ -24,9 +24,9 @@ export default function App() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
   const [screen, setScreen] = useState<NavTab>('home');
-  const [threadOpen, setThreadOpen] = useState(false);
-  const [createNonce, setCreateNonce] = useState(0);
   const [chatTarget, setChatTarget] = useState<{ groupId: string; nonce: number } | null>(null);
+  const [unread, setUnread] = useState(0);
+  const [chatClosedNonce, setChatClosedNonce] = useState(0);
   const [focusEventId, setFocusEventId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function App() {
     return onPushOpened(function (target) {
       if (target.type === 'message') {
         setChatTarget({ groupId: target.groupId, nonce: Date.now() });
-        setScreen('groups');
+        setScreen('home');
       } else {
         setFocusEventId(target.eventId);
         setScreen('home');
@@ -79,48 +79,44 @@ export default function App() {
     );
   }
 
-  function requestCreate() {
-    setScreen('home');
-    setCreateNonce((n) => n + 1);
+  function closeChat() {
+    setChatTarget(null);
+    setChatClosedNonce((n) => n + 1);
   }
-
-  function navigate(tab: NavTab) {
-    setCreateNonce(0);
-    setScreen(tab);
-  }
-
-  const navHidden = screen === 'groups' && threadOpen;
 
   return (
     <View style={styles.app}>
       <View style={styles.body}>
-        {screen === 'groups' ? (
-          <GroupChatScreen
-            key={chatTarget ? `chat-${chatTarget.nonce}` : 'chat'}
-            user={user}
-            initialGroupId={chatTarget?.groupId ?? null}
-            onThreadChange={setThreadOpen}
-          />
-        ) : screen === 'explore' ? (
+        {screen === 'explore' ? (
           <ExploreScreen userId={user.id} />
         ) : screen === 'you' ? (
           <YouScreen user={user} />
         ) : (
           <HomeScreen
             user={user}
-            createNonce={createNonce}
             focusEventId={focusEventId}
             onFocusHandled={() => setFocusEventId(null)}
-            onOpenChat={(groupId) => {
-              setChatTarget({ groupId, nonce: Date.now() });
-              setScreen('groups');
-            }}
+            onOpenChat={(groupId) => setChatTarget({ groupId, nonce: Date.now() })}
+            chatClosedNonce={chatClosedNonce}
+            onUnreadChange={setUnread}
           />
         )}
+
+        {/* A squad's chat opens on top of Parea, which stays put underneath. */}
+        {chatTarget ? (
+          <View style={styles.overlay}>
+            <GroupChatScreen
+              key={`chat-${chatTarget.nonce}`}
+              user={user}
+              initialGroupId={chatTarget.groupId}
+              onExit={closeChat}
+            />
+          </View>
+        ) : null}
       </View>
 
-      {navHidden ? null : (
-        <BottomNav active={screen} onNavigate={navigate} onCreate={requestCreate} />
+      {chatTarget ? null : (
+        <BottomNav active={screen} onNavigate={setScreen} badges={{ home: unread }} />
       )}
       <StatusBar style="dark" />
     </View>
@@ -131,4 +127,5 @@ const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 8 },
   app: { flex: 1, backgroundColor: colors.bg },
   body: { flex: 1 },
+  overlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },
 });

@@ -1,10 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Group } from '../../services/serviceGroup';
-import type { Person } from '../../lib/people';
 import { todayLabel } from '../../lib/datetime';
 import GroupSelect from '../general/GroupSelect';
-import AttendeeStack from '../events/Attendee';
 import { colors, radius, space, textSize, typo } from '../../theme';
 
 type HomeHeaderProps = {
@@ -12,25 +10,21 @@ type HomeHeaderProps = {
   avatarUrl?: string | null;
   groups: Group[];
   groupId: string | null;
-  members?: Person[];
   onGroupSelect: (groupId: string | null) => void;
   onChat?: (groupId: string) => void;
   onPlan?: () => void;
+  chatUnread?: number;
 };
-
-function plural(n: number, one: string, many: string) {
-  return `${n} ${n === 1 ? one : many}`;
-}
 
 export default function HomeHeader({
   displayName,
   avatarUrl = null,
   groups,
   groupId,
-  members = [],
   onGroupSelect,
   onChat,
   onPlan,
+  chatUnread = 0,
 }: HomeHeaderProps) {
   const active = groups.find((group) => group.id === groupId);
 
@@ -38,50 +32,56 @@ export default function HomeHeader({
     <View style={styles.header}>
       <Text style={styles.date}>{todayLabel()}</Text>
 
-      <View style={styles.picker}>
-        <GroupSelect
-          groups={groups}
-          groupId={groupId}
-          onSelect={onGroupSelect}
-          allAvatarLabel={displayName}
-          allAvatarUrl={avatarUrl}
-        />
+      <View style={styles.top}>
+        <View style={styles.picker}>
+          <GroupSelect
+            groups={groups}
+            groupId={groupId}
+            onSelect={onGroupSelect}
+            allAvatarLabel={displayName}
+            allAvatarUrl={avatarUrl}
+          />
+        </View>
+
+        <View style={styles.actions}>
+          {active && onChat ? (
+            <Pressable
+              onPress={() => onChat(active.id)}
+              accessibilityRole="button"
+              accessibilityLabel={
+                chatUnread > 0
+                  ? `Open the ${active.name} chat, ${chatUnread} unread`
+                  : `Open the ${active.name} chat`
+              }
+              style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.text} />
+              <Text style={styles.actionText}>Chat</Text>
+              {chatUnread > 0 ? (
+                <View style={styles.unread}>
+                  <Text style={styles.unreadText}>{chatUnread > 99 ? '99+' : chatUnread}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          ) : null}
+          {onPlan ? (
+            <Pressable
+              onPress={onPlan}
+              accessibilityRole="button"
+              accessibilityLabel={active ? `Propose a plan to ${active.name}` : 'Propose a plan'}
+              style={({ pressed }) => [styles.action, styles.actionMain, pressed && styles.pressed]}
+            >
+              <Ionicons name="add" size={17} color={colors.textOnBrand} />
+              <Text style={[styles.actionText, styles.actionMainText]}>Plan</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
-      {active ? (
-        <View style={styles.squad}>
-          <View style={styles.faces}>
-            <AttendeeStack people={members} size={26} max={5} />
-            <Text style={styles.count}>{plural(active.memberCount, 'member', 'members')}</Text>
-          </View>
-
-          <View style={styles.actions}>
-            {onChat ? (
-              <Pressable
-                onPress={() => onChat(active.id)}
-                accessibilityRole="button"
-                accessibilityLabel={`Open the ${active.name} chat`}
-                style={({ pressed }) => [styles.action, pressed && styles.pressed]}
-              >
-                <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.text} />
-                <Text style={styles.actionText}>Chat</Text>
-              </Pressable>
-            ) : null}
-            {onPlan ? (
-              <Pressable
-                onPress={onPlan}
-                accessibilityRole="button"
-                accessibilityLabel={`Propose a plan to ${active.name}`}
-                style={({ pressed }) => [styles.action, styles.actionMain, pressed && styles.pressed]}
-              >
-                <Ionicons name="add" size={17} color={colors.textOnBrand} />
-                <Text style={[styles.actionText, styles.actionMainText]}>Plan</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      ) : groups.length > 1 ? (
-        <Text style={styles.hint}>All your pareas · tap to pick one</Text>
+      {!active && groups.length > 1 ? (
+        <Text style={styles.hint} numberOfLines={1}>
+          All your pareas · tap to pick one
+        </Text>
       ) : null}
     </View>
   );
@@ -96,17 +96,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
-  picker: { marginTop: 3, alignSelf: 'flex-start' },
-  hint: { marginTop: 2, color: colors.textFaint, ...typo.medium, fontSize: textSize.small },
-  squad: {
-    flexDirection: 'row',
+  top: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: 3 },
+  picker: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
+  hint: { marginTop: space.xs, color: colors.textFaint, ...typo.medium, fontSize: textSize.small },
+  unread: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: radius.pill,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: space.sm,
-    marginTop: space.sm,
+    justifyContent: 'center',
+    backgroundColor: colors.danger,
   },
-  faces: { flexDirection: 'row', alignItems: 'center', gap: space.xs, flexShrink: 1 },
-  count: { color: colors.textSoft, ...typo.medium, fontSize: textSize.small },
+  unreadText: { color: '#FFFFFF', ...typo.semi, fontSize: 10 },
   actions: { flexDirection: 'row', gap: space.xs },
   action: {
     height: 34,

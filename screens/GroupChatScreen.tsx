@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import type { RealtimeChannel, User as AuthUser } from '@supabase/supabase-js';
 import {
   ActivityIndicator,
@@ -108,6 +107,9 @@ type GroupChatScreenProps = {
   initialGroupId?: string | null;
   onBack?: () => void;
   onThreadChange?: (open: boolean) => void;
+  // When set, leaving the thread goes back to where it was opened from,
+  // instead of to the list of squads.
+  onExit?: () => void;
 };
 
 export default function GroupChatScreen({
@@ -115,6 +117,7 @@ export default function GroupChatScreen({
   initialGroupId = null,
   onBack,
   onThreadChange,
+  onExit,
 }: GroupChatScreenProps) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [activeId, setActiveId] = useState<string | null>(initialGroupId);
@@ -910,7 +913,6 @@ export default function GroupChatScreen({
     }
   }
 
-
   const typing = typingLabel(
     activeTypists(typists, Date.now()).map(function (entry) {
       return entry.name;
@@ -924,19 +926,21 @@ export default function GroupChatScreen({
     keyboardOffset = 8;
   }
 
-
   function openGroup(id: string) {
     setError(null);
     setActiveId(id);
   }
 
   function closeGroup() {
+    if (onExit) {
+      onExit();
+      return;
+    }
     setActiveId(null);
     setError(null);
     loadPreviews(groups);
     loadUnread();
   }
-
 
   function renderOlderSpinner() {
     if (!loadingOlder) {
@@ -1017,7 +1021,6 @@ export default function GroupChatScreen({
     );
   }
 
-
   if (loadingGroups) {
     return (
       <SafeAreaView style={styles.center}>
@@ -1040,7 +1043,7 @@ export default function GroupChatScreen({
           displayName={displayName}
           avatarUrl={avatarUrl}
           onSelect={openGroup}
-          onBack={onBack}
+          onBack={onExit ?? onBack}
         />
 
       </SafeAreaView>
@@ -1074,7 +1077,7 @@ export default function GroupChatScreen({
           }}
           onOpenGroup={function () {
             setGroupScreen(true);
-}}
+          }}
         />
 
         <KeyboardAvoidingView
@@ -1084,7 +1087,6 @@ export default function GroupChatScreen({
         >
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {}
           {connectionLabel(connection) ? (
             <Text style={styles.connection}>{connectionLabel(connection)}</Text>
           ) : null}
@@ -1109,10 +1111,8 @@ export default function GroupChatScreen({
             />
           )}
 
-          {}
           {typing ? <Text style={styles.typing}>{typing}</Text> : null}
 
-          {}
           <ChatComposer
             key={editing ? 'edit-' + editing.id : 'new'}
             initialText={editing ? editing.content : ''}
@@ -1173,7 +1173,6 @@ export default function GroupChatScreen({
               setViewing(null);
             }}
           >
-            {}
             <Pressable
               style={styles.viewer}
               onPress={function () {

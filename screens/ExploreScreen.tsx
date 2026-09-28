@@ -67,6 +67,11 @@ const WHEN_OPTIONS: { key: FeedWhen; label: string }[] = [
 ];
 
 const NAV_CLEARANCE = 110;
+// The title row sits in the same place in list and map mode: the map's glass
+// island (its margin, padding and 1px border) adds up to the list's spacing.
+const GLASS_BORDER = 1;
+const ISLAND_PAD = space.md;
+const TITLE_TOP = space.sm + space.sm + GLASS_BORDER;
 const SEARCH_DELAY_MS = 300;
 
 function toCardData(event: FeedEvent, friendsGoing?: Person[]): CardEvent {
@@ -699,7 +704,6 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
         onBack={() => setProfileGroup(null)}
         following={following[profileGroup.id] === true}
         onToggleFollow={() => toggleFollow(profileGroup.id)}
-        nights={highlights.filter((night) => night.group.id === profileGroup.id)}
         onLeave={() => {
           setProfileGroup(null);
           load(0, false);
@@ -861,7 +865,7 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
   },
 
-  header: { gap: space.sm, paddingTop: space.xs, paddingBottom: space.sm },
+  header: { gap: space.sm, paddingTop: TITLE_TOP, paddingBottom: space.sm },
   column: { width: '100%', maxWidth: layout.column, alignSelf: 'center' },
   titleRow: {
     flexDirection: 'row',
@@ -903,8 +907,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   popCard: { width: '100%', maxWidth: layout.column, borderRadius: radius.lg, ...shadow.hero },
-  islands: { gap: space.sm, paddingHorizontal: 14, paddingTop: space.sm },
-  island: { paddingHorizontal: space.md, paddingVertical: space.sm, gap: space.xs },
+  islands: {
+    gap: space.sm,
+    paddingHorizontal: space.lg - ISLAND_PAD - GLASS_BORDER,
+    paddingTop: space.sm,
+  },
+  island: { paddingHorizontal: ISLAND_PAD, paddingVertical: space.sm, gap: space.xs },
   chipIsland: { paddingVertical: space.xs },
   chipsFloating: { paddingHorizontal: space.sm },
   flush: { paddingHorizontal: 0 },

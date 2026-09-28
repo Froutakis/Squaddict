@@ -13,9 +13,10 @@ import {
 import type { Group } from '../services/serviceGroup';
 import type { EventCover, MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getUserById } from '../services/serviceUser';
-import { getGroupsForUser, getMemberProfiles } from '../services/serviceGroup';
+import { getGroupsForUser } from '../services/serviceGroup';
 import { getPareaGoing, type PareaGoing } from '../services/serviceFeed';
-import type { Person } from '../lib/people';
+import { getUnreadCounts } from '../services/serviceChat';
+import ShowMore, { visibleSlice } from '../components/general/ShowMore';
 import {
   checkIn as saveCheckIn,
   clearRsvp,
@@ -69,6 +70,8 @@ type HomeScreenProps = {
   focusEventId?: string | null;
   onFocusHandled?: () => void;
   onOpenChat?: (groupId: string) => void;
+  chatClosedNonce?: number;
+  onUnreadChange?: (total: number) => void;
 };
 
 function planLine(event: MyEvent): string {
@@ -101,6 +104,8 @@ export default function HomeScreen({
   focusEventId = null,
   onFocusHandled,
   onOpenChat,
+  chatClosedNonce = 0,
+  onUnreadChange,
 }: HomeScreenProps) {
   const { signed, signPaths, dropSigned } = useSignedImages();
   const [displayName, setDisplayName] = useState('');
@@ -113,7 +118,9 @@ export default function HomeScreen({
   const [dayPlans, setDayPlans] = useState<string | null>(null);
   const [dayStory, setDayStory] = useState<MemoryNight[] | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
-  const [members, setMembers] = useState<Person[]>([]);
+  const [unread, setUnread] = useState<Record<string, number>>({});
+  const [showAllWaiting, setShowAllWaiting] = useState(false);
+  const [showAllGoing, setShowAllGoing] = useState(false);
   const [going, setGoing] = useState<PareaGoing[]>([]);
   const [goingSaving, setGoingSaving] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -210,6 +217,30 @@ export default function HomeScreen({
     load();
   }, [load]);
 
+  // Unread chat counts: on open, after leaving a chat, and on every refresh.
+  useEffect(() => {
+    let cancelled = false;
+
+    getUnreadCounts()
+      .then((counts) => {
+        if (!cancelled) setUnread(counts);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chatClosedNonce, photoNonce]);
+
+  useEffect(() => {
+    const mine = new Set(groups.map((g) => g.id));
+    const total = Object.entries(unread).reduce(
+      (sum, [id, count]) => (mine.has(id) ? sum + count : sum),
+      0,
+    );
+    onUnreadChange?.(total);
+  }, [unread, groups, onUnreadChange]);
+
   function refresh() {
     setRefreshing(true);
     setPhotoNonce((n) => n + 1);
@@ -224,23 +255,6 @@ export default function HomeScreen({
     });
     return () => sub.remove();
   }, [load]);
-
-  useEffect(() => {
-    setMembers([]);
-    if (!groupId) return;
-
-    let cancelled = false;
-
-    getMemberProfiles(groupId)
-      .then((people) => {
-        if (!cancelled) setMembers(people);
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [groupId]);
 
   useEffect(() => {
     if (groupId && groups.length > 0 && !groups.some((g) => g.id === groupId)) setGroupId(null);
@@ -352,6 +366,8 @@ export default function HomeScreen({
   const friendsPlans = groupId
     ? going.filter((plan) => plan.viaGroupIds.includes(groupId))
     : going;
+  const goingSlice = visibleSlice(friendsPlans, 2, showAllGoing);
+  const waitingSlice = visibleSlice(waiting, 3, showAllWaiting);
   const nights = useMemo(
     () => toMemoryNights(visible, coverPhotos, today).slice(0, MEMORY_LIMIT),
     [visible, coverPhotos, today],
@@ -574,7 +590,7 @@ export default function HomeScreen({
               meta={friendsPlans.length > 1 ? `${friendsPlans.length} plans` : undefined}
             />
             <View style={styles.body}>
-              {friendsPlans.map((plan) => (
+              {goingSlice.shown.map((plan) => (
                 <EventCard
                   key={plan.event.id}
                   event={{
@@ -588,6 +604,11 @@ export default function HomeScreen({
                   onRsvp={(status) => answerFriendsPlan(plan.event.id, status)}
                 />
               ))}
+              <ShowMore
+                hidden={goingSlice.hidden}
+                expanded={showAllGoing}
+                onToggle={() => setShowAllGoing(!showAllGoing)}
+              />
             </View>
           </View>
         ) : null}
@@ -667,7 +688,7 @@ export default function HomeScreen({
           <View>
             <SectionHead title="Waiting on you" count={waiting.length} />
             <View style={styles.body}>
-            {waiting.map((event) => (
+            {waitingSlice.shown.map((event) => (
               <EventCard
                 key={event.id}
                 event={toCardData(event, coverFor(event))}
@@ -676,6 +697,11 @@ export default function HomeScreen({
                 onRsvp={(status) => handleRsvp(event.id, status)}
               />
             ))}
+            <ShowMore
+              hidden={waitingSlice.hidden}
+              expanded={showAllWaiting}
+              onToggle={() => setShowAllWaiting(!showAllWaiting)}
+            />
             </View>
           </View>
         ) : null}
@@ -697,10 +723,10 @@ export default function HomeScreen({
           avatarUrl={avatarUrl}
           groups={groups}
           groupId={groupId}
-          members={members}
           onGroupSelect={setGroupId}
           onChat={onOpenChat}
           onPlan={() => openNewEvent(null)}
+          chatUnread={groupId ? unread[groupId] ?? 0 : 0}
         />
         {renderBody()}
       </ScrollView>
