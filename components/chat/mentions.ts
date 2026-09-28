@@ -72,12 +72,6 @@ export function mentionIds(text: string, members: Person[]): string[] {
   return seen;
 }
 
-export function mentionsMe(text: string, members: Person[], meId: string): boolean {
-  return findMentions(text, members).some(function (span) {
-    return span.userId === meId;
-  });
-}
-
 export type MentionPart = { text: string; userId: string | null };
 
 export function mentionParts(text: string, members: Person[]): MentionPart[] {

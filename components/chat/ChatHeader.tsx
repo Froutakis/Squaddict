@@ -21,7 +21,6 @@ type ChatHeaderProps = {
   onOpenGroup: () => void;
 };
 
-
 export default function ChatHeader({
   name,
   withName,

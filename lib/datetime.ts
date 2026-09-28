@@ -190,19 +190,10 @@ export function inPhotoWindow(
   return now >= opensAt && now < closesAt;
 }
 
-export function windowLeftLabel(closesAt: Date, now: Date = new Date()) {
-  const ms = closesAt.getTime() - now.getTime();
-  if (ms <= 0) return 'CLOSED';
-
-  const minutes = Math.floor(ms / 60000);
-  const hours = Math.floor(minutes / 60);
-  return hours > 0 ? `${hours}H ${minutes % 60}M LEFT` : `${minutes}M LEFT`;
-}
-
 export function timeLabel(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
 export function dayLabel(date: Date) {

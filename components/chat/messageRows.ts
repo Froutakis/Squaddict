@@ -1,4 +1,5 @@
 import type { ChatMessage } from '../../services/serviceChat';
+import { dayLabel, keyOf } from '../../lib/datetime';
 
 export type OutgoingMessage = {
   id: string;
@@ -22,25 +23,6 @@ export type Row =
       status?: 'pending' | 'failed';
       image?: LocalImage;
     };
-
-function dayKey(date: Date) {
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
-
-function dayLabel(date: Date) {
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-
-  if (dayKey(date) === dayKey(today)) return 'Today';
-  if (dayKey(date) === dayKey(yesterday)) return 'Yesterday';
-
-  return date.toLocaleDateString('en-US', {
-    day: 'numeric',
-    month: 'short',
-    ...(date.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
-  });
-}
 
 export function buildRows(
   messages: ChatMessage[],
@@ -76,8 +58,8 @@ export function buildRows(
     const prev = all[i - 1];
     const next = all[i + 1];
 
-    const startsDay = !prev || dayKey(new Date(prev.createdAt)) !== dayKey(date);
-    const endsDay = !next || dayKey(new Date(next.createdAt)) !== dayKey(date);
+    const startsDay = !prev || keyOf(new Date(prev.createdAt)) !== keyOf(date);
+    const endsDay = !next || keyOf(new Date(next.createdAt)) !== keyOf(date);
 
     if (startsDay) {
       rows.push({ kind: 'date', id: `date-${message.id}`, label: dayLabel(date) });

@@ -227,9 +227,7 @@ export default function ChatComposer({
         </View>
       ) : null}
 
-      {}
       <View style={[styles.box, focused && styles.boxFocused]}>
-        {}
         {onPickImage && !editing ? (
           <Pressable
             onPress={onPickImage}

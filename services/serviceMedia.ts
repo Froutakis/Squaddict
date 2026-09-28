@@ -289,7 +289,6 @@ export async function removeImage(path: string): Promise<void> {
   }
 }
 
-
 const OUTBOX_DIR = "outbox";
 
 function outboxDirectory(): Directory {

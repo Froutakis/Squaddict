@@ -60,17 +60,6 @@ export function normalizeHandle(handle: string): string {
   return handle.trim().toLowerCase();
 }
 
-export async function isHandleAvailable(handle: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("groups")
-    .select("id")
-    .eq("handle", normalizeHandle(handle))
-    .maybeSingle();
-  if (error) throw error;
-
-  return data === null;
-}
-
 export async function createGroup(handle: string, name: string): Promise<Group> {
   const user = await requireUser();
   const cleanHandle = normalizeHandle(handle);
@@ -94,34 +83,6 @@ export async function createGroup(handle: string, name: string): Promise<Group> 
 
   await addMember(data.id, user.id);
   await rotateInviteCode(data.id);
-
-  return toGroup(data);
-}
-
-export async function deleteGroup(groupId: string): Promise<void> {
-  const { error } = await supabase
-    .from("groups")
-    .delete()
-    .eq("id", groupId);
-  if (error) throw error;
-}
-
-export async function updateGroupProfile(
-  groupId: string,
-  changes: { name?: string; bio?: string | null; avatarUrl?: string | null },
-): Promise<Group> {
-  const patch: Record<string, unknown> = {};
-  if (changes.name !== undefined) patch.name = changes.name.trim();
-  if (changes.bio !== undefined) patch.bio = changes.bio;
-  if (changes.avatarUrl !== undefined) patch.avatar_url = changes.avatarUrl;
-
-  const { data, error } = await supabase
-    .from("groups")
-    .update(patch)
-    .eq("id", groupId)
-    .select(GROUP_FIELDS)
-    .single();
-  if (error) throw error;
 
   return toGroup(data);
 }
@@ -156,28 +117,6 @@ export async function getMembers(groupId: string) {
   if (error) throw error;
 
   return data;
-}
-
-export async function getGroupById(id: string): Promise<Group> {
-  const { data, error } = await supabase
-    .from("groups")
-    .select(GROUP_FIELDS)
-    .eq("id", id)
-    .single();
-  if (error) throw error;
-
-  return toGroup(data);
-}
-
-export async function getGroupByHandle(handle: string): Promise<Group | null> {
-  const { data, error } = await supabase
-    .from("groups")
-    .select(GROUP_FIELDS)
-    .eq("handle", normalizeHandle(handle))
-    .maybeSingle();
-  if (error) throw error;
-
-  return data ? toGroup(data) : null;
 }
 
 export async function searchGroups(query: string, limit = 20): Promise<Array<Group>> {
@@ -235,12 +174,4 @@ export async function getMemberProfiles(groupId: string): Promise<Person[]> {
     name: m.profiles?.display_name ?? "",
     avatarUrl: m.profiles?.avatar_url ?? null,
   }));
-}
-
-export async function getMemberNames(groupId: string): Promise<Record<string, string>> {
-  const names: Record<string, string> = {};
-  for (const person of await getMemberProfiles(groupId)) {
-    names[person.id] = person.name;
-  }
-  return names;
 }

@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import type { MyEvent, RsvpStatus } from '../../services/serviceEvents';
 import EventCard, { type CardEvent } from '../events/EventCard';
 import { colors, radius, space, textSize, typo } from '../../theme';
+import { plural } from '../../lib/text';
 
 type DayPlansSheetProps = {
   label: string | null;
@@ -33,7 +34,7 @@ export default function DayPlansSheet({
           <View style={styles.head}>
             <Text style={styles.title}>{label ? label.charAt(0).toUpperCase() + label.slice(1) : null}</Text>
             <Text style={styles.count}>
-              {plans.length} {plans.length === 1 ? 'plan' : 'plans'}
+              {plural(plans.length, 'plan', 'plans')}
             </Text>
           </View>
 

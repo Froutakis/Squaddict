@@ -29,14 +29,6 @@ export async function getUserById(id: string): Promise<User | null> {
   return toUser(data as ProfileRow);
 }
 
-export async function updateDisplayName(id: string, newName: string): Promise<void> {
-  const { error } = await supabase
-    .from("profiles")
-    .update({ display_name: newName })
-    .eq("id", id);
-  if (error) throw error;
-}
-
 export async function setAvatar(
   userId: string,
   picked: PickedImage,

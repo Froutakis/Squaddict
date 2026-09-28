@@ -441,7 +441,6 @@ const styles = StyleSheet.create({
   empty: { color: colors.textFaint, ...typo.medium, fontSize: textSize.body },
   error: { color: colors.danger, ...typo.medium, fontSize: textSize.body },
 
-
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
     gap: space.xs,

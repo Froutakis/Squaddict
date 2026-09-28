@@ -1,6 +1,7 @@
 import { Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, radius, shadow, space, textSize, tracking, typo } from '../../theme';
 import Monogram from '../general/Monogram';
+import { plural } from '../../lib/text';
 
 export const GROUP_CARD_WIDTH = 216;
 
@@ -24,10 +25,6 @@ type GroupCardProps = {
   onFollow?: () => void;
   style?: StyleProp<ViewStyle>;
 };
-
-function plural(count: number, one: string, many: string) {
-  return `${count} ${count === 1 ? one : many}`;
-}
 
 export default function GroupCard({
   group,

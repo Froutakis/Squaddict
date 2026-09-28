@@ -21,6 +21,7 @@ import GroupScreen from './GroupScreen';
 import GroupFormSheet from '../components/group/GroupFormSheet';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, radius, shadow, typo, layout, space, textSize } from '../theme';
+import { plural } from '../lib/text';
 
 const AVATAR_SIZE = 88;
 
@@ -141,7 +142,7 @@ export default function YouScreen({ user }: YouScreenProps) {
             {displayName}
           </Text>
           <Text style={styles.since}>
-            {groups.length === 1 ? 'In 1 parea' : `In ${groups.length} pareas`}
+            In {plural(groups.length, 'parea', 'pareas')}
           </Text>
           {avatarError ? <Text style={styles.error}>{avatarError}</Text> : null}
         </View>

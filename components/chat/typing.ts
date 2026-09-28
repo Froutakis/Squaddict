@@ -1,3 +1,4 @@
+import { plural } from '../../lib/text';
 
 export const TYPING_TTL_MS = 4000;
 
@@ -51,7 +52,7 @@ export function typingLabel(names: string[]): string | null {
 }
 
 export function presenceLabel(members: number, online: number): string {
-  const base = `${members} ${members === 1 ? 'member' : 'members'}`;
+  const base = plural(members, 'member', 'members');
   if (online < 2) {
     return base;
   }

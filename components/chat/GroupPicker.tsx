@@ -12,9 +12,8 @@ import {
 } from 'react-native';
 import { Group } from '../../services/serviceGroup';
 import type { GroupPreview } from '../../services/serviceChat';
-import { initialsFor } from '../general/Monogram';
 import { unreadLabel } from './unread';
-import { layout, paper, typo, radius, shadow, space } from '../../theme';
+import { layout, paper, typo, radius, space } from '../../theme';
 import GroupSelect from '../general/GroupSelect';
 import Monogram from '../general/Monogram';
 
@@ -195,7 +194,6 @@ export default function GroupPicker({
                 accessibilityLabel={label}
                 style={rowStyle}
               >
-                {}
                 {index > 0 ? <View style={styles.divider} /> : null}
 
                 <GroupMonogram name={group.name} />
@@ -219,7 +217,6 @@ export default function GroupPicker({
                     </Text>
                   ) : null}
 
-                  {}
                   {badge ? (
                     <View style={called ? [styles.badge, styles.badgeCalled] : styles.badge}>
                       {called ? <Text style={styles.badgeAt}>@</Text> : null}
@@ -348,7 +345,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
   },
-
 
   blank: {
     alignItems: 'center',
