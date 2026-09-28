@@ -14,8 +14,6 @@ const TILES = MAPTILER_KEY
   ? `https://api.maptiler.com/maps/${MAPTILER_STYLE}/256/{z}/{x}/{y}{r}.png?key=${MAPTILER_KEY}`
   : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 const ATTRIBUTION = MAPTILER_KEY ? '© MapTiler © OpenStreetMap contributors' : '© OpenStreetMap';
-const FIT_TOP_LEFT: [number, number] = [48, 220];
-const FIT_BOTTOM_RIGHT: [number, number] = [48, 240];
 
 function pinIcon(pin: MapPin) {
   const color = pin.color ?? colors.primary;
@@ -68,7 +66,6 @@ function escapeHtml(text: string) {
 
 export default function Map({
   pins,
-  route,
   showsUserLocation = false,
   height = 180,
   spanKm = 1.2,
@@ -92,7 +89,6 @@ export default function Map({
   const pinsKey = pins
     .map((pin) => `${pin.id}:${pin.lat}:${pin.lng}:${pin.color ?? ''}:${pin.badge ?? ''}:${pin.selected ? 1 : 0}`)
     .join('|');
-  const routeKey = route ? route.map((point) => `${point.lat},${point.lng}`).join(';') : '';
   const anchor = pins[0];
   const insetTop = insets?.top ?? 0;
   const insetBottom = insets?.bottom ?? 0;
@@ -172,30 +168,15 @@ export default function Map({
     const instance = map.current;
     if (instance === null || anchor === undefined || region === undefined) return;
 
-    const line =
-      route && route.length > 1
-        ? L.polyline(
-            route.map((point) => [point.lat, point.lng] as [number, number]),
-            { color: colors.primary, weight: 4 },
-          ).addTo(instance)
-        : null;
-
     const frame = () => {
       const box = instance.getContainer();
       framed.current = box.clientWidth > 0 && box.clientHeight > 0;
       if (!framed.current) return;
 
-      if (line) {
-        instance.fitBounds(line.getBounds(), {
-          paddingTopLeft: FIT_TOP_LEFT,
-          paddingBottomRight: FIT_BOTTOM_RIGHT,
-        });
-      } else {
-        instance.fitBounds(boundsOf(region), {
-          paddingTopLeft: [16, insetTop],
-          paddingBottomRight: [16, insetBottom],
-        });
-      }
+      instance.fitBounds(boundsOf(region), {
+        paddingTopLeft: [16, insetTop],
+        paddingBottomRight: [16, insetBottom],
+      });
     };
 
     frame();
@@ -203,9 +184,8 @@ export default function Map({
 
     return () => {
       refit.current = null;
-      line?.remove();
     };
-  }, [anchorKey, routeKey, insetTop, insetBottom]);
+  }, [anchorKey, insetTop, insetBottom]);
 
   useEffect(() => {
     host.current?.querySelectorAll<HTMLElement>('.leaflet-bottom').forEach((corner) => {

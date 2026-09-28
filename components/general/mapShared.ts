@@ -26,7 +26,6 @@ export const PIN = {
 
 export type MapProps = {
   pins: MapPin[];
-  route?: MapCoord[];
   showsUserLocation?: boolean;
   height?: number;
   spanKm?: number;

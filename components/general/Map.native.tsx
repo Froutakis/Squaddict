@@ -1,13 +1,11 @@
-import { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { colors, radius, space, textSize, typo } from '../../theme';
 import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Stop } from 'react-native-svg';
 import { PIN, PIN_SELECTED_SCALE, regionFor, type MapProps } from './mapShared';
 
 export type { MapCoord, MapPin, MapProps } from './mapShared';
 
-const FIT_PADDING = { top: 220, right: 48, bottom: 240, left: 48 };
 const PIN_ANCHOR = { x: 0.5, y: PIN.tipY / PIN.height };
 
 function pinOffset(selected?: boolean) {
@@ -37,7 +35,6 @@ function Pin({ color, selected }: { color: string; selected: boolean }) {
 
 export default function Map({
   pins,
-  route,
   showsUserLocation = false,
   height = 180,
   spanKm = 1.2,
@@ -47,17 +44,7 @@ export default function Map({
   insets,
   style,
 }: MapProps) {
-  const mapRef = useRef<MapView>(null);
   const region = regionFor(pins, spanKm);
-
-  useEffect(() => {
-    if (!route || route.length < 2) return;
-
-    mapRef.current?.fitToCoordinates(
-      route.map((point) => ({ latitude: point.lat, longitude: point.lng })),
-      { edgePadding: FIT_PADDING, animated: true },
-    );
-  }, [route]);
 
   if (region === undefined) {
     return (
@@ -69,7 +56,6 @@ export default function Map({
 
   const map = (
     <MapView
-      ref={mapRef}
       provider={PROVIDER_DEFAULT}
       style={StyleSheet.absoluteFill}
       initialRegion={region}
@@ -90,14 +76,6 @@ export default function Map({
           : undefined
       }
     >
-      {route && route.length > 1 ? (
-        <Polyline
-          coordinates={route.map((point) => ({ latitude: point.lat, longitude: point.lng }))}
-          strokeColor={colors.primary}
-          strokeWidth={4}
-        />
-      ) : null}
-
       {pins.map(function (pin) {
         return (
           <Marker

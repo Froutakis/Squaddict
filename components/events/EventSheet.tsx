@@ -11,8 +11,6 @@ import { ticketCode } from '../../lib/ticket';
 import AttendeeSheet from './AttendeeSheet';
 import EventPhotos from './EventPhotos';
 import Map from '../general/Map';
-import { getCurrentCoords } from '../../services/serviceLocation';
-import { getWalkingRoute, type Route } from '../../services/serviceRoute';
 import type { LivePerson } from '../../services/serviceLiveLocation';
 
 export type SheetEvent = {
@@ -56,7 +54,6 @@ export default function EventSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [route, setRoute] = useState<Route | null>(null);
 
   const place = placeLines(event?.location, event?.placeLabel);
 
@@ -80,31 +77,6 @@ export default function EventSheet({
     }
 
     load();
-    return () => { cancelled = true; };
-  }, [event?.id]);
-
-  useEffect(() => {
-    setRoute(null);
-
-    const target = event;
-    if (!target || target.lat === undefined || target.lng === undefined) return;
-
-    const to = { lat: target.lat, lng: target.lng };
-    let cancelled = false;
-
-    async function trace() {
-      try {
-        const here = await getCurrentCoords();
-        if (cancelled || !here.ok) return;
-
-        const found = await getWalkingRoute(here.coords, to);
-        if (!cancelled) setRoute(found);
-      } catch {
-        if (!cancelled) setRoute(null);
-      }
-    }
-
-    trace();
     return () => { cancelled = true; };
   }, [event?.id]);
 
@@ -192,7 +164,6 @@ export default function EventSheet({
                         badge: person.name.trim().charAt(0).toUpperCase() || '?',
                       })),
                     ]}
-                    route={route?.points}
                     showsUserLocation
                     interactive
                     spanKm={0.9}
@@ -471,7 +442,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   description: { color: colors.text, ...typo.medium, fontSize: textSize.base, lineHeight: 20 },
-
 
   error: { color: colors.danger, ...typo.medium, fontSize: textSize.body },
 
