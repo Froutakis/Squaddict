@@ -79,7 +79,10 @@ with checks(file, step, what, ok) as (
   ('search.sql', 10, 'function search_groups_folded',    to_regprocedure('public.search_groups_folded(text,integer)') is not null),
 
   -- parea_profile.sql
-  ('parea_profile.sql', 11, 'function parea_profile', to_regprocedure('public.parea_profile(uuid)') is not null)
+  ('parea_profile.sql', 11, 'function parea_profile', to_regprocedure('public.parea_profile(uuid)') is not null),
+
+  -- delete_account.sql
+  ('delete_account.sql', 12, 'function delete_account', to_regprocedure('public.delete_account()') is not null)
 )
 select step,
        file,
