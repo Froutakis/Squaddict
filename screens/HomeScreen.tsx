@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import type { Group } from '../services/serviceGroup';
-import type { EventPhoto, MyEvent, RsvpStatus } from '../services/serviceEvents';
+import type { EventCover, MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getUserById } from '../services/serviceUser';
 import { getGroupsForUser, getMemberProfiles } from '../services/serviceGroup';
 import { getPareaGoing, type PareaGoing } from '../services/serviceFeed';
@@ -38,8 +38,9 @@ import { useNow } from '../components/home/useNow';
 import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
 import PhotoPrompt from '../components/home/PhotoPrompt';
-import { MEMORY_LIMIT, toMemoryNights } from '../components/home/memories';
-import DayFilterRow from '../components/home/DayFilterRow';
+import { MEMORY_LIMIT, toMemoryNights, type MemoryNight } from '../components/home/memories';
+import DayPlansSheet from '../components/home/DayPlansSheet';
+import StoryViewer from '../components/events/StoryViewer';
 import ListEmpty from '../components/home/ListEmpty';
 import SectionHead from '../components/general/SectionHead';
 import PlanCard from '../components/home/PlanCard';
@@ -109,7 +110,8 @@ export default function HomeScreen({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [dayPlans, setDayPlans] = useState<string | null>(null);
+  const [dayStory, setDayStory] = useState<MemoryNight[] | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
   const [members, setMembers] = useState<Person[]>([]);
   const [going, setGoing] = useState<PareaGoing[]>([]);
@@ -122,7 +124,7 @@ export default function HomeScreen({
   const [rsvpError, setRsvpError] = useState<string | null>(null);
   const [checkins, setCheckins] = useState<Record<string, string[]>>({});
   const [posted, setPosted] = useState<Record<string, true>>({});
-  const [coverPhotos, setCoverPhotos] = useState<Record<string, EventPhoto>>({});
+  const [coverPhotos, setCoverPhotos] = useState<Record<string, EventCover>>({});
   const [clock, setClock] = useState(0);
   const [photoNonce, setPhotoNonce] = useState(0);
   const [addingPhoto, setAddingPhoto] = useState<MyEvent | null>(null);
@@ -277,7 +279,7 @@ export default function HomeScreen({
   }
 
   useEffect(() => {
-    if (createNonce > 0) openNewEvent(selectedDate);
+    if (createNonce > 0) openNewEvent(null);
   }, [createNonce]);
 
   useEffect(() => {
@@ -322,43 +324,34 @@ export default function HomeScreen({
 
   const now = useNow();
   const today = keyOf(new Date());
-  const dayMode = selectedDate !== null;
   const visible = useMemo(
     () => (groupId ? events.filter((e) => e.groupId === groupId) : events),
     [events, groupId],
   );
   const upcoming = visible.filter((e) => e.date >= today);
-  const upNextEvent = dayMode ? undefined : upcoming.find((e) => e.myStatus !== 'out');
-  const liveEvent = dayMode
-    ? undefined
-    : visible.find(
-        (e) => e.myStatus !== 'out' && isHappeningNow(e.date, e.startTime, e.endTime, now),
-      );
+  const upNextEvent = upcoming.find((e) => e.myStatus !== 'out');
+  const liveEvent = visible.find(
+    (e) => e.myStatus !== 'out' && isHappeningNow(e.date, e.startTime, e.endTime, now),
+  );
   const heroEvent = liveEvent ?? upNextEvent;
   const sharingEvent = liveEvent?.myStatus === 'in' ? liveEvent : undefined;
   const livePeople = useLiveLocations(sharingEvent?.id, { id: user.id, name: displayName });
-  const pool = dayMode
-    ? visible.filter((e) => e.date === selectedDate)
-    : upcoming.filter((e) => e.id !== heroEvent?.id);
+  const pool = upcoming.filter((e) => e.id !== heroEvent?.id);
   const waiting = pool.filter((e) => e.myStatus === undefined);
   const later = pool.filter((e) => e.myStatus !== undefined);
   const clockNow = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const recent = visible.filter((e) => inPhotoWindow(e.date, e.startTime, e.endTime, now));
   const recentIds = recent.map((e) => e.id).sort().join(',');
-  const wantsPhoto = dayMode
-    ? undefined
-    : recent.find(
-        (e) =>
-          e.myStatus === 'in' &&
-          !posted[e.id] &&
-          (e.date < today || !e.startTime || e.startTime <= clockNow) &&
-          !(e.id === liveEvent?.id && e.id === heroEvent?.id),
-      );
-  const friendsPlans = dayMode
-    ? []
-    : groupId
-      ? going.filter((plan) => plan.viaGroupIds.includes(groupId))
-      : going;
+  const wantsPhoto = recent.find(
+    (e) =>
+      e.myStatus === 'in' &&
+      !posted[e.id] &&
+      (e.date < today || !e.startTime || e.startTime <= clockNow) &&
+      !(e.id === liveEvent?.id && e.id === heroEvent?.id),
+  );
+  const friendsPlans = groupId
+    ? going.filter((plan) => plan.viaGroupIds.includes(groupId))
+    : going;
   const nights = useMemo(
     () => toMemoryNights(visible, coverPhotos, today).slice(0, MEMORY_LIMIT),
     [visible, coverPhotos, today],
@@ -434,6 +427,31 @@ export default function HomeScreen({
     return byDate;
   }, [events, coverPhotos, signed]);
 
+  const ignoreSeen = useCallback(() => {}, []);
+
+  // The calendar is for looking back: a past day plays its memories, today and
+  // later days open their plans (or a new one when the day is free).
+  function openDay(key: string) {
+    const plans = visible.filter((e) => e.date === key);
+
+    if (key < today) {
+      const withPhotos: MemoryNight[] = [];
+      for (const event of plans) {
+        const cover = coverPhotos[event.id];
+        if (cover) withPhotos.push({ event, cover, latestAt: cover.latestAt });
+      }
+
+      if (withPhotos.length > 0) setDayStory(withPhotos);
+      else if (plans.length === 1) setOpenEvent(plans[0]);
+      else if (plans.length > 1) setDayPlans(key);
+      return;
+    }
+
+    if (plans.length === 0) openNewEvent(key);
+    else if (plans.length === 1) setOpenEvent(plans[0]);
+    else setDayPlans(key);
+  }
+
   function coverFor(event: MyEvent): string | null {
     if (event.coverUrl) return event.coverUrl;
     const photo = coverPhotos[event.id];
@@ -506,17 +524,15 @@ export default function HomeScreen({
 
     return (
       <>
-        {!dayMode ? (
-          <MemoriesBar
-            userId={user.id}
-            nights={nights}
-            groupSizes={groupSizes}
-            signed={signed}
-            signPaths={signPaths}
-            onImageError={dropSigned}
-            onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
-          />
-        ) : null}
+        <MemoriesBar
+          userId={user.id}
+          nights={nights}
+          groupSizes={groupSizes}
+          signed={signed}
+          signPaths={signPaths}
+          onImageError={dropSigned}
+          onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
+        />
 
         {heroEvent ? (
           <View>
@@ -595,21 +611,12 @@ export default function HomeScreen({
         <View style={styles.body}>
           <CalendarCard
             events={visible}
-            selectedDate={selectedDate}
-            onSelectDate={(d) => setSelectedDate(d === selectedDate ? null : d)}
-            onAddEvent={() => openNewEvent(selectedDate)}
+            selectedDate={null}
+            onSelectDate={openDay}
+            onAddEvent={() => openNewEvent(null)}
             covers={covers}
           />
         </View>
-
-        {dayMode ? (
-          <View style={styles.body}>
-            <DayFilterRow
-              label={dayFilterLabel(selectedDate)}
-              onClear={() => setSelectedDate(null)}
-            />
-          </View>
-        ) : null}
 
         {rsvpError ? (
           <View style={styles.body}>
@@ -619,7 +626,7 @@ export default function HomeScreen({
 
         <View>
           <SectionHead
-            title={dayMode ? 'On this day' : 'Later'}
+            title="Later"
             meta={later.length > 0 ? `${later.length} plans` : undefined}
           />
 
@@ -627,10 +634,10 @@ export default function HomeScreen({
             <View style={styles.body}>
               {waiting.length === 0 ? (
                 <ListEmpty
-                  title={dayMode ? `Nothing on ${dayFilterLabel(selectedDate)}` : 'Nothing else planned'}
+                  title="Nothing else planned"
                   body="A free evening is a terrible thing to waste."
                   actionLabel="Propose something"
-                  onAction={() => openNewEvent(selectedDate)}
+                  onAction={() => openNewEvent(null)}
                 />
               ) : (
                 <Text style={styles.quiet}>Nothing else on the books.</Text>
@@ -693,10 +700,45 @@ export default function HomeScreen({
           members={members}
           onGroupSelect={setGroupId}
           onChat={onOpenChat}
-          onPlan={() => openNewEvent(selectedDate)}
+          onPlan={() => openNewEvent(null)}
         />
         {renderBody()}
       </ScrollView>
+
+      <StoryViewer
+        key={dayStory ? dayStory[0].event.id : 'day-closed'}
+        visible={dayStory !== null}
+        nights={dayStory ?? []}
+        startIndex={0}
+        groupSizes={groupSizes}
+        signed={signed}
+        signPaths={signPaths}
+        onImageError={dropSigned}
+        onSeen={ignoreSeen}
+        onAddYours={(night) => {
+          setDayStory(null);
+          setPhotoError(null);
+          setAddingPhoto(night.event);
+        }}
+        onClose={() => setDayStory(null)}
+      />
+
+      <DayPlansSheet
+        label={dayPlans ? dayFilterLabel(dayPlans) : null}
+        plans={dayPlans ? visible.filter((e) => e.date === dayPlans) : []}
+        toCard={(event) => toCardData(event, coverFor(event))}
+        onOpen={(event) => {
+          setDayPlans(null);
+          setOpenEvent(event);
+        }}
+        onRsvp={handleRsvp}
+        onPlan={() => {
+          const date = dayPlans;
+          setDayPlans(null);
+          openNewEvent(date);
+        }}
+        onClose={() => setDayPlans(null)}
+      />
 
       <PhotoSourceSheet
         visible={addingPhoto !== null}
