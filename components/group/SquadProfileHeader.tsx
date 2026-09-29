@@ -6,7 +6,11 @@ import Monogram from '../general/Monogram';
 import ImageViewer from '../general/ImageViewer';
 import { colors, radius, space, textSize, typo } from '../../theme';
 
-const BANNER = 200;
+// The banner keeps the photo's own shape so nobody gets cropped out; only very
+// tall or very long photos are held to a sensible band.
+const DEFAULT_RATIO = 16 / 9;
+const MIN_RATIO = 1.25;
+const MAX_RATIO = 3;
 const AVATAR = 112;
 const RING = 4;
 // The one colour that marks the squad you act as: the red of the logo.
@@ -24,9 +28,25 @@ type SquadProfileHeaderProps = {
 export default function SquadProfileHeader({ group, stats }: SquadProfileHeaderProps) {
   const [bannerBroken, setBannerBroken] = useState(false);
   const [viewing, setViewing] = useState<'banner' | 'avatar' | null>(null);
+  const [ratio, setRatio] = useState(DEFAULT_RATIO);
 
   useEffect(() => {
     setBannerBroken(false);
+    setRatio(DEFAULT_RATIO);
+    if (!group.bannerUrl) return;
+
+    let cancelled = false;
+    Image.getSize(
+      group.bannerUrl,
+      function (width, height) {
+        if (cancelled || !width || !height) return;
+        setRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, width / height)));
+      },
+      function () {},
+    );
+    return function cleanup() {
+      cancelled = true;
+    };
   }, [group.bannerUrl]);
 
   const banner = group.bannerUrl && !bannerBroken ? group.bannerUrl : null;
@@ -39,7 +59,7 @@ export default function SquadProfileHeader({ group, stats }: SquadProfileHeaderP
         accessibilityRole={banner ? 'imagebutton' : undefined}
         accessibilityLabel={`${group.name} banner`}
         accessibilityHint={banner ? 'Opens the full image' : undefined}
-        style={({ pressed }) => [styles.banner, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.banner, { aspectRatio: ratio }, pressed && styles.pressed]}
       >
         {banner ? (
           <Image
@@ -92,7 +112,7 @@ export default function SquadProfileHeader({ group, stats }: SquadProfileHeaderP
 
 const styles = StyleSheet.create({
   banner: {
-    height: BANNER,
+    width: '100%',
     borderRadius: radius.xl,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
