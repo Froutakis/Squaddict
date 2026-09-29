@@ -943,3 +943,38 @@ drop trigger if exists group_members_clear_acting on public.group_members;
 create trigger group_members_clear_acting
   after delete on public.group_members
   for each row execute function public.clear_acting_group();
+
+-- ─── squad follows ───
+create table if not exists public.squad_follows (
+  follower_group_id uuid        not null references public.groups(id) on delete cascade,
+  followed_group_id uuid        not null references public.groups(id) on delete cascade,
+  created_by        uuid        references public.profiles(id) on delete set null,
+  created_at        timestamptz not null default now(),
+  primary key (follower_group_id, followed_group_id),
+  constraint squad_follows_not_self check (follower_group_id <> followed_group_id)
+);
+
+create index if not exists squad_follows_followed_idx on public.squad_follows (followed_group_id);
+
+alter table public.squad_follows enable row level security;
+
+drop policy if exists "read follows of my squads" on public.squad_follows;
+create policy "read follows of my squads" on public.squad_follows
+  for select to authenticated
+  using (
+    follower_group_id in (select public.my_group_ids())
+    or followed_group_id in (select public.my_group_ids())
+  );
+
+drop policy if exists "follow as my squad" on public.squad_follows;
+create policy "follow as my squad" on public.squad_follows
+  for insert to authenticated
+  with check (
+    follower_group_id in (select public.my_group_ids())
+    and created_by = auth.uid()
+  );
+
+drop policy if exists "unfollow as my squad" on public.squad_follows;
+create policy "unfollow as my squad" on public.squad_follows
+  for delete to authenticated
+  using (follower_group_id in (select public.my_group_ids()));
