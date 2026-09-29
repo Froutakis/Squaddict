@@ -7,6 +7,9 @@ import ImageViewer from '../general/ImageViewer';
 import { colors, radius, space, textSize, typo } from '../../theme';
 
 const BANNER = 200;
+// Where to keep the crop when a photo is taller than the frame: 0 = its top,
+// 0.5 = its middle. People's faces usually sit in the upper part of a group shot.
+const FOCUS_Y = 0.3;
 const AVATAR = 112;
 const RING = 4;
 // The one colour that marks the squad you act as: the red of the logo.
@@ -25,9 +28,44 @@ export default function SquadProfileHeader({ group, stats }: SquadProfileHeaderP
   const [bannerBroken, setBannerBroken] = useState(false);
   const [viewing, setViewing] = useState<'banner' | 'avatar' | null>(null);
 
+  const [frame, setFrame] = useState<{ width: number; height: number } | null>(null);
+  const [photoSize, setPhotoSize] = useState<{ width: number; height: number } | null>(null);
+
   useEffect(() => {
     setBannerBroken(false);
+    setPhotoSize(null);
+    if (!group.bannerUrl) return;
+
+    let cancelled = false;
+    Image.getSize(
+      group.bannerUrl,
+      function (width, height) {
+        if (!cancelled && width && height) setPhotoSize({ width, height });
+      },
+      function () {},
+    );
+    return function cleanup() {
+      cancelled = true;
+    };
   }, [group.bannerUrl]);
+
+  // Fill the frame (like "cover"), but choose which part stays: centred across,
+  // biased towards the top down the height.
+  const placement =
+    frame && photoSize
+      ? (() => {
+          const scale = Math.max(frame.width / photoSize.width, frame.height / photoSize.height);
+          const width = photoSize.width * scale;
+          const height = photoSize.height * scale;
+          return {
+            position: 'absolute' as const,
+            width,
+            height,
+            left: (frame.width - width) / 2,
+            top: (frame.height - height) * FOCUS_Y,
+          };
+        })()
+      : null;
 
   const banner = group.bannerUrl && !bannerBroken ? group.bannerUrl : null;
 
@@ -39,20 +77,19 @@ export default function SquadProfileHeader({ group, stats }: SquadProfileHeaderP
         accessibilityRole={banner ? 'imagebutton' : undefined}
         accessibilityLabel={`${group.name} banner`}
         accessibilityHint={banner ? 'Opens the full image' : undefined}
+        onLayout={(event) => {
+          const { width, height } = event.nativeEvent.layout;
+          setFrame({ width, height });
+        }}
         style={({ pressed }) => [styles.banner, pressed && styles.pressed]}
       >
         {banner ? (
-          <>
-            {/* The same photo, blurred, fills the frame; the sharp one sits whole on top. */}
-            <Image source={{ uri: banner }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={24} />
-            <View style={styles.dim} />
-            <Image
-              source={{ uri: banner }}
-              style={StyleSheet.absoluteFill}
-              resizeMode="contain"
-              onError={() => setBannerBroken(true)}
-            />
-          </>
+          <Image
+            source={{ uri: banner }}
+            style={placement ?? StyleSheet.absoluteFill}
+            resizeMode="cover"
+            onError={() => setBannerBroken(true)}
+          />
         ) : (
           <LinearGradient colors={['#1B2A44', '#3A2E3F']} style={StyleSheet.absoluteFill} />
         )}
@@ -102,7 +139,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
   },
-  dim: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(12,25,38,0.25)' },
   pressed: { opacity: 0.85 },
   // Half the photo rides on the banner's bottom edge.
   avatarRow: { marginTop: -(AVATAR / 2 + RING), paddingLeft: space.md },
