@@ -17,6 +17,7 @@ import SquadProfileHeader, { ACTING_ACCENT } from '../components/group/SquadProf
 import { getFollowerIds, getFollowing } from '../services/serviceFollow';
 import Monogram from '../components/general/Monogram';
 import IconTabs from '../components/general/IconTabs';
+import DashedDivider from '../components/general/DashedDivider';
 import { getActingSquad, setActingGroup } from '../services/serviceUser';
 import {
   getGroupById,
@@ -422,6 +423,8 @@ export default function GroupScreen({
 
               {actingError ? <Text style={styles.error}>{actingError}</Text> : null}
               {error ? <Text style={styles.error}>{error}</Text> : null}
+
+              <DashedDivider />
 
               <IconTabs options={TABS} value={tab} onChange={setTab} />
 

@@ -70,30 +70,42 @@ export default function SquadProfileHeader({ group, stats, acting }: SquadProfil
       </View>
 
       <View style={styles.identity}>
-        <Text style={styles.name} numberOfLines={2}>
-          {group.name}
-        </Text>
-        <View style={styles.handleRow}>
-          <Text style={styles.handle} numberOfLines={1}>
-            {handleLine}
-          </Text>
-          {acting ? (
-            <View style={styles.acting} accessibilityLabel="The squad you act as">
-              <View style={styles.actingDot} />
-              <Text style={styles.actingText}>Acting</Text>
+        <View style={styles.titleRow}>
+          <View style={styles.names}>
+            <Text style={styles.name} numberOfLines={2}>
+              {group.name}
+            </Text>
+            <View style={styles.handleRow}>
+              <Text style={styles.handle} numberOfLines={1}>
+                {handleLine}
+              </Text>
+              {acting ? (
+                <View style={styles.acting} accessibilityLabel="The squad you act as">
+                  <View style={styles.actingDot} />
+                  <Text style={styles.actingText}>Acting</Text>
+                </View>
+              ) : null}
             </View>
-          ) : null}
+          </View>
+
+          <View style={styles.stats}>
+            {stats.map((stat) => (
+              <View
+                key={stat.label}
+                style={styles.stat}
+                accessible
+                accessibilityLabel={`${stat.value ?? 'unknown'} ${stat.label}`}
+              >
+                <Text style={styles.statValue}>{stat.value === null ? '–' : stat.value}</Text>
+                <Text style={styles.statLabel} numberOfLines={1}>
+                  {stat.label}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
 
         {group.bio ? <Text style={styles.bio}>{group.bio}</Text> : null}
-
-        <View style={styles.stats}>
-          {stats.map((stat) => (
-            <Text key={stat.label} style={styles.stat}>
-              <Text style={styles.statValue}>{stat.value === null ? '–' : stat.value}</Text> {stat.label}
-            </Text>
-          ))}
-        </View>
       </View>
 
       <ImageViewer
@@ -115,7 +127,9 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.85 },
   // Half the photo rides on the banner's bottom edge.
   avatarRow: { marginTop: -(AVATAR / 2 + RING), paddingLeft: space.md },
-  identity: { gap: 4, marginTop: space.sm },
+  identity: { gap: space.sm, marginTop: space.sm },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  names: { flex: 1, minWidth: 0, gap: 4 },
   name: { color: colors.text, ...typo.display, fontSize: textSize.hero, letterSpacing: -0.5 },
   handleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
   handle: { flexShrink: 1, color: colors.textSoft, ...typo.medium, fontSize: textSize.body },
@@ -123,7 +137,8 @@ const styles = StyleSheet.create({
   actingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: ACTING_ACCENT },
   actingText: { color: ACTING_ACCENT, ...typo.semi, fontSize: textSize.small },
   bio: { marginTop: space.xxs, color: colors.text, ...typo.regular, fontSize: textSize.base, lineHeight: 21 },
-  stats: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, marginTop: space.sm },
-  stat: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body },
-  statValue: { color: colors.text, ...typo.semi },
+  stats: { flexDirection: 'row', gap: space.md },
+  stat: { alignItems: 'center', minWidth: 36 },
+  statValue: { color: colors.text, ...typo.title, fontSize: textSize.lead + 2, letterSpacing: -0.3 },
+  statLabel: { color: colors.textSoft, ...typo.medium, fontSize: textSize.caption },
 });

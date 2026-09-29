@@ -31,7 +31,7 @@ export default function IconTabs<T extends string>({ options, value, onChange }:
               size={15}
               color={active ? colors.text : colors.textFaint}
             />
-            <Text style={[styles.label, active && styles.labelActive]}>{option.label}</Text>
+            <Text selectable={false} style={[styles.label, active && styles.labelActive]}>{option.label}</Text>
           </Pressable>
         );
       })}
