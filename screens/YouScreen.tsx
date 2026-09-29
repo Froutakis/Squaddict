@@ -22,6 +22,7 @@ import FollowShelf from '../components/you/FollowShelf';
 import SwitchRow from '../components/you/SwitchRow';
 import GroupScreen from './GroupScreen';
 import GroupFormSheet from '../components/group/GroupFormSheet';
+import FollowsScreen from './FollowsScreen';
 import { colors, layout, paper, radius, shadow, space, textSize, typo } from '../theme';
 
 type YouScreenProps = {
@@ -151,6 +152,19 @@ export default function YouScreen({ user }: YouScreenProps) {
         }}
         onLeave={() => {
           setProfileGroup(null);
+          load();
+        }}
+      />
+    );
+  }
+
+  if (followsOpen && acting) {
+    return (
+      <FollowsScreen
+        acting={acting}
+        userId={user.id}
+        onBack={() => {
+          setFollowsOpen(false);
           load();
         }}
       />
