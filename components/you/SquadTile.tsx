@@ -6,8 +6,11 @@ import { unreadLabel } from '../chat/unread';
 import Monogram from '../general/Monogram';
 import { colors, radius, shadow, space, sun, textSize, typo } from '../../theme';
 
-const BANNER = 56;
-const AVATAR = 36;
+const AVATAR = 24;
+// Cards take the banner's own shape so the whole photo shows, within reason.
+const DEFAULT_RATIO = 16 / 10;
+const MIN_RATIO = 1;
+const MAX_RATIO = 2.2;
 
 type SquadTileProps = {
   group: Group;
@@ -18,12 +21,28 @@ type SquadTileProps = {
 
 export default function SquadTile({ group, acting = false, unread = 0, onPress }: SquadTileProps) {
   const [bannerBroken, setBannerBroken] = useState(false);
+  const [ratio, setRatio] = useState(DEFAULT_RATIO);
+
+  const banner = group.bannerUrl && !bannerBroken ? group.bannerUrl : null;
 
   useEffect(() => {
     setBannerBroken(false);
-  }, [group.bannerUrl]);
+    setRatio(DEFAULT_RATIO);
+    if (!group.bannerUrl) return;
 
-  const banner = group.bannerUrl && !bannerBroken ? group.bannerUrl : null;
+    let cancelled = false;
+    Image.getSize(
+      group.bannerUrl,
+      function (width, height) {
+        if (cancelled || !width || !height) return;
+        setRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, width / height)));
+      },
+      function () {},
+    );
+    return function cleanup() {
+      cancelled = true;
+    };
+  }, [group.bannerUrl]);
   const badge = unreadLabel(unread);
   const members = `${group.memberCount} ${group.memberCount === 1 ? 'member' : 'members'}`;
   const label = [group.name, members, acting ? 'acting squad' : null, badge ? `${badge} unread` : null]
@@ -37,7 +56,7 @@ export default function SquadTile({ group, acting = false, unread = 0, onPress }
       accessibilityLabel={label}
       style={({ pressed }) => [styles.tile, acting && styles.tileActing, pressed && styles.pressed]}
     >
-      <View style={styles.banner}>
+      <View style={[styles.banner, { aspectRatio: ratio }]}>
         {banner ? (
           <Image
             source={{ uri: banner }}
@@ -66,13 +85,15 @@ export default function SquadTile({ group, acting = false, unread = 0, onPress }
       </View>
 
       <View style={styles.body}>
-        <Monogram name={group.name} size={AVATAR} ring={3} uri={group.avatarUrl} style={styles.avatar} />
-        <Text style={styles.name} numberOfLines={1}>
-          {group.name}
-        </Text>
-        <Text style={styles.meta} numberOfLines={1}>
-          {members}
-        </Text>
+        <Monogram name={group.name} size={AVATAR} uri={group.avatarUrl} />
+        <View style={styles.text}>
+          <Text style={styles.name} numberOfLines={1}>
+            {group.name}
+          </Text>
+          <Text style={styles.meta} numberOfLines={1}>
+            {members}
+          </Text>
+        </View>
       </View>
     </Pressable>
   );
@@ -88,7 +109,7 @@ const styles = StyleSheet.create({
   },
   tileActing: { borderWidth: 2, borderColor: sun },
   pressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
-  banner: { height: BANNER, backgroundColor: '#1B2A44' },
+  banner: { width: '100%', backgroundColor: '#1B2A44' },
   acting: {
     position: 'absolute',
     left: space.xs,
@@ -116,8 +137,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeText: { color: '#FFFFFF', ...typo.bold, fontSize: textSize.caption },
-  body: { paddingHorizontal: space.sm, paddingBottom: space.sm, gap: 1 },
-  avatar: { marginTop: -AVATAR / 2, marginBottom: space.xs },
+  // The white strip under the photo: small squad photo, name and size.
+  body: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+  },
+  text: { flex: 1, minWidth: 0 },
   name: { color: colors.text, ...typo.bold, fontSize: textSize.body },
   meta: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption },
 });
