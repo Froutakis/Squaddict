@@ -15,7 +15,7 @@ import SquadLookSheet from '../components/group/SquadLookSheet';
 import FollowButton from '../components/group/FollowButton';
 import SquadFollows from '../components/group/SquadFollows';
 import SquadMenu from '../components/group/SquadMenu';
-import SquadTicket from '../components/group/SquadTicket';
+import SquadStats from '../components/group/SquadStats';
 import { getFollowerIds, getFollowing } from '../services/serviceFollow';
 import Monogram from '../components/general/Monogram';
 import Segmented from '../components/general/Segmented';
@@ -55,9 +55,18 @@ type GroupScreenProps = {
   onBack: () => void;
   onLeave?: () => void;
   onChange?: (group: Group) => void;
+  // What the top bar's back button says, e.g. "You".
+  backLabel?: string;
 };
 
-export default function GroupScreen({ group, userId, onBack, onLeave, onChange }: GroupScreenProps) {
+export default function GroupScreen({
+  group,
+  userId,
+  onBack,
+  onLeave,
+  onChange,
+  backLabel = 'Back',
+}: GroupScreenProps) {
   const [plans, setPlans] = useState<FeedEvent[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [openPlan, setOpenPlan] = useState<SheetEvent | null>(null);
@@ -305,7 +314,9 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
       setOpened(null);
       setFollowsReload((n) => n + 1);
     };
-    return <GroupScreen group={opened} userId={userId} onBack={close} onLeave={close} />;
+    return (
+      <GroupScreen group={opened} userId={userId} onBack={close} onLeave={close} backLabel={current.name} />
+    );
   }
 
   // People outside the squad get its public profile instead.
@@ -330,27 +341,75 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.column}>
+        <View style={styles.topBar}>
+          <Pressable
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel={'Back to ' + backLabel}
+            hitSlop={8}
+            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="chevron-back" size={22} color={paper.ink} />
+            <Text style={styles.backText} numberOfLines={1}>
+              {backLabel}
+            </Text>
+          </Pressable>
+
+          {member ? (
+            <Pressable
+              onPress={() => setMenuOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="More options"
+              hitSlop={8}
+              style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}
+            >
+              <Ionicons name="ellipsis-horizontal" size={20} color={paper.ink} />
+            </Pressable>
+          ) : null}
+        </View>
+
         <ScrollView contentContainerStyle={styles.content}>
           <SquadHero
             group={current}
             memberCount={count}
             nights={member ? 0 : nights}
-            onBack={onBack}
-            onMenu={member ? () => setMenuOpen(true) : undefined}
             action={<FollowButton key={actingId ?? 'none'} group={current} userId={userId} />}
           />
 
           {member ? (
-            <SquadTicket
-              group={current}
-              nights={nights}
-              memberCount={count}
-              following={followCounts.following}
-              followers={followCounts.followers}
-              acting={isActing}
-              switching={actingBusy}
-              onActAs={actAsThisSquad}
-            />
+            <>
+              <SquadStats
+                stats={[
+                  { value: count, label: count === 1 ? 'member' : 'members' },
+                  { value: nights, label: nights === 1 ? 'night' : 'nights' },
+                  { value: followCounts.following, label: 'follows' },
+                  { value: followCounts.followers, label: followCounts.followers === 1 ? 'follower' : 'followers' },
+                ]}
+              />
+
+              {isActing ? (
+                <View style={styles.actingPill} accessibilityLabel="You are acting as this squad">
+                  <View style={styles.actingDot} />
+                  <Text style={styles.actingText}>Acting as this squad</Text>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={actAsThisSquad}
+                  disabled={actingBusy}
+                  accessibilityRole="button"
+                  accessibilityLabel="Act as this squad"
+                  accessibilityHint="Follows will be made in this squad's name"
+                  style={({ pressed }) => [styles.actButton, (pressed || actingBusy) && styles.pressed]}
+                >
+                  {actingBusy ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Ionicons name="flash" size={15} color="#FFFFFF" />
+                  )}
+                  <Text style={styles.actText}>Act as this squad</Text>
+                </Pressable>
+              )}
+            </>
           ) : null}
 
           {actingError ? <Text style={styles.error}>{actingError}</Text> : null}
@@ -466,8 +525,46 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: paper.bg },
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
   pressed: { opacity: 0.6 },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: space.sm,
+    height: 48,
+  },
+  backButton: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 1, paddingRight: space.sm },
+  backText: { color: paper.ink, ...typo.semi, fontSize: textSize.lead },
+  moreButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: paper.surface,
+  },
+  actButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: paper.ink,
+  },
+  actText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.base },
+  actingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: paper.accentSoft,
+  },
+  actingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: paper.accent },
+  actingText: { color: paper.accent, ...typo.semi, fontSize: textSize.base },
 
-  content: { padding: space.md, gap: space.md, paddingBottom: space.xl },
+  content: { paddingHorizontal: space.md, paddingBottom: space.xl, gap: space.md },
 
   loader: { marginVertical: space.xl },
   error: { color: paper.danger, ...typo.medium, fontSize: textSize.body },

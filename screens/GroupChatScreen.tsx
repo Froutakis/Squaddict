@@ -1054,6 +1054,7 @@ export default function GroupChatScreen({
       <GroupScreen
         group={activeGroup}
         userId={user.id}
+        backLabel="Chat"
         onBack={function () {
           setGroupScreen(false);
         }}

@@ -206,7 +206,9 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
       setProfileGroup(null);
       load();
     };
-    return <GroupScreen group={profileGroup} userId={user.id} onBack={close} onLeave={close} />;
+    return (
+      <GroupScreen group={profileGroup} userId={user.id} onBack={close} onLeave={close} backLabel="You" />
+    );
   }
 
   const since = sinceLabel(joinedAt);

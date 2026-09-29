@@ -702,6 +702,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
       <GroupScreen
         group={profileGroup}
         userId={userId}
+        backLabel="Explore"
         onBack={() => {
           // The profile can follow or unfollow; pick that up on the cards.
           setProfileGroup(null);

@@ -15,16 +15,16 @@ type SquadHeroProps = {
   group: Group;
   memberCount: number;
   nights: number;
-  onBack: () => void;
+  // Without it the banner has no back button (the page shows its own).
+  onBack?: () => void;
   action?: ReactNode;
-  onMenu?: () => void;
 };
 
 function plural(count: number, one: string, many: string) {
   return `${count} ${count === 1 ? one : many}`;
 }
 
-export default function SquadHero({ group, memberCount, nights, onBack, action, onMenu }: SquadHeroProps) {
+export default function SquadHero({ group, memberCount, nights, onBack, action }: SquadHeroProps) {
   const [bannerBroken, setBannerBroken] = useState(false);
   const [viewing, setViewing] = useState<'banner' | 'avatar' | null>(null);
 
@@ -60,23 +60,14 @@ export default function SquadHero({ group, memberCount, nights, onBack, action, 
           <LinearGradient colors={['#1B2A44', '#3A2E3F']} style={StyleSheet.absoluteFill} />
         )}
 
-        <Pressable
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={({ pressed }) => [styles.back, pressed && styles.pressed]}
-        >
-          <Ionicons name="chevron-back" size={20} color={paper.ink} />
-        </Pressable>
-
-        {onMenu ? (
+        {onBack ? (
           <Pressable
-            onPress={onMenu}
+            onPress={onBack}
             accessibilityRole="button"
-            accessibilityLabel="More options"
-            style={({ pressed }) => [styles.back, styles.menu, pressed && styles.pressed]}
+            accessibilityLabel="Back"
+            style={({ pressed }) => [styles.back, pressed && styles.pressed]}
           >
-            <Ionicons name="ellipsis-horizontal" size={19} color={paper.ink} />
+            <Ionicons name="chevron-back" size={20} color={paper.ink} />
           </Pressable>
         ) : null}
 
@@ -146,7 +137,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  menu: { left: undefined, right: space.sm },
   pressed: { opacity: 0.6 },
   tag: {
     position: 'absolute',
