@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radius, textSize, typo } from '../../theme';
+import { colors, textSize, typo } from '../../theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -10,7 +10,7 @@ type IconTabsProps<T extends string> = {
   onChange: (value: T) => void;
 };
 
-// Quiet tabs: plain words, the chosen one on a soft neutral chip. No colour.
+// An iOS segmented control: one grey track, the chosen segment a raised white pill.
 export default function IconTabs<T extends string>({ options, value, onChange }: IconTabsProps<T>) {
   return (
     <View style={styles.track} accessibilityRole="tablist">
@@ -40,17 +40,24 @@ export default function IconTabs<T extends string>({ options, value, onChange }:
 }
 
 const styles = StyleSheet.create({
-  track: { flexDirection: 'row', gap: 4 },
+  track: { flexDirection: 'row', gap: 2, padding: 2, borderRadius: 11, backgroundColor: 'rgba(118,118,128,0.14)' },
   item: {
     flex: 1,
-    height: 36,
+    height: 32,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    borderRadius: radius.md,
+    borderRadius: 9,
   },
-  itemActive: { backgroundColor: colors.surfaceAlt },
+  itemActive: {
+    backgroundColor: colors.surface,
+    shadowColor: '#000000',
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
   pressed: { opacity: 0.6 },
   label: { color: colors.textFaint, ...typo.semi, fontSize: textSize.body },
   labelActive: { color: colors.text },

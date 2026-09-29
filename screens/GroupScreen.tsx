@@ -373,36 +373,39 @@ export default function GroupScreen({
                 ]}
               />
 
-              <View style={styles.buttons}>
-                {isActing ? (
-                  <View style={[styles.button, styles.buttonActing]} accessibilityLabel="You are acting as this squad">
-                    <View style={styles.actingDot} />
-                    <Text style={styles.buttonActingText} numberOfLines={1}>
-                      Acting
-                    </Text>
-                  </View>
-                ) : (
-                  <Pressable
-                    onPress={actAsThisSquad}
-                    disabled={actingBusy}
-                    accessibilityRole="button"
-                    accessibilityLabel="Act as this squad"
-                    accessibilityHint="Follows will be made in this squad's name"
-                    style={({ pressed }) => [styles.button, styles.buttonPrimary, (pressed || actingBusy) && styles.pressed]}
-                  >
-                    <Text style={styles.buttonPrimaryText} numberOfLines={1}>
-                      {actingBusy ? 'Switching…' : 'Act as'}
-                    </Text>
-                  </Pressable>
-                )}
+              {/* iOS contact-card actions: icon over a short word, one tile each. */}
+              <View style={styles.tiles}>
+                <Pressable
+                  onPress={actAsThisSquad}
+                  disabled={actingBusy || isActing}
+                  accessibilityRole="button"
+                  accessibilityLabel={isActing ? 'You are acting as this squad' : 'Act as this squad'}
+                  accessibilityHint={isActing ? undefined : "Follows will be made in this squad's name"}
+                  accessibilityState={{ selected: isActing, disabled: actingBusy || isActing }}
+                  style={({ pressed }) => [styles.tile, (pressed || actingBusy) && styles.tilePressed]}
+                >
+                  {actingBusy ? (
+                    <ActivityIndicator size="small" color={paper.accent} />
+                  ) : (
+                    <Ionicons
+                      name={isActing ? 'checkmark-circle' : 'flash'}
+                      size={21}
+                      color={isActing ? ACTING_ACCENT : paper.accent}
+                    />
+                  )}
+                  <Text style={styles.tileText} numberOfLines={1}>
+                    {isActing ? 'Acting' : 'Act as'}
+                  </Text>
+                </Pressable>
 
                 <Pressable
                   onPress={() => setEditing(true)}
                   accessibilityRole="button"
                   accessibilityLabel="Edit look"
-                  style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+                  style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
                 >
-                  <Text style={styles.buttonText} numberOfLines={1}>
+                  <Ionicons name="color-palette" size={21} color={paper.accent} />
+                  <Text style={styles.tileText} numberOfLines={1}>
                     Edit look
                   </Text>
                 </Pressable>
@@ -411,9 +414,10 @@ export default function GroupScreen({
                   onPress={() => setTab('members')}
                   accessibilityRole="button"
                   accessibilityLabel="Invite people"
-                  style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+                  style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
                 >
-                  <Text style={styles.buttonText} numberOfLines={1}>
+                  <Ionicons name="person-add" size={20} color={paper.accent} />
+                  <Text style={styles.tileText} numberOfLines={1}>
                     Invite
                   </Text>
                 </Pressable>
@@ -560,7 +564,19 @@ const styles = StyleSheet.create({
   },
 
   buttons: { flexDirection: 'row', gap: 6 },
-  // Calm, neutral buttons: white with a hairline, the same for every action.
+  tiles: { flexDirection: 'row', gap: space.sm },
+  tile: {
+    flex: 1,
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    borderRadius: radius.md,
+    backgroundColor: paper.surface,
+  },
+  tilePressed: { backgroundColor: paper.surfaceAlt },
+  tileText: { color: paper.ink, ...typo.semi, fontSize: textSize.small },
+  // Calm, neutral buttons: white with a hairline (used by the leave confirm).
   button: {
     flex: 1,
     height: 38,

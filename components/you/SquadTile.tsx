@@ -6,8 +6,8 @@ import { unreadLabel } from '../chat/unread';
 import Monogram from '../general/Monogram';
 import { colors, radius, shadow, space, sun, textSize, typo } from '../../theme';
 
-const BANNER = 84;
-const AVATAR = 44;
+const BANNER = 56;
+const AVATAR = 36;
 
 type SquadTileProps = {
   group: Group;
@@ -118,6 +118,6 @@ const styles = StyleSheet.create({
   badgeText: { color: '#FFFFFF', ...typo.bold, fontSize: textSize.caption },
   body: { paddingHorizontal: space.sm, paddingBottom: space.sm, gap: 1 },
   avatar: { marginTop: -AVATAR / 2, marginBottom: space.xs },
-  name: { color: colors.text, ...typo.bold, fontSize: textSize.base },
+  name: { color: colors.text, ...typo.bold, fontSize: textSize.body },
   meta: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption },
 });

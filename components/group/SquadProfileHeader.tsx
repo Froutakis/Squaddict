@@ -8,7 +8,7 @@ import ImageViewer from '../general/ImageViewer';
 import { colors, radius, space, textSize, typo } from '../../theme';
 
 const BANNER = 150;
-const AVATAR = 84;
+const AVATAR = 92;
 const RING = 4;
 // The one colour that marks the squad you act as: the red of the logo.
 export const ACTING_ACCENT = colors.accent;
@@ -21,8 +21,8 @@ type SquadProfileHeaderProps = {
   acting: boolean;
 };
 
-// Banner with the squad's photo sitting on its bottom edge, cut out by a ring in
-// the page colour, then name, handle, bio and the numbers as a quiet line.
+// iOS-style profile card: banner, the photo centred on its bottom edge, the
+// name centred under it, and the numbers in one inset group below.
 export default function SquadProfileHeader({ group, stats, acting }: SquadProfileHeaderProps) {
   const [bannerBroken, setBannerBroken] = useState(false);
   const [viewing, setViewing] = useState<'banner' | 'avatar' | null>(null);
@@ -70,42 +70,35 @@ export default function SquadProfileHeader({ group, stats, acting }: SquadProfil
       </View>
 
       <View style={styles.identity}>
-        <View style={styles.titleRow}>
-          <View style={styles.names}>
-            <Text style={styles.name} numberOfLines={2}>
-              {group.name}
-            </Text>
-            <View style={styles.handleRow}>
-              <Text style={styles.handle} numberOfLines={1}>
-                {handleLine}
-              </Text>
-              {acting ? (
-                <View style={styles.acting} accessibilityLabel="The squad you act as">
-                  <View style={styles.actingDot} />
-                  <Text style={styles.actingText}>Acting</Text>
-                </View>
-              ) : null}
-            </View>
+        <Text style={styles.name} numberOfLines={2}>
+          {group.name}
+        </Text>
+        <Text style={styles.handle} numberOfLines={1}>
+          {handleLine}
+        </Text>
+        {acting ? (
+          <View style={styles.acting} accessibilityLabel="The squad you act as">
+            <View style={styles.actingDot} />
+            <Text style={styles.actingText}>Acting as this squad</Text>
           </View>
-
-          <View style={styles.stats}>
-            {stats.map((stat) => (
-              <View
-                key={stat.label}
-                style={styles.stat}
-                accessible
-                accessibilityLabel={`${stat.value ?? 'unknown'} ${stat.label}`}
-              >
-                <Text style={styles.statValue}>{stat.value === null ? '–' : stat.value}</Text>
-                <Text style={styles.statLabel} numberOfLines={1}>
-                  {stat.label}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
+        ) : null}
         {group.bio ? <Text style={styles.bio}>{group.bio}</Text> : null}
+      </View>
+
+      <View style={styles.stats}>
+        {stats.map((stat, index) => (
+          <View
+            key={stat.label}
+            style={[styles.stat, index > 0 && styles.statDivider]}
+            accessible
+            accessibilityLabel={`${stat.value ?? 'unknown'} ${stat.label}`}
+          >
+            <Text style={styles.statValue}>{stat.value === null ? '–' : stat.value}</Text>
+            <Text style={styles.statLabel} numberOfLines={1}>
+              {stat.label}
+            </Text>
+          </View>
+        ))}
       </View>
 
       <ImageViewer
@@ -125,20 +118,41 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceAlt,
   },
   pressed: { opacity: 0.85 },
-  // Half the photo rides on the banner's bottom edge.
-  avatarRow: { marginTop: -(AVATAR / 2 + RING), paddingLeft: space.md },
-  identity: { gap: space.sm, marginTop: space.sm },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  names: { flex: 1, minWidth: 0, gap: 4 },
-  name: { color: colors.text, ...typo.display, fontSize: textSize.hero, letterSpacing: -0.5 },
-  handleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' },
-  handle: { flexShrink: 1, color: colors.textSoft, ...typo.medium, fontSize: textSize.body },
-  acting: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  // The photo sits centred on the banner's bottom edge.
+  avatarRow: { alignItems: 'center', marginTop: -(AVATAR / 2 + RING) },
+  identity: { alignItems: 'center', gap: 3, marginTop: space.sm, paddingHorizontal: space.md },
+  name: { color: colors.text, ...typo.display, fontSize: textSize.hero, letterSpacing: -0.5, textAlign: 'center' },
+  handle: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body, textAlign: 'center' },
+  acting: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: space.xxs,
+    paddingHorizontal: 10,
+    height: 24,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+  },
   actingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: ACTING_ACCENT },
-  actingText: { color: ACTING_ACCENT, ...typo.semi, fontSize: textSize.small },
-  bio: { marginTop: space.xxs, color: colors.text, ...typo.regular, fontSize: textSize.base, lineHeight: 21 },
-  stats: { flexDirection: 'row', gap: space.md },
-  stat: { alignItems: 'center', minWidth: 36 },
+  actingText: { color: colors.text, ...typo.semi, fontSize: textSize.small },
+  bio: {
+    marginTop: space.xs,
+    color: colors.text,
+    ...typo.regular,
+    fontSize: textSize.base,
+    lineHeight: 21,
+    textAlign: 'center',
+  },
+  // One inset group, like an iOS settings row, with hairlines between the numbers.
+  stats: {
+    flexDirection: 'row',
+    marginTop: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+  },
+  stat: { flex: 1, alignItems: 'center', gap: 1 },
+  statDivider: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border },
   statValue: { color: colors.text, ...typo.title, fontSize: textSize.lead + 2, letterSpacing: -0.3 },
   statLabel: { color: colors.textSoft, ...typo.medium, fontSize: textSize.caption },
 });

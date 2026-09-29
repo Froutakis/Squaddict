@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Group } from '../../services/serviceGroup';
@@ -14,14 +15,20 @@ type SquadGridProps = {
 
 type Cell = { kind: 'squad'; group: Group } | { kind: 'new' };
 
-// Every squad you are in, two to a row, with a last tile to start or join one.
+// Every squad you are in, with a last tile to start or join one. Two to a row
+// on a phone, three once there is room, so the cards never sprawl.
+const WIDE = 520;
 export default function SquadGrid({ groups, actingId, unread, onOpen, onNew }: SquadGridProps) {
+  const [columns, setColumns] = useState(2);
   const cells: Cell[] = [...groups.map((group) => ({ kind: 'squad' as const, group })), { kind: 'new' }];
   const rows: Cell[][] = [];
-  for (let i = 0; i < cells.length; i += 2) rows.push(cells.slice(i, i + 2));
+  for (let i = 0; i < cells.length; i += columns) rows.push(cells.slice(i, i + columns));
 
   return (
-    <View style={styles.grid}>
+    <View
+      style={styles.grid}
+      onLayout={(event) => setColumns(event.nativeEvent.layout.width >= WIDE ? 3 : 2)}
+    >
       {rows.map((pair, index) => (
         <View key={index} style={styles.row}>
           {pair.map((cell) =>
@@ -42,14 +49,16 @@ export default function SquadGrid({ groups, actingId, unread, onOpen, onNew }: S
                 style={({ pressed }) => [styles.newTile, pressed && styles.pressed]}
               >
                 <View style={styles.plus}>
-                  <Ionicons name="add" size={22} color={colors.primary} />
+                  <Ionicons name="add" size={18} color={colors.primary} />
                 </View>
                 <Text style={styles.newTitle}>New squad</Text>
                 <Text style={styles.newHint}>Make one or enter a code</Text>
               </Pressable>
             ),
           )}
-          {pair.length === 1 ? <View style={styles.spacer} /> : null}
+          {Array.from({ length: columns - pair.length }).map((_, i) => (
+            <View key={'pad' + i} style={styles.spacer} />
+          ))}
         </View>
       ))}
     </View>
@@ -62,7 +71,7 @@ const styles = StyleSheet.create({
   spacer: { flex: 1 },
   newTile: {
     flex: 1,
-    minHeight: 160,
+    minHeight: 124,
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.xxs,
@@ -73,8 +82,8 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
   },
   plus: {
-    width: 42,
-    height: 42,
+    width: 34,
+    height: 34,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
