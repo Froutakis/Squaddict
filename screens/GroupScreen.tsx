@@ -364,7 +364,6 @@ export default function GroupScreen({
             <>
               <SquadProfileHeader
                 group={current}
-                acting={isActing}
                 stats={[
                   { value: nights, label: nights === 1 ? 'night' : 'nights' },
                   { value: count, label: count === 1 ? 'member' : 'members' },
@@ -372,6 +371,8 @@ export default function GroupScreen({
                   { value: followCounts.following, label: 'following' },
                 ]}
               />
+
+              <DashedDivider />
 
               <View style={styles.buttons}>
                 {isActing ? (
