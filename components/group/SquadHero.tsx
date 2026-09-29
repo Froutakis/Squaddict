@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,13 +16,14 @@ type SquadHeroProps = {
   memberCount: number;
   nights: number;
   onBack: () => void;
+  action?: ReactNode;
 };
 
 function plural(count: number, one: string, many: string) {
   return `${count} ${count === 1 ? one : many}`;
 }
 
-export default function SquadHero({ group, memberCount, nights, onBack }: SquadHeroProps) {
+export default function SquadHero({ group, memberCount, nights, onBack, action }: SquadHeroProps) {
   const [bannerBroken, setBannerBroken] = useState(false);
   const [viewing, setViewing] = useState<'banner' | 'avatar' | null>(null);
 
@@ -74,7 +75,7 @@ export default function SquadHero({ group, memberCount, nights, onBack }: SquadH
         ) : null}
       </View>
 
-      <View style={styles.avatar}>
+      <View style={styles.avatarRow}>
         {group.avatarUrl ? (
           <Pressable
             onPress={function () {
@@ -90,6 +91,8 @@ export default function SquadHero({ group, memberCount, nights, onBack }: SquadH
         ) : (
           <Monogram name={group.name} size={AVATAR} ring={4} />
         )}
+
+        {action ? <View style={styles.action}>{action}</View> : null}
       </View>
 
       <View style={styles.identity}>
@@ -142,7 +145,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   tagText: { color: '#FFFFFF', ...typo.bold, fontSize: textSize.caption, letterSpacing: 1 },
-  avatar: { marginTop: -AVATAR / 2, marginLeft: space.md },
+  avatarRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    gap: space.sm,
+    marginTop: -AVATAR / 2,
+    paddingLeft: space.md,
+  },
+  action: { flexShrink: 1, alignItems: 'flex-end' },
   identity: { gap: 3, paddingTop: space.sm },
   name: { color: paper.ink, ...typo.display, fontSize: textSize.hero },
   handle: { color: paper.inkFaint, ...typo.mono, fontSize: textSize.body },

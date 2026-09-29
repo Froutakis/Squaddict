@@ -170,7 +170,13 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
     <SafeAreaView style={styles.screen}>
       <View style={styles.column}>
         <ScrollView contentContainerStyle={styles.content}>
-          <SquadHero group={current} memberCount={count} nights={nights} onBack={onBack} />
+          <SquadHero
+            group={current}
+            memberCount={count}
+            nights={nights}
+            onBack={onBack}
+            action={<FollowButton group={current} userId={userId} />}
+          />
 
           {member ? (
             <Pressable
@@ -185,8 +191,6 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
               <Text style={styles.editLookText}>Edit look</Text>
             </Pressable>
           ) : null}
-
-          {loading || member ? null : <FollowButton group={current} userId={userId} />}
 
           {loading ? null : (
             <SquadMemories

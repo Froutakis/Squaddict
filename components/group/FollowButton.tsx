@@ -90,8 +90,8 @@ export default function FollowButton({ group, userId }: FollowButtonProps) {
           (pressed || saving) && styles.pressed,
         ]}
       >
-        <Ionicons name={following ? 'checkmark' : 'add'} size={16} color={following ? colors.text : '#FFFFFF'} />
-        <Text style={following ? styles.outlinedText : styles.solidText} numberOfLines={1}>
+        <Ionicons name={following ? 'checkmark' : 'add'} size={15} color={following ? colors.text : '#FFFFFF'} />
+        <Text style={[styles.label, following ? styles.outlinedText : styles.solidText]} numberOfLines={1}>
           {label}
         </Text>
       </Pressable>
@@ -99,10 +99,10 @@ export default function FollowButton({ group, userId }: FollowButtonProps) {
       {followsBack ? (
         <View style={styles.back}>
           <View style={styles.duo}>
-            <Monogram name={group.name} size={24} uri={group.avatarUrl} ring={2} ringColor={paper.accentSoft} />
+            <Monogram name={group.name} size={18} uri={group.avatarUrl} ring={2} ringColor={paper.accentSoft} />
             <Monogram
               name={acting.name}
-              size={24}
+              size={18}
               uri={acting.avatarUrl}
               ring={2}
               ringColor={paper.accentSoft}
@@ -123,31 +123,33 @@ export default function FollowButton({ group, userId }: FollowButtonProps) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: space.sm },
+  wrap: { alignItems: 'flex-end', gap: space.xxs, maxWidth: '100%' },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.xs,
-    paddingVertical: 12,
-    paddingHorizontal: space.md,
-    borderRadius: radius.md,
+    gap: space.xxs,
+    maxWidth: '100%',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
   },
   solid: { backgroundColor: colors.text },
   outlined: { borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface },
-  solidText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.base },
-  outlinedText: { color: colors.text, ...typo.semi, fontSize: textSize.base },
+  label: { flexShrink: 1, ...typo.semi, fontSize: textSize.body },
+  solidText: { color: '#FFFFFF' },
+  outlinedText: { color: colors.text },
   pressed: { opacity: 0.6 },
   back: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.sm,
-    padding: space.sm,
-    borderRadius: radius.md,
+    gap: space.xs,
+    paddingVertical: 3,
+    paddingHorizontal: space.xs,
+    borderRadius: radius.pill,
     backgroundColor: paper.accentSoft,
   },
   duo: { flexDirection: 'row' },
-  duoSecond: { marginLeft: -8 },
-  backText: { color: colors.primary, ...typo.semi, fontSize: textSize.small },
-  error: { color: colors.danger, ...typo.medium, fontSize: textSize.body },
+  duoSecond: { marginLeft: -6 },
+  backText: { color: colors.primary, ...typo.semi, fontSize: textSize.caption },
+  error: { color: colors.danger, ...typo.medium, fontSize: textSize.small, textAlign: 'right' },
 });
