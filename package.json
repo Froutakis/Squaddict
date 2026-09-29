@@ -29,6 +29,7 @@
     "test-squad-look": "tsx debug/test-squad-look.ts",
     "test-acting": "tsx debug/test-acting.ts",
     "test-follows": "tsx debug/test-follows.ts",
+    "test-banner": "tsx debug/test-banner.ts",
     "listen": "tsx --env-file=.env debug/listen.ts",
     "send": "tsx --env-file=.env debug/send.ts",
     "seed": "tsx --env-file=.env debug/seed.ts"

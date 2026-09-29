@@ -150,6 +150,25 @@ export async function updateSquadLook(groupId: string, look: SquadLook): Promise
   return toGroup(data);
 }
 
+// Read on its own (not in GROUP_FIELDS) so the app keeps working before the
+// banner_focus_y column exists: then this just falls back to the middle.
+export async function getBannerFocus(groupId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from("groups")
+    .select("banner_focus_y")
+    .eq("id", groupId)
+    .maybeSingle();
+  if (error) throw error;
+
+  const value = (data as { banner_focus_y?: number } | null)?.banner_focus_y;
+  return typeof value === "number" ? value : 0.5;
+}
+
+export async function setBannerFocus(groupId: string, focus: number): Promise<void> {
+  const { error } = await supabase.rpc("set_banner_focus", { p_group_id: groupId, p_focus: focus });
+  if (error) throw error;
+}
+
 export async function getNightsKept(groupId: string): Promise<number> {
   const { data, error } = await supabase.rpc("squad_nights_kept", { p_group_id: groupId });
   if (error) throw error;

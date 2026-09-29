@@ -364,6 +364,7 @@ export default function GroupScreen({
             <>
               <SquadProfileHeader
                 group={current}
+                canReposition={member}
                 stats={[
                   { value: nights, label: nights === 1 ? 'night' : 'nights' },
                   { value: count, label: count === 1 ? 'member' : 'members' },

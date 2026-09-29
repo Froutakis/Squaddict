@@ -978,3 +978,32 @@ drop policy if exists "unfollow as my squad" on public.squad_follows;
 create policy "unfollow as my squad" on public.squad_follows
   for delete to authenticated
   using (follower_group_id in (select public.my_group_ids()));
+
+-- ─── banner position (reposition like a cover photo) ───
+-- 0 = show the top of the banner photo, 1 = its bottom, 0.5 = the middle.
+alter table public.groups add column if not exists banner_focus_y real not null default 0.5;
+
+alter table public.groups drop constraint if exists groups_banner_focus_y_range;
+alter table public.groups add constraint groups_banner_focus_y_range
+  check (banner_focus_y >= 0 and banner_focus_y <= 1);
+
+create or replace function public.set_banner_focus(p_group_id uuid, p_focus real)
+returns void language plpgsql security definer set search_path to 'public' as $function$
+begin
+  if not exists (
+    select 1 from public.group_members
+     where group_id = p_group_id and user_id = auth.uid()
+  ) then
+    raise exception 'Only members can change the look.';
+  end if;
+
+  if p_focus is null or p_focus < 0 or p_focus > 1 then
+    raise exception 'The banner position must be between 0 and 1.';
+  end if;
+
+  update public.groups set banner_focus_y = p_focus where id = p_group_id;
+end;
+$function$;
+
+revoke all on function public.set_banner_focus(uuid, real) from public;
+grant execute on function public.set_banner_focus(uuid, real) to authenticated;
