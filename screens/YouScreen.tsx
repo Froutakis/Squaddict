@@ -46,7 +46,6 @@ const AVATAR_SIZE = 76;
 
 type YouScreenProps = {
   user: AuthUser;
-  onOpenParea?: (groupId: string) => void;
   onPlan?: () => void;
 };
 
@@ -58,7 +57,7 @@ function sinceLabel(iso?: string) {
 }
 
 // You: your year out, your pareas, and every night you were part of.
-export default function YouScreen({ user, onOpenParea, onPlan }: YouScreenProps) {
+export default function YouScreen({ user, onPlan }: YouScreenProps) {
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [joinedAt, setJoinedAt] = useState<string | undefined>(undefined);
@@ -149,11 +148,6 @@ export default function YouScreen({ user, onOpenParea, onPlan }: YouScreenProps)
   const topPlace = topBy(thisYear, (night) => night.location ?? night.placeLabel);
   const streak = weekStreak(nights.map((night) => night.date), today);
   const months = useMemo(() => byMonth(nights, today), [nights, today]);
-  const nightsByGroup = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const night of nights) counts[night.groupId] = (counts[night.groupId] ?? 0) + 1;
-    return counts;
-  }, [nights]);
   const groupSizes = useMemo(
     () => Object.fromEntries(groups.map((group) => [group.id, group.memberCount])),
     [groups],

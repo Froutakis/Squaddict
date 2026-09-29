@@ -94,10 +94,6 @@ export default function App() {
         ) : screen === 'you' ? (
           <YouScreen
             user={user}
-            onOpenParea={(groupId) => {
-              setSelectGroup({ id: groupId, nonce: Date.now() });
-              setScreen('home');
-            }}
             onPlan={() => {
               setCreateNonce((n) => n + 1);
               setScreen('home');
