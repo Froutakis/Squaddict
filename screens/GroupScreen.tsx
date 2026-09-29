@@ -14,6 +14,7 @@ import SquadMemories from '../components/group/SquadMemories';
 import SquadLookSheet from '../components/group/SquadLookSheet';
 import FollowButton from '../components/group/FollowButton';
 import SquadFollows from '../components/group/SquadFollows';
+import SquadMenu from '../components/group/SquadMenu';
 import Monogram from '../components/general/Monogram';
 import Segmented from '../components/general/Segmented';
 import { getActingSquad, setActingGroup } from '../services/serviceUser';
@@ -26,7 +27,7 @@ import {
   rotateInviteCode,
   type Group,
 } from '../services/serviceGroup';
-import { layout, paper, typo, radius, space, textSize } from '../theme';
+import { layout, paper, typo, radius, space, sun, textSize } from '../theme';
 import { getGroupPublicEvents, type FeedEvent } from '../services/serviceFeed';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
@@ -65,12 +66,11 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rotating, setRotating] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [leaving, setLeaving] = useState(false);
   const [current, setCurrent] = useState(group);
   const [nights, setNights] = useState(0);
   const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState<Tab>('memories');
+  const [menuOpen, setMenuOpen] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   const [actingBusy, setActingBusy] = useState(false);
   const [actingError, setActingError] = useState<string | null>(null);
@@ -240,17 +240,16 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
   }
 
   async function handleLeave() {
-    setLeaving(true);
     setError(null);
 
     try {
       await leaveGroup(group.id);
+      setMenuOpen(false);
       if (onLeave) onLeave();
       else onBack();
     } catch {
+      setMenuOpen(false);
       setError('Could not leave the squad. Try again.');
-      setLeaving(false);
-      setConfirming(false);
     }
   }
 
@@ -335,26 +334,20 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
                   pressed && styles.pressed,
                 ]}
               >
-                <Ionicons
-                  name={isActing ? 'checkmark-circle' : 'flash-outline'}
-                  size={16}
-                  color={isActing ? paper.accent : '#FFFFFF'}
-                />
+                {isActing ? <View style={styles.actDot} /> : null}
                 <Text style={isActing ? styles.actOnText : styles.actOffText} numberOfLines={1}>
                   {isActing ? 'Acting as this squad' : actingBusy ? 'Switching…' : 'Act as this squad'}
                 </Text>
               </Pressable>
 
               <Pressable
-                onPress={function () {
-                  setEditing(true);
-                }}
+                onPress={() => setMenuOpen(true)}
                 accessibilityRole="button"
-                accessibilityLabel="Edit look"
-                style={({ pressed }) => [styles.editLook, pressed && styles.pressed]}
+                accessibilityLabel="More options"
+                hitSlop={6}
+                style={({ pressed }) => [styles.more, pressed && styles.pressed]}
               >
-                <Ionicons name="color-palette-outline" size={16} color={paper.accent} />
-                <Text style={styles.editLookText}>Edit look</Text>
+                <Ionicons name="ellipsis-horizontal" size={20} color={paper.ink} />
               </Pressable>
             </View>
           ) : null}
@@ -383,91 +376,68 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
               ) : null}
 
               {tab === 'members' ? (
-            <>
-              {member ? (
-              <View style={styles.card}>
-                <Text style={styles.cardLabel}>INVITE CODE</Text>
+                <View style={styles.membersTab}>
+                  {member ? (
+                    <View style={styles.invite}>
+                      <View style={styles.inviteText}>
+                        <Text style={styles.inviteLabel}>INVITE CODE</Text>
+                        <Text style={styles.code} selectable>
+                          {code ?? '——————'}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={handleRotate}
+                        disabled={rotating}
+                        accessibilityRole="button"
+                        accessibilityLabel="Make a new invite code"
+                        hitSlop={6}
+                        style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}
+                      >
+                        {rotating ? (
+                          <ActivityIndicator size="small" color={paper.ink} />
+                        ) : (
+                          <Ionicons name="refresh" size={17} color={paper.ink} />
+                        )}
+                      </Pressable>
+                    </View>
+                  ) : null}
 
-                <View style={styles.codeRow}>
-                  <Text style={styles.code} selectable>
-                    {code ?? '——————'}
-                  </Text>
-
-                  <Pressable
-                    onPress={handleRotate}
-                    disabled={rotating}
-                    accessibilityRole="button"
-                    accessibilityLabel="Make a new invite code"
-                    style={({ pressed }) => [styles.ghost, pressed && styles.pressed]}
-                  >
-                    <Ionicons name="refresh" size={15} color={paper.accent} />
-                    <Text style={styles.ghostText}>{rotating ? 'Working…' : 'New code'}</Text>
-                  </Pressable>
+                  {restricted ? (
+                    <Text style={styles.hint}>Only members see who is in this squad.</Text>
+                  ) : (
+                    <View style={styles.memberList}>
+                      {members.map((person, index) => (
+                        <View key={person.id} style={[styles.member, index > 0 && styles.memberDivider]}>
+                          <Monogram name={person.name} uri={person.avatarUrl} size={38} />
+                          <Text style={styles.memberName} numberOfLines={1}>
+                            {person.name}
+                          </Text>
+                          {person.id === userId ? <Text style={styles.you}>You</Text> : null}
+                        </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
-
-                <Text style={styles.cardHint}>
-                  Anyone with this code can join. Make a new one and the old stops working.
-                </Text>
-              </View>
-              ) : null}
-
-              {restricted ? (
-                <Text style={styles.hint}>Only members see who is in this squad.</Text>
-              ) : (
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>MEMBERS</Text>
-
-                {members.map((member) => (
-                  <View key={member.id} style={styles.member}>
-                    <Monogram name={member.name} uri={member.avatarUrl} size={34} />
-                    <Text style={styles.memberName} numberOfLines={1}>
-                      {member.name}
-                    </Text>
-                    {member.id === userId ? <Text style={styles.you}>you</Text> : null}
-                  </View>
-                ))}
-              </View>
-              )}
-
-              {!member ? null : confirming ? (
-                <View style={styles.confirmRow}>
-                  <Pressable
-                    onPress={() => setConfirming(false)}
-                    disabled={leaving}
-                    accessibilityRole="button"
-                    accessibilityLabel="Cancel"
-                    style={({ pressed }) => [styles.confirm, styles.cancel, pressed && styles.pressed]}
-                  >
-                    <Text style={styles.cancelText}>Cancel</Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={handleLeave}
-                    disabled={leaving}
-                    accessibilityRole="button"
-                    accessibilityLabel="Confirm leaving the squad"
-                    style={({ pressed }) => [styles.confirm, styles.danger, pressed && styles.pressed]}
-                  >
-                    <Text style={styles.dangerText}>{leaving ? 'Leaving…' : 'Yes, leave'}</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <Pressable
-                  onPress={() => setConfirming(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Leave this squad"
-                  style={({ pressed }) => [styles.leave, pressed && styles.pressed]}
-                >
-                  <Ionicons name="exit-outline" size={16} color={paper.danger} />
-                  <Text style={styles.leaveText}>Leave squad</Text>
-                </Pressable>
-              )}
-            </>
               ) : null}
             </>
           )}
         </ScrollView>
       </View>
+
+      <SquadMenu
+        visible={menuOpen}
+        squadName={current.name}
+        onClose={() => setMenuOpen(false)}
+        onEditLook={() => {
+          setMenuOpen(false);
+          afterSheet(() => setEditing(true));
+        }}
+        onInvite={() => {
+          setMenuOpen(false);
+          setTab('members');
+        }}
+        onLeave={handleLeave}
+      />
 
       <SquadLookSheet
         visible={editing}
@@ -484,6 +454,13 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
   );
 }
 
+// iOS can't present a sheet while another one is still sliding away.
+const SHEET_CLOSE_MS = 350;
+
+function afterSheet(open: () => void) {
+  setTimeout(open, SHEET_CLOSE_MS);
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: paper.bg },
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
@@ -494,24 +471,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.xs,
-    height: 40,
+    height: 38,
     paddingHorizontal: space.md,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
   },
   actOff: { backgroundColor: paper.ink },
-  actOn: { backgroundColor: paper.accentSoft },
+  actOn: { backgroundColor: paper.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: paper.line },
+  actDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: sun },
   actOffText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.body },
-  actOnText: { color: paper.accent, ...typo.semi, fontSize: textSize.body },
-  editLook: {
-    flexDirection: 'row',
+  actOnText: { color: paper.ink, ...typo.semi, fontSize: textSize.body },
+  more: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.sm,
     alignItems: 'center',
-    gap: space.xs,
-    height: 40,
-    paddingHorizontal: space.md,
-    borderRadius: radius.pill,
-    backgroundColor: paper.accentSoft,
+    justifyContent: 'center',
+    backgroundColor: paper.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: paper.line,
   },
-  editLookText: { color: paper.accent, ...typo.semi, fontSize: textSize.body },
   pressed: { opacity: 0.6 },
 
   content: { padding: space.md, gap: space.md, paddingBottom: space.xl },
@@ -526,89 +504,36 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
   },
 
-  card: {
-    backgroundColor: paper.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: paper.line,
-    padding: space.md,
-    gap: space.sm,
-  },
-  cardLabel: {
-    color: paper.inkFaint,
-    ...typo.mono,
-    fontSize: textSize.micro,
-    letterSpacing: 1.2,
-  },
-  codeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
-  code: {
-    color: paper.ink,
-    ...typo.mono,
-    fontSize: textSize.heading,
-    letterSpacing: 3,
-  },
-  ghost: {
+  membersTab: { gap: space.md },
+  invite: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderRadius: radius.md,
+    backgroundColor: paper.surface,
+  },
+  inviteText: { flex: 1, gap: 2 },
+  inviteLabel: { color: paper.inkFaint, ...typo.mono, fontSize: textSize.micro, letterSpacing: 1.2 },
+  code: { color: paper.ink, ...typo.mono, fontSize: textSize.heading, letterSpacing: 3 },
+  roundButton: {
+    width: 36,
+    height: 36,
     borderRadius: radius.pill,
-    backgroundColor: paper.accentSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: paper.bg,
   },
-  ghostText: { color: paper.accent, ...typo.semi, fontSize: textSize.small },
-  cardHint: { color: paper.inkFaint, ...typo.regular, fontSize: textSize.small, lineHeight: 17 },
-
-  section: { gap: space.xs },
-  sectionLabel: {
-    marginBottom: space.xxs,
-    color: paper.inkFaint,
-    ...typo.mono,
-    fontSize: textSize.micro,
-    letterSpacing: 1.2,
-  },
+  memberList: { borderRadius: radius.md, backgroundColor: paper.surface, overflow: 'hidden' },
   member: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    backgroundColor: paper.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: paper.line,
     paddingHorizontal: space.md,
-    paddingVertical: space.sm,
+    paddingVertical: 10,
   },
+  memberDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: paper.line },
   memberName: { flex: 1, color: paper.ink, ...typo.medium, fontSize: textSize.base },
-  you: {
-    color: paper.inkFaint,
-    ...typo.mono,
-    fontSize: textSize.caption,
-  },
-
-  leave: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    marginTop: space.sm,
-    paddingVertical: 13,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: paper.line,
-    backgroundColor: paper.surface,
-  },
-  leaveText: { color: paper.danger, ...typo.semi, fontSize: textSize.base },
-  confirmRow: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
-  confirm: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 13,
-    borderRadius: radius.md,
-    borderWidth: 1,
-  },
-  cancel: { borderColor: paper.line, backgroundColor: paper.surface },
-  cancelText: { color: paper.inkSoft, ...typo.semi, fontSize: textSize.base },
-  danger: { borderColor: paper.danger, backgroundColor: paper.danger },
-  dangerText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.base },
+  you: { color: paper.inkFaint, ...typo.medium, fontSize: textSize.small },
 });
