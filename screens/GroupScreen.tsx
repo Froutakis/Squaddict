@@ -12,6 +12,7 @@ import {
 import SquadHero from '../components/group/SquadHero';
 import SquadMemories from '../components/group/SquadMemories';
 import SquadLookSheet from '../components/group/SquadLookSheet';
+import FollowButton from '../components/group/FollowButton';
 import Monogram from '../components/general/Monogram';
 import {
   getGroupById,
@@ -184,6 +185,8 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
               <Text style={styles.editLookText}>Edit look</Text>
             </Pressable>
           ) : null}
+
+          {loading || member ? null : <FollowButton group={current} userId={userId} />}
 
           {loading ? null : (
             <SquadMemories
