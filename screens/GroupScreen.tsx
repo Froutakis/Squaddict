@@ -13,7 +13,10 @@ import SquadHero from '../components/group/SquadHero';
 import SquadMemories from '../components/group/SquadMemories';
 import SquadLookSheet from '../components/group/SquadLookSheet';
 import FollowButton from '../components/group/FollowButton';
+import SquadFollows from '../components/group/SquadFollows';
 import Monogram from '../components/general/Monogram';
+import Segmented from '../components/general/Segmented';
+import { getActingSquad, setActingGroup } from '../services/serviceUser';
 import {
   getGroupById,
   getInviteCode,
@@ -28,13 +31,20 @@ import { getGroupPublicEvents, type FeedEvent } from '../services/serviceFeed';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import PublicProfile from '../components/group/PublicProfile';
-import { plural } from '../lib/text';
 
 type Member = {
   id: string;
   name: string;
   avatarUrl: string | null;
 };
+
+type Tab = 'memories' | 'following' | 'members';
+
+const TABS: { value: Tab; label: string }[] = [
+  { value: 'memories', label: 'Memories' },
+  { value: 'following', label: 'Following' },
+  { value: 'members', label: 'Members' },
+];
 
 type GroupScreenProps = {
   group: Group;
@@ -60,10 +70,46 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
   const [current, setCurrent] = useState(group);
   const [nights, setNights] = useState(0);
   const [editing, setEditing] = useState(false);
+  const [tab, setTab] = useState<Tab>('memories');
+  const [actingId, setActingId] = useState<string | null>(null);
+  const [actingBusy, setActingBusy] = useState(false);
+  const [actingError, setActingError] = useState<string | null>(null);
+  const [opened, setOpened] = useState<Group | null>(null);
+  const [followsReload, setFollowsReload] = useState(0);
 
   useEffect(() => {
     setCurrent(group);
   }, [group]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getActingSquad(userId)
+      .then(function (acting) {
+        if (!cancelled) setActingId(acting?.id ?? null);
+      })
+      .catch(function () {});
+    return function cleanup() {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  async function actAsThisSquad() {
+    if (actingBusy || actingId === group.id) return;
+
+    const previous = actingId;
+    setActingId(group.id);
+    setActingBusy(true);
+    setActingError(null);
+
+    try {
+      await setActingGroup(userId, group.id);
+    } catch {
+      setActingId(previous);
+      setActingError('Could not switch. Try again.');
+    } finally {
+      setActingBusy(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -209,6 +255,7 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
   }
 
   const count = members.length > 0 ? members.length : group.memberCount;
+  const isActing = actingId === group.id;
 
   function openSheet(plan: FeedEvent) {
     setOpenPlan({
@@ -233,6 +280,15 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
       onChanged={async () => setPlans(await getGroupPublicEvents(group.id))}
     />
   );
+
+  // A squad opened from the Following tab stacks on top of this one.
+  if (opened) {
+    const close = () => {
+      setOpened(null);
+      setFollowsReload((n) => n + 1);
+    };
+    return <GroupScreen group={opened} userId={userId} onBack={close} onLeave={close} />;
+  }
 
   // People outside the squad get its public profile instead.
   if (!loading && !member) {
@@ -262,38 +318,71 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
             memberCount={count}
             nights={nights}
             onBack={onBack}
-            action={<FollowButton group={current} userId={userId} />}
+            action={<FollowButton key={actingId ?? 'none'} group={current} userId={userId} />}
           />
 
           {member ? (
-            <Pressable
-              onPress={function () {
-                setEditing(true);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Edit look"
-              style={({ pressed }) => [styles.editLook, pressed && styles.pressed]}
-            >
-              <Ionicons name="color-palette-outline" size={16} color={paper.accent} />
-              <Text style={styles.editLookText}>Edit look</Text>
-            </Pressable>
+            <View style={styles.actions}>
+              <Pressable
+                onPress={actAsThisSquad}
+                disabled={actingBusy || isActing}
+                accessibilityRole="button"
+                accessibilityLabel={isActing ? 'You are acting as this squad' : 'Act as this squad'}
+                accessibilityState={{ selected: isActing, disabled: actingBusy || isActing }}
+                style={({ pressed }) => [
+                  styles.actButton,
+                  isActing ? styles.actOn : styles.actOff,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Ionicons
+                  name={isActing ? 'checkmark-circle' : 'flash-outline'}
+                  size={16}
+                  color={isActing ? paper.accent : '#FFFFFF'}
+                />
+                <Text style={isActing ? styles.actOnText : styles.actOffText} numberOfLines={1}>
+                  {isActing ? 'Acting as this squad' : actingBusy ? 'Switching…' : 'Act as this squad'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={function () {
+                  setEditing(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Edit look"
+                style={({ pressed }) => [styles.editLook, pressed && styles.pressed]}
+              >
+                <Ionicons name="color-palette-outline" size={16} color={paper.accent} />
+                <Text style={styles.editLookText}>Edit look</Text>
+              </Pressable>
+            </View>
           ) : null}
 
-          {loading ? null : (
-            <SquadMemories
-              group={current}
-              userId={userId}
-              member={member}
-              nights={nights}
-              onPhotosChanged={refreshNights}
-            />
-          )}
-
+          {actingError ? <Text style={styles.error}>{actingError}</Text> : null}
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           {loading ? (
             <ActivityIndicator color={paper.accent} style={styles.loader} />
           ) : (
+            <>
+              <Segmented options={TABS} value={tab} onChange={setTab} />
+
+              {tab === 'memories' ? (
+                <SquadMemories
+                  group={current}
+                  userId={userId}
+                  member={member}
+                  nights={nights}
+                  onPhotosChanged={refreshNights}
+                />
+              ) : null}
+
+              {tab === 'following' ? (
+                <SquadFollows group={current} reloadKey={followsReload} onOpen={setOpened} />
+              ) : null}
+
+              {tab === 'members' ? (
             <>
               {member ? (
               <View style={styles.card}>
@@ -374,6 +463,8 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
                 </Pressable>
               )}
             </>
+              ) : null}
+            </>
           )}
         </ScrollView>
       </View>
@@ -396,13 +487,27 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: paper.bg },
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  actButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.xs,
+    height: 40,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+  },
+  actOff: { backgroundColor: paper.ink },
+  actOn: { backgroundColor: paper.accentSoft },
+  actOffText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.body },
+  actOnText: { color: paper.accent, ...typo.semi, fontSize: textSize.body },
   editLook: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
     gap: space.xs,
-    paddingVertical: space.xs,
-    paddingHorizontal: space.sm,
+    height: 40,
+    paddingHorizontal: space.md,
     borderRadius: radius.pill,
     backgroundColor: paper.accentSoft,
   },

@@ -12,34 +12,23 @@ import {
 } from 'react-native';
 import type { User as AuthUser } from '@supabase/supabase-js';
 import { logout } from '../services/serviceAuth';
-import { clearAvatar, getUserById, setAvatar } from '../services/serviceUser';
+import { clearAvatar, getActingGroupId, getUserById, setAvatar } from '../services/serviceUser';
 import { pickImage, takePhoto } from '../services/serviceMedia';
 import { getGroupsForUser, type Group } from '../services/serviceGroup';
 import { getUnreadCounts } from '../services/serviceChat';
-import {
-  countMyPhotos,
-  getEventCovers,
-  getMyEvents,
-  type EventCover,
-  type MyEvent,
-} from '../services/serviceEvents';
+import { countMyPhotos, getMyEvents, type MyEvent } from '../services/serviceEvents';
 import { messageFor, PhotoSourceSheet, type PhotoSource } from '../components/events/EventPhotos';
 import Monogram, { initialsFor } from '../components/general/Monogram';
 import SectionHead from '../components/general/SectionHead';
 import GroupFormSheet from '../components/group/GroupFormSheet';
-import EventSheet from '../components/events/EventSheet';
-import StoryViewer from '../components/events/StoryViewer';
-import type { MemoryNight } from '../components/home/memories';
-import { useSignedImages } from '../components/home/useSignedImages';
 import YearTicket from '../components/you/YearTicket';
-import SquadSection from '../components/you/SquadSection';
+import SquadGrid from '../components/you/SquadGrid';
 import GroupScreen from './GroupScreen';
-import FollowsScreen from './FollowsScreen';
-import NightsArchive from '../components/you/NightsArchive';
 import SettingsSheet from '../components/you/SettingsSheet';
 import { keyOf, parseLocal, todayLabel } from '../lib/datetime';
-import { byMonth, pastNights, topBy, weekStreak } from '../lib/stats';
+import { pastNights, topBy, weekStreak } from '../lib/stats';
 import { ticketCode } from '../lib/ticket';
+import { pickActing } from '../lib/acting';
 import { colors, layout, radius, space, textSize, typo } from '../theme';
 
 const AVATAR_SIZE = 76;
@@ -56,7 +45,7 @@ function sinceLabel(iso?: string) {
   return `On Squaddict since ${date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;
 }
 
-// You: your year out, your pareas, and every night you were part of.
+// You: your year out and every squad you are in.
 export default function YouScreen({ user, onPlan }: YouScreenProps) {
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -65,7 +54,7 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
   const [events, setEvents] = useState<MyEvent[]>([]);
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [photoCount, setPhotoCount] = useState(0);
-  const [covers, setCovers] = useState<Record<string, EventCover>>({});
+  const [actingId, setActingId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -76,25 +65,21 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
   const [askingAvatar, setAskingAvatar] = useState(false);
   const [settings, setSettings] = useState(false);
   const [groupForm, setGroupForm] = useState<'create' | 'join' | null>(null);
-  const [openEvent, setOpenEvent] = useState<MyEvent | null>(null);
-  const [story, setStory] = useState<MemoryNight[] | null>(null);
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
-  const [followsOf, setFollowsOf] = useState<Group | null>(null);
-  const [squadReloads, setSquadReloads] = useState(0);
 
-  const { signed, signPaths, dropSigned } = useSignedImages();
   const today = keyOf(new Date());
   const year = parseLocal(today).getFullYear();
 
   const load = useCallback(
     async function load() {
       try {
-        const [profile, myGroups, myEvents, counts, photos] = await Promise.all([
+        const [profile, myGroups, myEvents, counts, photos, stored] = await Promise.all([
           getUserById(user.id),
           getGroupsForUser(user.id),
           getMyEvents(user.id),
           getUnreadCounts().catch(() => ({}) as Record<string, number>),
           countMyPhotos(user.id).catch(() => 0),
+          getActingGroupId(user.id).catch(() => null),
         ]);
 
         setDisplayName(profile?.name ?? '');
@@ -104,13 +89,13 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
         setEvents(myEvents);
         setUnread(counts);
         setPhotoCount(photos);
+        setActingId(stored);
         setError(null);
       } catch {
         setError('Could not load your nights.');
       } finally {
         setLoading(false);
         setRefreshing(false);
-        setSquadReloads((n) => n + 1);
       }
     },
     [user.id],
@@ -121,48 +106,11 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
   }, [load]);
 
   const nights = useMemo(() => pastNights(events, today), [events, today]);
-  const nightIds = nights.map((night) => night.id).join(',');
-
-  useEffect(() => {
-    if (nightIds === '') {
-      setCovers({});
-      return;
-    }
-
-    let cancelled = false;
-    getEventCovers(nightIds.split(','))
-      .then((found) => {
-        if (cancelled) return;
-        setCovers(found);
-        signPaths(Object.values(found).map((cover) => cover.path));
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [nightIds, signPaths]);
-
   const thisYear = nights.filter((night) => night.date.startsWith(String(year)));
   const topGroup = topBy(thisYear, (night) => night.groupName);
   const topPlace = topBy(thisYear, (night) => night.location ?? night.placeLabel);
   const streak = weekStreak(nights.map((night) => night.date), today);
-  const months = useMemo(() => byMonth(nights, today), [nights, today]);
-  const groupSizes = useMemo(
-    () => Object.fromEntries(groups.map((group) => [group.id, group.memberCount])),
-    [groups],
-  );
-
-  function coverFor(event: MyEvent): string | null {
-    const photo = covers[event.id];
-    return (photo ? signed[photo.path]?.url : undefined) ?? event.coverUrl ?? null;
-  }
-
-  function openNight(event: MyEvent) {
-    const cover = covers[event.id];
-    if (cover) setStory([{ event, cover, latestAt: cover.latestAt }]);
-    else setOpenEvent(event);
-  }
+  const acting = pickActing(groups, actingId);
 
   async function changeAvatar(source: PhotoSource) {
     setAskingAvatar(false);
@@ -238,36 +186,16 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
         </View>
 
         <View>
-          <SectionHead title="Your squad" meta={groups.length > 0 ? String(groups.length) : undefined} />
+          <SectionHead title="Your squads" meta={groups.length > 0 ? String(groups.length) : undefined} />
           <View style={styles.body}>
-            <SquadSection
-              userId={user.id}
+            <SquadGrid
               groups={groups}
+              actingId={acting?.id ?? null}
               unread={unread}
-              reloadKey={squadReloads}
-              onOpenProfile={setProfileGroup}
-              onOpenFollows={setFollowsOf}
-              onMake={() => setGroupForm('create')}
-              onJoin={() => setGroupForm('join')}
+              onOpen={setProfileGroup}
+              onNew={() => setGroupForm('create')}
             />
           </View>
-        </View>
-
-        <View>
-          <SectionHead title="Your nights" meta={nights.length > 0 ? `${nights.length} in all` : undefined} />
-          {months.length > 0 ? (
-            <NightsArchive months={months} coverFor={coverFor} onOpen={openNight} />
-          ) : (
-            <View style={styles.body}>
-              <View style={styles.emptyCard}>
-                <Ionicons name="images-outline" size={24} color={colors.textSoft} />
-                <Text style={styles.emptyTitle}>Your nights will live here</Text>
-                <Text style={styles.emptyBody}>
-                  Every plan you say you're in lands here once it's over, with the photos from that night.
-                </Text>
-              </View>
-            </View>
-          )}
         </View>
       </>
     );
@@ -279,19 +207,6 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
       load();
     };
     return <GroupScreen group={profileGroup} userId={user.id} onBack={close} onLeave={close} />;
-  }
-
-  if (followsOf) {
-    return (
-      <FollowsScreen
-        acting={followsOf}
-        userId={user.id}
-        onBack={() => {
-          setFollowsOf(null);
-          load();
-        }}
-      />
-    );
   }
 
   const since = sinceLabel(joinedAt);
@@ -389,36 +304,9 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
           load();
         }}
       />
-
-      <StoryViewer
-        key={story ? story[0].event.id : 'closed'}
-        visible={story !== null}
-        nights={story ?? []}
-        startIndex={0}
-        groupSizes={groupSizes}
-        signed={signed}
-        signPaths={signPaths}
-        onImageError={dropSigned}
-        onSeen={noop}
-        onAddYours={(night) => {
-          setStory(null);
-          setOpenEvent(night.event);
-        }}
-        onClose={() => setStory(null)}
-      />
-
-      <EventSheet
-        event={openEvent}
-        currentUserId={user.id}
-        onClose={() => setOpenEvent(null)}
-        onChanged={load}
-        onPhotosChanged={load}
-      />
     </SafeAreaView>
   );
 }
-
-function noop() {}
 
 // iOS can't present a sheet while another one is still sliding away.
 const SHEET_CLOSE_MS = 350;

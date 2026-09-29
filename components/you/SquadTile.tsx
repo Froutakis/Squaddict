@@ -2,18 +2,21 @@ import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Group } from '../../services/serviceGroup';
+import { unreadLabel } from '../chat/unread';
 import Monogram from '../general/Monogram';
-import { colors, radius, shadow, space, textSize, typo } from '../../theme';
+import { colors, radius, shadow, space, sun, textSize, typo } from '../../theme';
 
-const BANNER = 76;
-const AVATAR = 36;
+const BANNER = 84;
+const AVATAR = 44;
 
 type SquadTileProps = {
   group: Group;
+  acting?: boolean;
+  unread?: number;
   onPress: () => void;
 };
 
-export default function SquadTile({ group, onPress }: SquadTileProps) {
+export default function SquadTile({ group, acting = false, unread = 0, onPress }: SquadTileProps) {
   const [bannerBroken, setBannerBroken] = useState(false);
 
   useEffect(() => {
@@ -21,13 +24,18 @@ export default function SquadTile({ group, onPress }: SquadTileProps) {
   }, [group.bannerUrl]);
 
   const banner = group.bannerUrl && !bannerBroken ? group.bannerUrl : null;
+  const badge = unreadLabel(unread);
+  const members = `${group.memberCount} ${group.memberCount === 1 ? 'member' : 'members'}`;
+  const label = [group.name, members, acting ? 'acting squad' : null, badge ? `${badge} unread` : null]
+    .filter(Boolean)
+    .join(', ');
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Open ${group.name}, @${group.handle}`}
-      style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.tile, acting && styles.tileActing, pressed && styles.pressed]}
     >
       <View style={styles.banner}>
         {banner ? (
@@ -42,6 +50,19 @@ export default function SquadTile({ group, onPress }: SquadTileProps) {
         ) : (
           <LinearGradient colors={['#1B2A44', '#3A2E3F']} style={StyleSheet.absoluteFill} />
         )}
+
+        {acting ? (
+          <View style={styles.acting}>
+            <View style={styles.actingDot} />
+            <Text style={styles.actingText}>ACTING</Text>
+          </View>
+        ) : null}
+
+        {badge ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{badge}</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.body}>
@@ -49,8 +70,8 @@ export default function SquadTile({ group, onPress }: SquadTileProps) {
         <Text style={styles.name} numberOfLines={1}>
           {group.name}
         </Text>
-        <Text style={styles.handle} numberOfLines={1}>
-          @{group.handle}
+        <Text style={styles.meta} numberOfLines={1}>
+          {members}
         </Text>
       </View>
     </Pressable>
@@ -65,10 +86,38 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...shadow.card,
   },
-  pressed: { opacity: 0.7 },
+  tileActing: { borderWidth: 2, borderColor: sun },
+  pressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
   banner: { height: BANNER, backgroundColor: '#1B2A44' },
-  body: { paddingHorizontal: space.sm, paddingBottom: space.sm, gap: 2 },
+  acting: {
+    position: 'absolute',
+    left: space.xs,
+    top: space.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    height: 20,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(6,14,22,0.6)',
+  },
+  actingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: sun },
+  actingText: { color: '#FFFFFF', ...typo.mono, fontSize: textSize.micro, letterSpacing: 1 },
+  badge: {
+    position: 'absolute',
+    right: space.xs,
+    top: space.xs,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { color: '#FFFFFF', ...typo.bold, fontSize: textSize.caption },
+  body: { paddingHorizontal: space.sm, paddingBottom: space.sm, gap: 1 },
   avatar: { marginTop: -AVATAR / 2, marginBottom: space.xs },
   name: { color: colors.text, ...typo.bold, fontSize: textSize.base },
-  handle: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption },
+  meta: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption },
 });
