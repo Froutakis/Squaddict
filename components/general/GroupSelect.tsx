@@ -13,6 +13,7 @@ type GroupSelectProps = {
   onSelect: (groupId: string | null) => void;
   allLabel?: string;
   allAvatarLabel?: string;
+  allAvatarUrl?: string | null;
 };
 
 export default function GroupSelect({
@@ -21,6 +22,7 @@ export default function GroupSelect({
   onSelect,
   allLabel = 'You',
   allAvatarLabel = '',
+  allAvatarUrl = null,
 }: GroupSelectProps) {
   const [picker, setPicker] = useState(false);
   const [anchor, setAnchor] = useState({ top: 0, left: 0 });
@@ -29,9 +31,10 @@ export default function GroupSelect({
   const active = groups.find((group) => group.id === groupId);
   const label = active ? active.name : allLabel;
   const avatarLabel = active ? active.name : allAvatarLabel || allLabel;
+  const avatarUrl = active ? active.avatarUrl : allAvatarUrl;
 
   function openPicker() {
-    trigger.current?.measureInWindow((x, y, width, height) => {
+    trigger.current?.measureInWindow((x, y, _width, height) => {
       const maxLeft = Dimensions.get('window').width - MENU_WIDTH - space.md;
       setAnchor({ top: y + height + 6, left: Math.max(space.md, Math.min(x, maxLeft)) });
       setPicker(true);
@@ -54,7 +57,7 @@ export default function GroupSelect({
         accessibilityState={{ expanded: picker }}
         style={({ pressed }) => [styles.trigger, pressed && styles.pressed]}
       >
-        <Monogram name={avatarLabel} initials={initialsFor(avatarLabel)} size={25} />
+        <Monogram name={avatarLabel} uri={avatarUrl} initials={initialsFor(avatarLabel)} size={25} />
 
         <Text style={styles.triggerText} numberOfLines={1}>
           {label}
@@ -86,6 +89,7 @@ export default function GroupSelect({
             >
               <Monogram
                 name={allAvatarLabel || allLabel}
+                uri={allAvatarUrl}
                 initials={initialsFor(allAvatarLabel || allLabel)}
                 size={24}
               />
@@ -103,7 +107,7 @@ export default function GroupSelect({
                 accessibilityLabel={group.name}
                 style={({ pressed }) => [styles.row, pressed && styles.pressed]}
               >
-                <Monogram name={group.name} size={24} />
+                <Monogram name={group.name} uri={group.avatarUrl} size={24} />
                 <Text style={styles.name} numberOfLines={1}>
                   {group.name}
                 </Text>
@@ -120,7 +124,7 @@ export default function GroupSelect({
 }
 
 const styles = StyleSheet.create({
-  trigger: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  trigger: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '100%' },
   triggerText: {
     flexShrink: 1,
     color: colors.text,

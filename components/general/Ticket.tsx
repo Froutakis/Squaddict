@@ -2,6 +2,8 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import {
   Animated,
   Easing,
+  Image,
+  Platform,
   Pressable,
   StyleSheet,
   View,
@@ -12,6 +14,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { brand, colors, radius, shadow, space } from '../../theme';
 
 const DASH_COUNT = 26;
+// Dark enough at the bottom, where the text sits, for white type on any photo.
+const COVER_TINT = ['rgba(12,25,38,0.12)', 'rgba(12,25,38,0.55)', 'rgba(12,25,38,0.9)'] as const;
 const TEAR_MS = 280;
 const TOOTH_COUNT = 80;
 const TOOTH_SIZES = [8, 6, 9, 7, 10, 6, 8];
@@ -26,6 +30,9 @@ type TicketProps = {
   notches?: boolean;
   torn?: boolean;
   cutColor?: string;
+  cover?: string | null;
+  coverTint?: readonly [string, string, ...string[]];
+  onCoverError?: () => void;
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
@@ -38,6 +45,9 @@ export default function Ticket({
   notches = true,
   torn = false,
   cutColor = colors.bg,
+  cover = null,
+  coverTint = COVER_TINT,
+  onCoverError,
   onPress,
   style,
   accessibilityLabel,
@@ -63,7 +73,6 @@ export default function Ticket({
     }).start();
   }, [torn, tear]);
 
-
   const content = (
     <>
       {tone === 'brand' ? (
@@ -75,7 +84,25 @@ export default function Ticket({
           pointerEvents="none"
         />
       ) : null}
-      <View style={styles.main}>{children}</View>
+      {cover ? (
+        <View style={[styles.main, styles.covered, !stub && styles.coveredAll]}>
+          <Image
+            source={{ uri: cover }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+            onError={onCoverError}
+            accessibilityIgnoresInvertColors
+          />
+          <LinearGradient
+            colors={coverTint}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+          {children}
+        </View>
+      ) : (
+        <View style={styles.main}>{children}</View>
+      )}
 
       {stub ? (
         <>
@@ -155,7 +182,7 @@ export default function Ticket({
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      accessibilityRole={Platform.OS === 'web' && stub ? undefined : 'button'}
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         styles.card,
@@ -188,6 +215,13 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.85 },
 
   main: { paddingHorizontal: space.md, paddingTop: space.md, paddingBottom: space.sm },
+  covered: {
+    overflow: 'hidden',
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    paddingBottom: space.md,
+  },
+  coveredAll: { borderBottomLeftRadius: radius.lg, borderBottomRightRadius: radius.lg },
   stub: { paddingHorizontal: space.md, paddingTop: space.sm, paddingBottom: space.md },
 
   perf: { height: 1.5, marginHorizontal: 14, justifyContent: 'center' },

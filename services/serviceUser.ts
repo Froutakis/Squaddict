@@ -2,16 +2,21 @@ import { supabase } from "./supabaseClient";
 import type { User } from "./serviceAuth";
 import { getGroupsForUser, type Group } from "./serviceGroup";
 import { pickActing } from "../lib/acting";
+import { removeAvatar, squareImage, uploadAvatar, type PickedImage } from "./serviceMedia";
 
 type ProfileRow = {
   id: string;
   display_name: string;
+  avatar_url: string | null;
+  created_at?: string | null;
 };
 
 function toUser(r: ProfileRow): User {
   return {
     id: r.id,
     name: r.display_name,
+    avatarUrl: r.avatar_url,
+    joinedAt: r.created_at ?? undefined,
     isOnline: false,
   };
 }
@@ -28,11 +33,14 @@ export async function getUserById(id: string): Promise<User | null> {
   return toUser(data as ProfileRow);
 }
 
-export async function updateDisplayName(id: string, newName: string): Promise<void> {
+export async function updateDisplayName(userId: string, name: string): Promise<void> {
   const { error } = await supabase
     .from("profiles")
-    .update({ display_name: newName })
-    .eq("id", id);
+    .update({ display_name: name.trim() })
+    .eq("id", userId);
+
+  // display_name is unique across Squaddict.
+  if (error?.code === "23505") throw new Error("Someone already goes by that name. Try another.");
   if (error) throw error;
 }
 
@@ -61,4 +69,29 @@ export async function getActingSquad(userId: string): Promise<Group | null> {
   ]);
 
   return pickActing(groups, actingId);
+}
+
+export async function setAvatar(
+  userId: string,
+  picked: PickedImage,
+  previousUrl?: string | null,
+): Promise<string> {
+  const square = await squareImage(picked);
+  const url = await uploadAvatar(userId, square);
+
+  const { error } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", userId);
+  if (error) {
+    await removeAvatar(url).catch(() => {});
+    throw error;
+  }
+
+  if (previousUrl) await removeAvatar(previousUrl).catch(() => {});
+  return url;
+}
+
+export async function clearAvatar(userId: string, previousUrl?: string | null): Promise<void> {
+  const { error } = await supabase.from("profiles").update({ avatar_url: null }).eq("id", userId);
+  if (error) throw error;
+
+  if (previousUrl) await removeAvatar(previousUrl).catch(() => {});
 }

@@ -24,10 +24,16 @@ import {
   type Group,
 } from '../services/serviceGroup';
 import { layout, paper, typo, radius, space, textSize } from '../theme';
+import { getGroupPublicEvents, type FeedEvent } from '../services/serviceFeed';
+import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
+import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
+import PublicProfile from '../components/group/PublicProfile';
+import { plural } from '../lib/text';
 
 type Member = {
   id: string;
   name: string;
+  avatarUrl: string | null;
 };
 
 type GroupScreenProps = {
@@ -39,6 +45,9 @@ type GroupScreenProps = {
 };
 
 export default function GroupScreen({ group, userId, onBack, onLeave, onChange }: GroupScreenProps) {
+  const [plans, setPlans] = useState<FeedEvent[]>([]);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [openPlan, setOpenPlan] = useState<SheetEvent | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [code, setCode] = useState<string | null>(null);
   const [member, setMember] = useState(false);
@@ -106,6 +115,7 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
         list = (rows as any[]).map((row) => ({
           id: row.user_id,
           name: row.profiles?.display_name ?? 'Someone',
+          avatarUrl: row.profiles?.avatar_url ?? null,
         }));
         mine = list.some((person) => person.id === userId);
       } catch {
@@ -116,6 +126,16 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
 
       setMembers(list);
       setMember(mine);
+      if (!mine) setRestricted(true);
+
+      if (!mine) {
+        try {
+          const upcoming = await getGroupPublicEvents(group.id);
+          if (!cancelled) setPlans(upcoming);
+        } catch {
+          if (!cancelled) setError("Couldn't load their plans");
+        }
+      }
 
       if (mine) {
         try {
@@ -135,6 +155,30 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
       cancelled = true;
     };
   }, [group.id, userId]);
+
+  async function answer(plan: FeedEvent, status: RsvpStatus | null) {
+    setSavingId(plan.id);
+    setError(null);
+
+    try {
+      if (status) await setRsvp(plan.id, status);
+      else await clearRsvp(plan.id);
+
+      setPlans((current) =>
+        current.map((one) => {
+          if (one.id !== plan.id) return one;
+          const wasIn = one.myStatus === 'in';
+          const isIn = status === 'in';
+          const goingCount = one.goingCount + (isIn && !wasIn ? 1 : 0) - (wasIn && !isIn ? 1 : 0);
+          return { ...one, myStatus: status ?? undefined, goingCount: Math.max(0, goingCount) };
+        }),
+      );
+    } catch {
+      setError('Could not save your answer. Try again.');
+    } finally {
+      setSavingId(null);
+    }
+  }
 
   async function handleRotate() {
     setRotating(true);
@@ -165,6 +209,49 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
   }
 
   const count = members.length > 0 ? members.length : group.memberCount;
+
+  function openSheet(plan: FeedEvent) {
+    setOpenPlan({
+      id: plan.id,
+      groupName: plan.groupName,
+      title: plan.title,
+      date: plan.date,
+      startTime: plan.startTime,
+      location: plan.location,
+      placeLabel: plan.placeLabel,
+      lat: plan.lat,
+      lng: plan.lng,
+      isMember: false,
+    });
+  }
+
+  const sheet = (
+    <EventSheet
+      event={openPlan}
+      currentUserId={userId}
+      onClose={() => setOpenPlan(null)}
+      onChanged={async () => setPlans(await getGroupPublicEvents(group.id))}
+    />
+  );
+
+  // People outside the squad get its public profile instead.
+  if (!loading && !member) {
+    return (
+      <>
+        <PublicProfile
+          group={current}
+          plans={plans}
+          savingId={savingId}
+          error={error}
+          followAction={<FollowButton group={current} userId={userId} />}
+          onBack={onBack}
+          onAnswer={answer}
+          onOpenPlan={openSheet}
+        />
+        {sheet}
+      </>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -236,14 +323,14 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
               ) : null}
 
               {restricted ? (
-                <Text style={styles.hint}>Only members can see who is in this squad.</Text>
+                <Text style={styles.hint}>Only members see who is in this squad.</Text>
               ) : (
               <View style={styles.section}>
                 <Text style={styles.sectionLabel}>MEMBERS</Text>
 
                 {members.map((member) => (
                   <View key={member.id} style={styles.member}>
-                    <Monogram name={member.name} size={34} />
+                    <Monogram name={member.name} uri={member.avatarUrl} size={34} />
                     <Text style={styles.memberName} numberOfLines={1}>
                       {member.name}
                     </Text>

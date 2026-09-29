@@ -41,6 +41,7 @@ type StoryViewerProps = {
   onImageError: (path: string) => void;
   onSeen: (eventId: string) => void;
   onAddYours: (night: MemoryNight) => void;
+  onOpenGroup?: (night: MemoryNight) => void;
   onClose: () => void;
 };
 
@@ -54,6 +55,7 @@ export default function StoryViewer({
   onImageError,
   onSeen,
   onAddYours,
+  onOpenGroup,
   onClose,
 }: StoryViewerProps) {
   const [night, setNight] = useState(startIndex);
@@ -151,12 +153,12 @@ export default function StoryViewer({
   }, []);
 
   useEffect(() => {
-    if (!current) return;
+    if (!visible || !current) return;
     onSeen(current.event.id);
-  }, [current, onSeen]);
+  }, [visible, current, onSeen]);
 
   useEffect(() => {
-    if (!current || frames[current.event.id]) return;
+    if (!visible || !current || frames[current.event.id]) return;
 
     let cancelled = false;
     const id = current.event.id;
@@ -183,7 +185,7 @@ export default function StoryViewer({
     return function cleanup() {
       cancelled = true;
     };
-  }, [current, frames, signPaths]);
+  }, [visible, current, frames, signPaths]);
 
   useEffect(() => {
     startFrom.current = 0;
@@ -248,11 +250,12 @@ export default function StoryViewer({
   const place = placeLines(event.location, event.placeLabel);
   const size = groupSizes[event.groupId] ?? 0;
   const going = event.going ?? [];
+  const goingCount = current.goingCount ?? going.length;
   const wereIn =
     size > 0
-      ? `${going.length} of ${size} were in`
-      : going.length > 0
-        ? `${going.length} were in`
+      ? `${goingCount} of ${size} were in`
+      : goingCount > 0
+        ? `${goingCount} were in`
         : '';
   const tint = solidFor(event.groupName);
 
@@ -376,7 +379,9 @@ export default function StoryViewer({
             notches={false}
             stub={
               <View style={styles.stubRow}>
-                <Punch state={event.myStatus === 'in' ? 'in' : 'out'} size={22} />
+                {onOpenGroup ? null : (
+                  <Punch state={event.myStatus === 'in' ? 'in' : 'out'} size={22} />
+                )}
                 {going.length > 0 ? <AttendeeStack people={going} size={22} max={3} /> : null}
                 {wereIn ? (
                   <Text style={styles.were} numberOfLines={1}>
@@ -384,7 +389,18 @@ export default function StoryViewer({
                   </Text>
                 ) : null}
                 <View style={styles.spacer} />
-                {event.myStatus === 'in' ? (
+                {onOpenGroup ? (
+                  <Pressable
+                    onPress={function () {
+                      onOpenGroup(current);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`See ${event.groupName}`}
+                    style={({ pressed }) => [styles.add, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.addText}>See the parea</Text>
+                  </Pressable>
+                ) : event.myStatus === 'in' ? (
                   <Pressable
                     onPress={function () {
                       onAddYours(current);

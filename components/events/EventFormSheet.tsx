@@ -1,8 +1,24 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { Group } from '../../services/serviceGroup';
-import { createEvent, updateEvent, type MyEvent, type NewEvent } from '../../services/serviceEvents';
+import {
+  createEvent,
+  setEventCover,
+  updateEvent,
+  type MyEvent,
+  type NewEvent,
+} from '../../services/serviceEvents';
+import {
+  pickImage,
+  removeEventCover,
+  takePhoto,
+  uploadEventCover,
+  wideImage,
+  type PickedImage,
+} from '../../services/serviceMedia';
+import { messageFor, PhotoSourceSheet, type PhotoSource } from './EventPhotos';
 import type { Place } from '../../services/servicePlaces';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../../lib/tags';
 import { colors, typo, radius, space, textSize } from '../../theme';
@@ -54,6 +70,10 @@ export default function EventFormSheet({
   const [targetGroup, setTargetGroup] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [pendingCover, setPendingCover] = useState<PickedImage | null>(null);
+  const [askingCover, setAskingCover] = useState(false);
+  const [preparingCover, setPreparingCover] = useState(false);
 
   useEffect(
     function () {
@@ -70,6 +90,9 @@ export default function EventFormSheet({
       setTags(event?.tags ?? []);
       setTargetGroup(defaultGroupId ?? groups[0]?.id ?? null);
       setFormError(null);
+      setCoverUrl(event?.coverUrl ?? null);
+      setPendingCover(null);
+      setAskingCover(false);
     },
     [visible, defaultDate, event?.id],
   );
@@ -77,6 +100,42 @@ export default function EventFormSheet({
   const editing = !!event;
   const hadPlace = !!placeOf(event);
   const placeRequired = isPublic || !editing || hadPlace;
+
+  const coverPreview = pendingCover?.uri ?? coverUrl;
+
+  async function chooseCover(source: PhotoSource) {
+    setAskingCover(false);
+    setPreparingCover(true);
+    setFormError(null);
+
+    try {
+      const picked =
+        source === 'camera'
+          ? await takePhoto({ aspect: [16, 9] })
+          : await pickImage({ aspect: [16, 9] });
+      if (picked) setPendingCover(await wideImage(picked));
+    } catch (problem) {
+      setFormError(messageFor(problem));
+    } finally {
+      setPreparingCover(false);
+    }
+  }
+
+  function dropCover() {
+    setAskingCover(false);
+    setPendingCover(null);
+    setCoverUrl(null);
+  }
+
+  // The event has to exist before its cover can be stored under its id.
+  async function saveCover(eventId: string, groupId: string) {
+    const before = event?.coverUrl ?? null;
+    let after = coverUrl;
+
+    if (pendingCover) after = await uploadEventCover(groupId, eventId, pendingCover);
+    if (after !== before) await setEventCover(eventId, after);
+    if (before && before !== after) await removeEventCover(before).catch(() => {});
+  }
 
   function toggleTag(tag: EventTag) {
     setTags(function (current) {
@@ -108,8 +167,13 @@ export default function EventFormSheet({
     setFormError(null);
 
     try {
-      if (event) await updateEvent(event.id, input);
-      else await createEvent(targetGroup!, input);
+      const saved = event ? await updateEvent(event.id, input) : await createEvent(targetGroup!, input);
+
+      try {
+        await saveCover(saved.id, saved.groupId);
+      } catch (problem) {
+        console.error('[squaddict] το cover δεν ανέβηκε:', problem);
+      }
 
       await onSaved();
       onClose();
@@ -159,6 +223,45 @@ export default function EventFormSheet({
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.form}
           >
+            <Pressable
+              onPress={() => setAskingCover(true)}
+              disabled={saving || preparingCover}
+              accessibilityRole="button"
+              accessibilityLabel={coverPreview ? 'Change the cover photo' : 'Add a cover photo'}
+              style={({ pressed }) => [
+                styles.cover,
+                !coverPreview && styles.coverEmpty,
+                pressed && styles.pressed,
+              ]}
+            >
+              {coverPreview ? (
+                <>
+                  <Image source={{ uri: coverPreview }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                  <LinearGradient
+                    colors={['rgba(12,25,38,0)', 'rgba(12,25,38,0.6)']}
+                    style={StyleSheet.absoluteFill}
+                    pointerEvents="none"
+                  />
+                  <View style={styles.coverBadge}>
+                    <Ionicons name="image-outline" size={14} color="#FFFFFF" />
+                    <Text style={styles.coverBadgeText}>Change cover</Text>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Ionicons
+                    name={preparingCover ? 'hourglass-outline' : 'image-outline'}
+                    size={24}
+                    color={colors.textSoft}
+                  />
+                  <Text style={styles.coverTitle}>
+                    {preparingCover ? 'Getting it ready…' : 'Add a cover photo'}
+                  </Text>
+                  <Text style={styles.coverBody}>The spot, the poster, the vibe. It goes behind the ticket.</Text>
+                </>
+              )}
+            </Pressable>
+
             <View>
               <Label>Calling it</Label>
               <TextInput
@@ -268,6 +371,14 @@ export default function EventFormSheet({
             </View>
           </ScrollView>
 
+          <PhotoSourceSheet
+            visible={askingCover}
+            title="Cover photo"
+            onClose={() => setAskingCover(false)}
+            onPick={chooseCover}
+            onRemove={coverPreview ? dropCover : undefined}
+          />
+
           <View style={styles.actionBar}>
             {formError ? <Text style={styles.formError}>{formError}</Text> : null}
             <Button
@@ -347,6 +458,37 @@ const styles = StyleSheet.create({
   publicBody: { color: colors.textSoft, ...typo.medium, fontSize: 12.5, lineHeight: 17 },
 
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+
+  cover: {
+    aspectRatio: 16 / 9,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: colors.bg,
+  },
+  coverEmpty: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    paddingHorizontal: space.lg,
+  },
+  coverTitle: { color: colors.text, ...typo.semi, fontSize: textSize.base },
+  coverBody: { color: colors.textFaint, ...typo.medium, fontSize: textSize.small, textAlign: 'center' },
+  coverBadge: {
+    position: 'absolute',
+    right: space.sm,
+    bottom: space.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: space.sm,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(12,25,38,0.55)',
+  },
+  coverBadgeText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.caption },
   pressed: { opacity: 0.7 },
 
   actionBar: {

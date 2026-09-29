@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-
 export async function readJson<T>(key: string): Promise<T | null> {
   try {
     const raw = await AsyncStorage.getItem(key);

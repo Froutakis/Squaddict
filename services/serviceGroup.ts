@@ -2,7 +2,8 @@ import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
 import { UNIQUE_VIOLATION } from "../lib/postgres";
 import type { SquadLook } from "../lib/squadLook";
-import { squadSearchFilter } from "../lib/squadSearch";
+import { searchTerm } from "../lib/search";
+import type { Person } from "../lib/people";
 
 export type Group = {
   id: string;
@@ -15,10 +16,11 @@ export type Group = {
   memoriesPublic: boolean;
   memberCount: number;
   createdAt: string;
+  followerCount?: number;
 };
 
 export const GROUP_FIELDS =
-  "id, handle, name, bio, avatar_url, banner_url, wallpaper_url, memories_public, member_count, created_at";
+  "id, handle, name, bio, avatar_url, banner_url, wallpaper_url, memories_public, member_count, created_at, parea_follower_count";
 
 export const HANDLE_PATTERN = /^[a-z0-9_]{3,30}$/;
 
@@ -34,22 +36,39 @@ export function toGroup(row: any): Group {
     memoriesPublic: row.memories_public ?? false,
     memberCount: row.member_count ?? 0,
     createdAt: row.created_at ?? '',
+    followerCount: row.parea_follower_count ?? 0,
   };
+}
+
+export async function getFollowedIds(): Promise<string[]> {
+  const { data, error } = await supabase.from("parea_follows").select("group_id");
+  if (error) throw error;
+
+  return (data ?? []).map((row: { group_id: string }) => row.group_id);
+}
+
+export async function followGroup(groupId: string): Promise<void> {
+  const user = await requireUser();
+
+  const { error } = await supabase
+    .from("parea_follows")
+    .upsert({ group_id: groupId, user_id: user.id }, { onConflict: "group_id,user_id", ignoreDuplicates: true });
+  if (error) throw error;
+}
+
+export async function unfollowGroup(groupId: string): Promise<void> {
+  const user = await requireUser();
+
+  const { error } = await supabase
+    .from("parea_follows")
+    .delete()
+    .eq("group_id", groupId)
+    .eq("user_id", user.id);
+  if (error) throw error;
 }
 
 export function normalizeHandle(handle: string): string {
   return handle.trim().toLowerCase();
-}
-
-export async function isHandleAvailable(handle: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("groups")
-    .select("id")
-    .eq("handle", normalizeHandle(handle))
-    .maybeSingle();
-  if (error) throw error;
-
-  return data === null;
 }
 
 export async function createGroup(handle: string, name: string): Promise<Group> {
@@ -162,7 +181,7 @@ export async function leaveGroup(groupId: string): Promise<void> {
 export async function getMembers(groupId: string) {
   const { data, error } = await supabase
     .from("group_members")
-    .select("user_id, profiles(display_name)")
+    .select("user_id, profiles(display_name, avatar_url)")
     .eq("group_id", groupId)
     .order("display_name", { referencedTable: "profiles" });
   if (error) throw error;
@@ -193,15 +212,10 @@ export async function getGroupByHandle(handle: string): Promise<Group | null> {
 }
 
 export async function searchGroups(query: string, limit = 20): Promise<Array<Group>> {
-  const filter = squadSearchFilter(query);
-  if (!filter) return [];
+  const term = searchTerm(query);
+  if (term === null) return [];
 
-  const { data, error } = await supabase
-    .from("groups")
-    .select(GROUP_FIELDS)
-    .or(filter)
-    .order("member_count", { ascending: false })
-    .limit(limit);
+  const { data, error } = await supabase.rpc("search_groups_folded", { needle: term, lim: limit });
   if (error) throw error;
 
   return (data ?? []).map(toGroup);
@@ -245,12 +259,12 @@ export async function joinByInviteCode(inviteCode: string): Promise<Group> {
   return toGroup(data);
 }
 
-export async function getMemberNames(groupId: string): Promise<Record<string, string>> {
+export async function getMemberProfiles(groupId: string): Promise<Person[]> {
   const members = await getMembers(groupId);
 
-  const names: Record<string, string> = {};
-  for (const m of members as any[]) {
-    names[m.user_id] = m.profiles?.display_name ?? "";
-  }
-  return names;
+  return (members as any[]).map((m) => ({
+    id: m.user_id,
+    name: m.profiles?.display_name ?? "",
+    avatarUrl: m.profiles?.avatar_url ?? null,
+  }));
 }

@@ -11,13 +11,24 @@ import GroupChatScreen from './screens/GroupChatScreen';
 import ExploreScreen from './screens/ExploreScreen';
 import YouScreen from './screens/YouScreen';
 import BottomNav, { type NavTab } from './components/general/BottomNav';
+import {
+  onPushOpened,
+  registerForPush,
+  showNotificationsInForeground,
+} from './services/serviceNotifications';
+
+showNotificationsInForeground();
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
   const [screen, setScreen] = useState<NavTab>('home');
-  const [threadOpen, setThreadOpen] = useState(false);
+  const [chatTarget, setChatTarget] = useState<{ groupId: string; nonce: number } | null>(null);
+  const [unread, setUnread] = useState(0);
+  const [chatClosedNonce, setChatClosedNonce] = useState(0);
+  const [focusEventId, setFocusEventId] = useState<string | null>(null);
+  const [selectGroup, setSelectGroup] = useState<{ id: string; nonce: number } | null>(null);
   const [createNonce, setCreateNonce] = useState(0);
 
   useEffect(() => {
@@ -31,6 +42,26 @@ export default function App() {
     });
 
     return () => data.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    registerForPush().catch((problem) => {
+      console.warn('[squaddict] push registration failed:', problem);
+    });
+  }, [user?.id]);
+
+  useEffect(() => {
+    return onPushOpened(function (target) {
+      if (target.type === 'message') {
+        setChatTarget({ groupId: target.groupId, nonce: Date.now() });
+        setScreen('home');
+      } else {
+        setFocusEventId(target.eventId);
+        setScreen('home');
+      }
+    });
   }, []);
 
   if (checkingSession) {
@@ -50,34 +81,65 @@ export default function App() {
     );
   }
 
-  function requestCreate() {
-    setScreen('home');
-    setCreateNonce((n) => n + 1);
+  function closeChat() {
+    setChatTarget(null);
+    setChatClosedNonce((n) => n + 1);
   }
-
-  function navigate(tab: NavTab) {
-    setCreateNonce(0);
-    setScreen(tab);
-  }
-
-  const navHidden = screen === 'groups' && threadOpen;
 
   return (
     <View style={styles.app}>
       <View style={styles.body}>
-        {screen === 'groups' ? (
-          <GroupChatScreen user={user} onThreadChange={setThreadOpen} />
-        ) : screen === 'explore' ? (
+        {screen === 'explore' ? (
           <ExploreScreen userId={user.id} />
         ) : screen === 'you' ? (
-          <YouScreen user={user} />
+          <YouScreen
+            user={user}
+            onOpenParea={(groupId) => {
+              setSelectGroup({ id: groupId, nonce: Date.now() });
+              setScreen('home');
+            }}
+            onPlan={() => {
+              setCreateNonce((n) => n + 1);
+              setScreen('home');
+            }}
+          />
         ) : (
-          <HomeScreen user={user} createNonce={createNonce} />
+          <HomeScreen
+            user={user}
+            focusEventId={focusEventId}
+            onFocusHandled={() => setFocusEventId(null)}
+            onOpenChat={(groupId) => setChatTarget({ groupId, nonce: Date.now() })}
+            chatClosedNonce={chatClosedNonce}
+            onUnreadChange={setUnread}
+            selectGroup={selectGroup}
+            createNonce={createNonce}
+          />
         )}
+
+        {/* A squad's chat opens on top of Parea, which stays put underneath. */}
+        {chatTarget ? (
+          <View style={styles.overlay}>
+            <GroupChatScreen
+              key={`chat-${chatTarget.nonce}`}
+              user={user}
+              initialGroupId={chatTarget.groupId}
+              onExit={closeChat}
+            />
+          </View>
+        ) : null}
       </View>
 
-      {navHidden ? null : (
-        <BottomNav active={screen} onNavigate={navigate} onCreate={requestCreate} />
+      {chatTarget ? null : (
+        <BottomNav
+          active={screen}
+          onNavigate={(tab) => {
+            // One-off requests from another tab must not replay when Parea remounts.
+            setCreateNonce(0);
+            setSelectGroup(null);
+            setScreen(tab);
+          }}
+          badges={{ home: unread }}
+        />
       )}
       <StatusBar style="dark" />
     </View>
@@ -88,4 +150,5 @@ const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 8 },
   app: { flex: 1, backgroundColor: colors.bg },
   body: { flex: 1 },
+  overlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },
 });

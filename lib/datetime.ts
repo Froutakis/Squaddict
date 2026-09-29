@@ -1,4 +1,4 @@
-function parseLocal(dateStr: string) {
+export function parseLocal(dateStr: string) {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, m - 1, d);
 }
@@ -190,19 +190,10 @@ export function inPhotoWindow(
   return now >= opensAt && now < closesAt;
 }
 
-export function windowLeftLabel(closesAt: Date, now: Date = new Date()) {
-  const ms = closesAt.getTime() - now.getTime();
-  if (ms <= 0) return 'CLOSED';
-
-  const minutes = Math.floor(ms / 60000);
-  const hours = Math.floor(minutes / 60);
-  return hours > 0 ? `${hours}H ${minutes % 60}M LEFT` : `${minutes}M LEFT`;
-}
-
 export function timeLabel(iso: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
 export function dayLabel(date: Date) {
@@ -218,4 +209,20 @@ export function dayLabel(date: Date) {
     month: 'short',
     ...(date.getFullYear() === today.getFullYear() ? {} : { year: 'numeric' }),
   });
+}
+
+export type FeedWhen = 'today' | 'tomorrow' | 'weekend';
+
+export function dateRange(when: FeedWhen, today = new Date()): [string, string] {
+  const day = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const shift = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+
+  if (when === 'today') return [keyOf(day), keyOf(day)];
+  if (when === 'tomorrow') return [keyOf(shift(day, 1)), keyOf(shift(day, 1))];
+
+  const weekday = day.getDay();
+  if (weekday === 0) return [keyOf(day), keyOf(day)];
+
+  const saturday = weekday === 6 ? day : shift(day, 6 - weekday);
+  return [keyOf(saturday), keyOf(shift(saturday, 1))];
 }

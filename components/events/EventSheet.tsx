@@ -1,21 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Attendee, RsvpStatus } from '../../services/serviceEvents';
 import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/serviceEvents';
-import { colors, typo, radius, space, textSize } from '../../theme';
-import { formatDateTime } from '../../lib/datetime';
+import { colors, solidFor, typo, radius, space, textSize } from '../../theme';
+import { formatDateTime, keyOf } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import { ticketCode } from '../../lib/ticket';
 import AttendeeSheet from './AttendeeSheet';
-import ShareToSquadSheet from './ShareToSquadSheet';
+import EventPhotos from './EventPhotos';
 import Map from '../general/Map';
-import type { Group } from '../../services/serviceGroup';
-import { getCurrentCoords } from '../../services/serviceLocation';
-import { getWalkingRoute, type Route } from '../../services/serviceRoute';
+import type { LivePerson } from '../../services/serviceLiveLocation';
 
 export type SheetEvent = {
   id: string;
+  groupId?: string;
+  isPublic?: boolean;
   groupName: string;
   title: string;
   date: string;
@@ -31,46 +32,28 @@ export type SheetEvent = {
 
 type EventSheetProps = {
   event: SheetEvent | null;
-  groups?: Group[];
-  sharedGroupIds?: string[];
-  onShare?: (groupId: string) => Promise<void> | void;
+  livePeople?: LivePerson[];
   currentUserId: string;
   onClose: () => void;
   onChanged: () => void | Promise<void>;
   onEdit?: (event: SheetEvent) => void;
+  onPhotosChanged?: () => void;
 };
 
 export default function EventSheet({
   event,
-  groups = [],
-  sharedGroupIds = [],
-  onShare,
+  livePeople = [],
   currentUserId,
   onClose,
   onChanged,
   onEdit,
+  onPhotosChanged,
 }: EventSheetProps) {
-  const [sharing, setSharing] = useState(false);
   const [roster, setRoster] = useState(false);
-  const [sharingId, setSharingId] = useState<string | null>(null);
-
-  async function share(groupId: string) {
-    if (!onShare || sharingId !== null) return;
-
-    setSharingId(groupId);
-    try {
-      await onShare(groupId);
-      setSharing(false);
-    } finally {
-      setSharingId(null);
-    }
-  }
-
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [route, setRoute] = useState<Route | null>(null);
 
   const place = placeLines(event?.location, event?.placeLabel);
 
@@ -94,32 +77,6 @@ export default function EventSheet({
     }
 
     load();
-    return () => { cancelled = true; };
-  }, [event?.id]);
-
-  useEffect(() => {
-    setRoute(null);
-
-    const target = event;
-    if (!target || target.lat === undefined || target.lng === undefined) return;
-    if (Platform.OS === 'web') return;
-
-    const to = { lat: target.lat, lng: target.lng };
-    let cancelled = false;
-
-    async function trace() {
-      try {
-        const here = await getCurrentCoords();
-        if (cancelled || !here.ok) return;
-
-        const found = await getWalkingRoute(here.coords, to);
-        if (!cancelled) setRoute(found);
-      } catch {
-        if (!cancelled) setRoute(null);
-      }
-    }
-
-    trace();
     return () => { cancelled = true; };
   }, [event?.id]);
 
@@ -165,6 +122,7 @@ export default function EventSheet({
 
   const myStatus = attendees.find((a) => a.id === currentUserId)?.status;
   const isOwner = event?.createdBy !== undefined && event.createdBy === currentUserId;
+  const started = event !== null && event.date <= keyOf(new Date());
 
   return (
     <Modal
@@ -197,8 +155,15 @@ export default function EventSheet({
                         lng: event.lng,
                         label: place.primary || event.title,
                       },
+                      ...livePeople.map((person) => ({
+                        id: `person-${person.id}`,
+                        lat: person.lat,
+                        lng: person.lng,
+                        label: person.name,
+                        color: solidFor(person.name),
+                        badge: person.name.trim().charAt(0).toUpperCase() || '?',
+                      })),
                     ]}
-                    route={route?.points}
                     showsUserLocation
                     interactive
                     spanKm={0.9}
@@ -207,6 +172,12 @@ export default function EventSheet({
               ) : null}
 
               <View style={styles.header}>
+                <LinearGradient
+                  colors={['rgba(8,16,28,0.86)', 'rgba(8,16,28,0.62)', 'rgba(8,16,28,0)']}
+                  locations={[0, 0.65, 1]}
+                  style={StyleSheet.absoluteFill}
+                  pointerEvents="none"
+                />
                 <View style={styles.grabber} />
 
                 <View style={styles.topRow}>
@@ -303,16 +274,18 @@ export default function EventSheet({
 
                 {error ? <Text style={styles.error}>{error}</Text> : null}
 
-                {onShare && event.isMember === false ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Share this to a parea"
-                    onPress={() => setSharing(true)}
-                    style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
-                  >
-                    <Ionicons name="arrow-redo-outline" size={17} color={colors.primary} />
-                    <Text style={styles.actionText}>Share to a parea</Text>
-                  </Pressable>
+                {started && event.groupId ? (
+                  <View style={styles.photos}>
+                    <EventPhotos
+                      key={event.id}
+                      eventId={event.id}
+                      groupId={event.groupId}
+                      currentUserId={currentUserId}
+                      canAdd={myStatus === 'in'}
+                      shareable={event.isPublic === true}
+                      onChanged={onPhotosChanged}
+                    />
+                  </View>
                 ) : null}
 
                 {isOwner ? (
@@ -372,17 +345,6 @@ export default function EventSheet({
 
       <AttendeeSheet visible={roster} attendees={attendees} onClose={() => setRoster(false)} />
 
-      <ShareToSquadSheet
-        visible={sharing}
-        groups={groups}
-        eventTitle={event?.title ?? ''}
-        savingId={sharingId}
-        sharedIds={sharedGroupIds}
-        onPick={share}
-        onClose={() => {
-          if (sharingId === null) setSharing(false);
-        }}
-      />
     </Modal>
   );
 }
@@ -398,7 +360,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
 
-  header: { paddingHorizontal: space.md, paddingTop: space.md, paddingBottom: space.sm },
+  header: { paddingHorizontal: space.md, paddingTop: space.md, paddingBottom: space.xl },
   canvas: {
     position: 'absolute',
     top: 0,
@@ -474,21 +436,12 @@ const styles = StyleSheet.create({
     paddingTop: space.sm,
     paddingBottom: space.lg,
   },
-  description: { color: colors.text, ...typo.medium, fontSize: textSize.base, lineHeight: 20 },
-
-  action: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.xs,
-    paddingVertical: space.sm,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bg,
+  photos: {
+    padding: space.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
   },
-  actionPressed: { opacity: 0.7 },
-  actionText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
+  description: { color: colors.text, ...typo.medium, fontSize: textSize.base, lineHeight: 20 },
 
   error: { color: colors.danger, ...typo.medium, fontSize: textSize.body },
 

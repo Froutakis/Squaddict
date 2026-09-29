@@ -5,15 +5,20 @@ import { colors, sun } from '../../theme';
 export type MemoryNight = {
   event: MyEvent;
   cover: EventPhoto;
+  // Set for Explore highlights, where strangers cannot list who was in.
+  goingCount?: number;
+  // When the newest photo of the night was added.
+  latestAt?: string;
 };
 
-export type SeenNights = Record<string, true>;
+// Per night: when its newest photo was when you watched it (true: older, unknown).
+export type SeenNights = Record<string, true | string>;
 
 export const MEMORY_LIMIT = 12;
 
 export function toMemoryNights(
   events: MyEvent[],
-  covers: Record<string, EventPhoto>,
+  covers: Record<string, EventPhoto & { latestAt?: string }>,
   today: string,
 ): MemoryNight[] {
   const nights: MemoryNight[] = [];
@@ -21,7 +26,7 @@ export function toMemoryNights(
   for (const event of events) {
     const cover = covers[event.id];
     if (event.date < today && cover) {
-      nights.push({ event, cover });
+      nights.push({ event, cover, latestAt: cover.latestAt });
     }
   }
 
@@ -33,20 +38,29 @@ export function ringFor(night: MemoryNight, seen: boolean): string {
   return seen ? colors.border : colors.primary;
 }
 
-export function seenNightsKey(userId: string): string {
-  return userPrefix(userId) + 'seen:nights';
+export function seenNightsKey(userId: string, scope: 'home' | 'explore' = 'home'): string {
+  return userPrefix(userId) + (scope === 'home' ? 'seen:nights' : 'seen:highlights');
 }
 
-export function markSeen(seen: SeenNights, eventId: string): SeenNights {
-  if (seen[eventId]) return seen;
-  return { ...seen, [eventId]: true };
+// Seen, unless photos were added after you watched it.
+export function isSeen(seen: SeenNights, night: MemoryNight): boolean {
+  const mark = seen[night.event.id];
+  if (!mark) return false;
+  if (mark === true || !night.latestAt) return true;
+  return mark >= night.latestAt;
+}
+
+export function markSeen(seen: SeenNights, night: MemoryNight): SeenNights {
+  if (isSeen(seen, night) && seen[night.event.id] !== true) return seen;
+  return { ...seen, [night.event.id]: night.latestAt ?? true };
 }
 
 export function pruneSeen(seen: SeenNights, nights: MemoryNight[]): SeenNights {
   const live: SeenNights = {};
 
   for (const night of nights) {
-    if (seen[night.event.id]) live[night.event.id] = true;
+    const mark = seen[night.event.id];
+    if (mark) live[night.event.id] = mark;
   }
 
   return live;

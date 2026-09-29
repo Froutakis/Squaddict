@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { colors, radius, shadow, space, textSize, tracking, typo } from '../../theme';
 import Monogram from '../general/Monogram';
+import { plural } from '../../lib/text';
 
 export const GROUP_CARD_WIDTH = 216;
 
@@ -20,6 +21,7 @@ export type CardGroup = {
 type GroupCardProps = {
   group: CardGroup;
   following?: boolean;
+  member?: boolean;
   saving?: boolean;
   reason?: string;
   onPress?: () => void;
@@ -27,13 +29,10 @@ type GroupCardProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-function plural(count: number, one: string, many: string) {
-  return `${count} ${count === 1 ? one : many}`;
-}
-
 export default function GroupCard({
   group,
   following = false,
+  member = false,
   saving = false,
   reason,
   onPress,
@@ -61,7 +60,7 @@ export default function GroupCard({
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityRole={onPress && !(Platform.OS === 'web' && onFollow && !member) ? 'button' : undefined}
       accessibilityLabel={label}
       style={({ pressed }) => [styles.card, pressed && onPress ? styles.pressed : null, style]}
     >
@@ -100,7 +99,9 @@ export default function GroupCard({
           {stats.join(' · ')}
         </Text>
 
-        {onFollow ? (
+        {member ? (
+          <Text style={styles.memberText}>Member</Text>
+        ) : onFollow ? (
           <Pressable
             onPress={onFollow}
             disabled={saving}
@@ -175,4 +176,5 @@ const styles = StyleSheet.create({
   },
   followText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
   followingText: { color: colors.success, ...typo.semi, fontSize: textSize.base },
+  memberText: { color: colors.textFaint, ...typo.semi, fontSize: textSize.base },
 });

@@ -7,21 +7,17 @@ import type { Person } from '../../lib/people';
 import type { ReactionCount } from './reactions';
 import { paper, typo, shadow, space } from '../../theme';
 import { GroupMonogram } from './GroupPicker';
+import { timeLabel } from '../../lib/datetime';
 
 const AVATAR = 24;
 const ROUND = 18;
 const TIGHT = 6;
 const TAIL = 5;
 
-function timeLabel(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-}
-
 type MessageBubbleProps = {
   content: string;
   senderName: string;
+  senderAvatar?: string | null;
   createdAt: string;
   mine: boolean;
   isFirst: boolean;
@@ -49,6 +45,7 @@ const PHOTO_MAX_HEIGHT = 300;
 export default function MessageBubble({
   content,
   senderName,
+  senderAvatar,
   createdAt,
   mine,
   isFirst,
@@ -153,9 +150,8 @@ export default function MessageBubble({
 
   return (
     <View style={[styles.row, mine ? styles.rowMine : styles.rowOther, isFirst && styles.rowFirst]}>
-      {}
       {mine ? null : isLast ? (
-        <GroupMonogram name={senderName || '?'} size={AVATAR} />
+        <GroupMonogram name={senderName || '?'} uri={senderAvatar} size={AVATAR} />
       ) : (
         <View style={styles.avatarSpacer} />
       )}
@@ -167,7 +163,6 @@ export default function MessageBubble({
           </Text>
         ) : null}
 
-        {}
         {reply || replyUnknown ? (
           <View style={styles.quote}>
             <View style={styles.quoteBar} />
@@ -193,7 +188,6 @@ export default function MessageBubble({
           </View>
         ) : null}
 
-        {}
         {deleted ? (
           <View
             style={[styles.bubble, styles.bubbleDeleted, shape]}
@@ -241,7 +235,6 @@ export default function MessageBubble({
           </View>
         )}
 
-        {}
         {reactions && reactions.length > 0 ? (
           <View style={styles.reactions}>
             {reactions.map(function (item) {
@@ -261,7 +254,6 @@ export default function MessageBubble({
                   style={item.mine ? [styles.chip, styles.chipMine] : styles.chip}
                 >
                   <Text style={styles.chipEmoji}>{item.emoji}</Text>
-                  {}
                   {item.count > 1 ? (
                     <Text style={item.mine ? [styles.chipCount, styles.chipCountMine] : styles.chipCount}>
                       {item.count}
@@ -273,7 +265,6 @@ export default function MessageBubble({
           </View>
         ) : null}
 
-        {}
         {status === 'failed' ? (
           <Text style={styles.failedNote}>Not sent · Tap to try again</Text>
         ) : status === 'pending' ? (
@@ -281,7 +272,6 @@ export default function MessageBubble({
         ) : isLast ? (
           <Text style={styles.time}>
             {timeLabel(createdAt)}
-            {}
             {editedAt && !deleted ? ' · edited' : ''}
           </Text>
         ) : null}

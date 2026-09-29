@@ -22,12 +22,13 @@ type EventRow = {
   lng: number | null;
   place_label: string | null;
   tags: string[] | null;
+  cover_url?: string | null;
 };
 
 type AttendeeRow = {
   user_id: string;
   status: string;
-  profiles: { display_name: string } | null;
+  profiles: { display_name: string; avatar_url: string | null } | null;
 };
 
 type EventPhotoRow = {
@@ -38,6 +39,7 @@ type EventPhotoRow = {
   width: number;
   height: number;
   created_at: string;
+  in_explore?: boolean | null;
 };
 
 type EventRowWithJoins = EventRow & {
@@ -60,6 +62,7 @@ export type GroupEvent = {
   lng?: number;
   placeLabel?: string;
   tags: EventTag[];
+  coverUrl?: string | null;
 };
 
 export type NewEvent = Omit<
@@ -78,6 +81,7 @@ export type EventPhoto = {
   width: number;
   height: number;
   createdAt: string;
+  inExplore: boolean;
 };
 
 export type RsvpStatus = "in" | "out";
@@ -108,6 +112,7 @@ function toEvent(r: EventRow): GroupEvent {
     lng: r.lng ?? undefined,
     placeLabel: r.place_label ?? undefined,
     tags: toEventTags(r.tags),
+    coverUrl: r.cover_url ?? null,
   };
 }
 
@@ -115,6 +120,7 @@ function toAttendee(a: AttendeeRow): Attendee {
   return {
     id: a.user_id,
     name: a.profiles?.display_name ?? "",
+    avatarUrl: a.profiles?.avatar_url ?? null,
     status: a.status === "in" ? "in" : "out",
   };
 }
@@ -129,7 +135,11 @@ function toMyEvent(r: EventRowWithJoins, userId: string): MyEvent {
         myStatus: mine === "in" || mine === "out" ? mine : undefined,
         going: answers
             .filter((a) => a.status === "in")
-            .map((a) => ({ id: a.user_id, name: a.profiles?.display_name ?? "" })),
+            .map((a) => ({
+                id: a.user_id,
+                name: a.profiles?.display_name ?? "",
+                avatarUrl: a.profiles?.avatar_url ?? null,
+            })),
     };
 }
 
@@ -148,6 +158,7 @@ function toColumns(input: NewEvent) {
   if (input.lng !== undefined) columns.lng = input.lng;
   if (input.placeLabel !== undefined) columns.place_label = input.placeLabel || null;
   if (input.tags !== undefined) columns.tags = input.tags;
+  if (input.coverUrl !== undefined) columns.cover_url = input.coverUrl;
 
   return columns;
 }
@@ -206,13 +217,18 @@ export async function getMyEvents(userId: string): Promise<MyEvent[]> {
 
     const { data, error } = await supabase
         .from("events")
-        .select("*, groups(name), event_attendees(user_id, status, profiles(display_name))")
+        .select("*, groups(name), event_attendees(user_id, status, profiles(display_name, avatar_url))")
         .or(filters.join(","))
         .order("date", { ascending: true })
         .order("start_time", { ascending: true, nullsFirst: true });
     if (error) throw error;
 
     return (data as EventRowWithJoins[]).map((r) => toMyEvent(r, userId));
+}
+
+export async function setEventCover(eventId: string, coverUrl: string | null): Promise<void> {
+    const { error } = await supabase.from("events").update({ cover_url: coverUrl }).eq("id", eventId);
+    if (error) throw error;
 }
 
 export async function deleteEvent(eventId: string): Promise<void> {
@@ -261,7 +277,7 @@ export async function clearRsvp(eventId: string): Promise<void> {
 export async function getAttendees(eventId: string): Promise<Attendee[]> {
     const { data, error } = await supabase
         .from("event_attendees")
-        .select("user_id, status, profiles(display_name)")
+        .select("user_id, status, profiles(display_name, avatar_url)")
         .eq("event_id", eventId)
         .in("status", ["in", "out"]);
     if (error) throw error;
@@ -278,6 +294,7 @@ function toEventPhoto(r: EventPhotoRow): EventPhoto {
     width: r.width,
     height: r.height,
     createdAt: r.created_at,
+    inExplore: r.in_explore ?? false,
   };
 }
 
@@ -296,7 +313,10 @@ export async function getEventPhotos(eventId: string): Promise<EventPhoto[]> {
     return (data as EventPhotoRow[]).map(toEventPhoto);
 }
 
-export async function getEventCovers(eventIds: string[]): Promise<Record<string, EventPhoto>> {
+export type EventCover = EventPhoto & { latestAt: string };
+
+// The first photo of each night, plus when its newest photo was added.
+export async function getEventCovers(eventIds: string[]): Promise<Record<string, EventCover>> {
     if (eventIds.length === 0) return {};
 
     const { data, error } = await supabase
@@ -306,9 +326,11 @@ export async function getEventCovers(eventIds: string[]): Promise<Record<string,
         .order("created_at", { ascending: true });
     if (error) throw error;
 
-    const covers: Record<string, EventPhoto> = {};
+    const covers: Record<string, EventCover> = {};
     for (const row of data as EventPhotoRow[]) {
-        if (!covers[row.event_id]) covers[row.event_id] = toEventPhoto(row);
+        const cover = covers[row.event_id];
+        if (cover) cover.latestAt = row.created_at;
+        else covers[row.event_id] = { ...toEventPhoto(row), latestAt: row.created_at };
     }
     return covers;
 }
@@ -340,6 +362,7 @@ export async function getGroupMemories(groupId: string, userId: string): Promise
 export async function addEventPhoto(
     event: { id: string; groupId: string },
     image: PickedImage,
+    inExplore = false,
 ): Promise<EventPhoto> {
     const user = await requireUser();
 
@@ -356,6 +379,7 @@ export async function addEventPhoto(
             path: attachment.path,
             width: attachment.width,
             height: attachment.height,
+            in_explore: inExplore,
         })
         .select()
         .single();
@@ -376,6 +400,11 @@ export async function addEventPhoto(
     return toEventPhoto(data as EventPhotoRow);
 }
 
+export async function setPhotoInExplore(photoId: string, shown: boolean): Promise<void> {
+    const { error } = await supabase.rpc("set_photo_in_explore", { photo_id: photoId, shown });
+    if (error) throw error;
+}
+
 export async function removeEventPhoto(photo: EventPhoto): Promise<void> {
     const { error } = await supabase
         .from("event_photos")
@@ -384,4 +413,39 @@ export async function removeEventPhoto(photo: EventPhoto): Promise<void> {
     if (error) throw error;
 
     await removeImage(photo.path);
+}
+
+export async function getCheckins(eventIds: string[]): Promise<Record<string, string[]>> {
+    if (eventIds.length === 0) return {};
+
+    const { data, error } = await supabase
+        .from("event_checkins")
+        .select("event_id, user_id")
+        .in("event_id", eventIds);
+    if (error) throw error;
+
+    const byEvent: Record<string, string[]> = {};
+    for (const row of data as { event_id: string; user_id: string }[]) {
+        (byEvent[row.event_id] ??= []).push(row.user_id);
+    }
+    return byEvent;
+}
+
+export async function checkIn(eventId: string): Promise<void> {
+    const user = await requireUser();
+
+    const { error } = await supabase
+        .from("event_checkins")
+        .upsert({ event_id: eventId, user_id: user.id }, { onConflict: "event_id,user_id", ignoreDuplicates: true });
+    if (error) throw error;
+}
+
+export async function countMyPhotos(userId: string): Promise<number> {
+    const { count, error } = await supabase
+        .from("event_photos")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId);
+    if (error) throw error;
+
+    return count ?? 0;
 }

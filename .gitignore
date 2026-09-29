@@ -5,3 +5,6 @@ debug
 .expo
 docs
 supabase/.temp
+dist/
+.idea/
+*.zip

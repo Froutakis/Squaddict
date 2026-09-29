@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -9,70 +11,107 @@ import {
   View,
 } from 'react-native';
 import type { User as AuthUser } from '@supabase/supabase-js';
-import { Ionicons } from '@expo/vector-icons';
 import { logout } from '../services/serviceAuth';
-import { getActingGroupId, getUserById, setActingGroup } from '../services/serviceUser';
-import { getGroupsForUser, getNightsKept, type Group } from '../services/serviceGroup';
+import { clearAvatar, getUserById, setAvatar } from '../services/serviceUser';
+import { pickImage, takePhoto } from '../services/serviceMedia';
+import { getGroupsForUser, type Group } from '../services/serviceGroup';
 import { getUnreadCounts } from '../services/serviceChat';
-import { getFollowing } from '../services/serviceFollow';
-import { pickActing, splitVisible, switchList } from '../lib/acting';
-import Monogram from '../components/general/Monogram';
-import ActingCard from '../components/you/ActingCard';
-import FollowShelf from '../components/you/FollowShelf';
-import SwitchRow from '../components/you/SwitchRow';
-import GroupScreen from './GroupScreen';
+import {
+  countMyPhotos,
+  getEventCovers,
+  getMyEvents,
+  type EventCover,
+  type MyEvent,
+} from '../services/serviceEvents';
+import { messageFor, PhotoSourceSheet, type PhotoSource } from '../components/events/EventPhotos';
+import Monogram, { initialsFor } from '../components/general/Monogram';
+import SectionHead from '../components/general/SectionHead';
 import GroupFormSheet from '../components/group/GroupFormSheet';
+import EventSheet from '../components/events/EventSheet';
+import StoryViewer from '../components/events/StoryViewer';
+import type { MemoryNight } from '../components/home/memories';
+import { useSignedImages } from '../components/home/useSignedImages';
+import YearTicket from '../components/you/YearTicket';
+import SquadSection from '../components/you/SquadSection';
+import GroupScreen from './GroupScreen';
 import FollowsScreen from './FollowsScreen';
-import { colors, layout, paper, radius, shadow, space, textSize, typo } from '../theme';
+import NightsArchive from '../components/you/NightsArchive';
+import SettingsSheet from '../components/you/SettingsSheet';
+import { keyOf, parseLocal, todayLabel } from '../lib/datetime';
+import { byMonth, pastNights, topBy, weekStreak } from '../lib/stats';
+import { ticketCode } from '../lib/ticket';
+import { colors, layout, radius, space, textSize, typo } from '../theme';
+
+const AVATAR_SIZE = 76;
 
 type YouScreenProps = {
   user: AuthUser;
+  onOpenParea?: (groupId: string) => void;
+  onPlan?: () => void;
 };
 
-export default function YouScreen({ user }: YouScreenProps) {
+function sinceLabel(iso?: string) {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return `On Squaddict since ${date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;
+}
+
+// You: your year out, your pareas, and every night you were part of.
+export default function YouScreen({ user, onOpenParea, onPlan }: YouScreenProps) {
   const [displayName, setDisplayName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [joinedAt, setJoinedAt] = useState<string | undefined>(undefined);
   const [groups, setGroups] = useState<Group[]>([]);
-  const [actingId, setActingId] = useState<string | null>(null);
+  const [events, setEvents] = useState<MyEvent[]>([]);
   const [unread, setUnread] = useState<Record<string, number>>({});
-  const [nights, setNights] = useState(0);
-  const [reloads, setReloads] = useState(0);
+  const [photoCount, setPhotoCount] = useState(0);
+  const [covers, setCovers] = useState<Record<string, EventCover>>({});
+
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [switchError, setSwitchError] = useState<string | null>(null);
-  const [switching, setSwitching] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  const [profileGroup, setProfileGroup] = useState<Group | null>(null);
+
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [askingAvatar, setAskingAvatar] = useState(false);
+  const [settings, setSettings] = useState(false);
   const [groupForm, setGroupForm] = useState<'create' | 'join' | null>(null);
-  const [follows, setFollows] = useState<{ forId: string; list: Group[]; error: boolean } | null>(null);
-  const [followsOpen, setFollowsOpen] = useState(false);
-  const switchSeq = useRef(0);
+  const [openEvent, setOpenEvent] = useState<MyEvent | null>(null);
+  const [story, setStory] = useState<MemoryNight[] | null>(null);
+  const [profileGroup, setProfileGroup] = useState<Group | null>(null);
+  const [followsOf, setFollowsOf] = useState<Group | null>(null);
+  const [squadReloads, setSquadReloads] = useState(0);
+
+  const { signed, signPaths, dropSigned } = useSignedImages();
+  const today = keyOf(new Date());
+  const year = parseLocal(today).getFullYear();
 
   const load = useCallback(
     async function load() {
-      const seq = switchSeq.current;
-
-      getUnreadCounts()
-        .then(setUnread)
-        .catch(function () {
-          setUnread({});
-        });
-
       try {
-        const [profile, myGroups, stored] = await Promise.all([
+        const [profile, myGroups, myEvents, counts, photos] = await Promise.all([
           getUserById(user.id),
           getGroupsForUser(user.id),
-          getActingGroupId(user.id).catch(() => null),
+          getMyEvents(user.id),
+          getUnreadCounts().catch(() => ({}) as Record<string, number>),
+          countMyPhotos(user.id).catch(() => 0),
         ]);
 
         setDisplayName(profile?.name ?? '');
+        setAvatarUrl(profile?.avatarUrl ?? null);
+        setJoinedAt(profile?.joinedAt);
         setGroups(myGroups);
-        if (switchSeq.current === seq) setActingId(stored);
+        setEvents(myEvents);
+        setUnread(counts);
+        setPhotoCount(photos);
         setError(null);
       } catch {
-        setError('Could not load your pareas.');
+        setError('Could not load your nights.');
       } finally {
         setLoading(false);
-        setReloads((n) => n + 1);
+        setRefreshing(false);
+        setSquadReloads((n) => n + 1);
       }
     },
     [user.id],
@@ -82,229 +121,270 @@ export default function YouScreen({ user }: YouScreenProps) {
     load();
   }, [load]);
 
-  const acting = pickActing(groups, actingId);
-  const others = switchList(groups, acting);
-  const { shown, more } = expanded ? { shown: others, more: 0 } : splitVisible(others);
-  const shelf = acting && follows?.forId === acting.id ? follows : null;
+  const nights = useMemo(() => pastNights(events, today), [events, today]);
+  const nightIds = nights.map((night) => night.id).join(',');
 
   useEffect(() => {
-    if (!acting) return;
+    if (nightIds === '') {
+      setCovers({});
+      return;
+    }
 
     let cancelled = false;
-    setNights(0);
-    getNightsKept(acting.id)
-      .then(function (count) {
-        if (!cancelled) setNights(count);
+    getEventCovers(nightIds.split(','))
+      .then((found) => {
+        if (cancelled) return;
+        setCovers(found);
+        signPaths(Object.values(found).map((cover) => cover.path));
       })
-      .catch(function () {});
+      .catch(() => {});
 
-    return function cleanup() {
+    return () => {
       cancelled = true;
     };
-  }, [acting?.id, reloads]);
+  }, [nightIds, signPaths]);
 
-  useEffect(() => {
-    if (!acting) return;
+  const thisYear = nights.filter((night) => night.date.startsWith(String(year)));
+  const topGroup = topBy(thisYear, (night) => night.groupName);
+  const topPlace = topBy(thisYear, (night) => night.location ?? night.placeLabel);
+  const streak = weekStreak(nights.map((night) => night.date), today);
+  const months = useMemo(() => byMonth(nights, today), [nights, today]);
+  const nightsByGroup = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const night of nights) counts[night.groupId] = (counts[night.groupId] ?? 0) + 1;
+    return counts;
+  }, [nights]);
+  const groupSizes = useMemo(
+    () => Object.fromEntries(groups.map((group) => [group.id, group.memberCount])),
+    [groups],
+  );
 
-    const forId = acting.id;
-    let cancelled = false;
-    getFollowing(forId)
-      .then(function (list) {
-        if (!cancelled) setFollows({ forId, list, error: false });
-      })
-      .catch(function () {
-        if (!cancelled) setFollows({ forId, list: [], error: true });
-      });
+  function coverFor(event: MyEvent): string | null {
+    const photo = covers[event.id];
+    return (photo ? signed[photo.path]?.url : undefined) ?? event.coverUrl ?? null;
+  }
 
-    return function cleanup() {
-      cancelled = true;
-    };
-  }, [acting?.id, reloads]);
+  function openNight(event: MyEvent) {
+    const cover = covers[event.id];
+    if (cover) setStory([{ event, cover, latestAt: cover.latestAt }]);
+    else setOpenEvent(event);
+  }
 
-  async function switchTo(group: Group) {
-    if (switching) return;
+  async function changeAvatar(source: PhotoSource) {
+    setAskingAvatar(false);
+    setAvatarError(null);
 
-    switchSeq.current += 1;
-    const previous = actingId;
-    setActingId(group.id);
-    setSwitchError(null);
-    setSwitching(true);
+    const options = { square: true };
+    const picked = source === 'camera' ? await takePhoto(options) : await pickImage(options);
+    if (!picked) return;
 
+    setAvatarBusy(true);
     try {
-      await setActingGroup(user.id, group.id);
-    } catch {
-      setActingId(previous);
-      setSwitchError('Could not switch. Try again.');
-      load();
+      setAvatarUrl(await setAvatar(user.id, picked, avatarUrl));
+    } catch (problem) {
+      setAvatarError(messageFor(problem));
     } finally {
-      setSwitching(false);
+      setAvatarBusy(false);
     }
   }
 
-  if (profileGroup) {
+  async function removeAvatar() {
+    setAskingAvatar(false);
+    setAvatarError(null);
+    setAvatarBusy(true);
+
+    try {
+      await clearAvatar(user.id, avatarUrl);
+      setAvatarUrl(null);
+    } catch (problem) {
+      setAvatarError(messageFor(problem));
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
+
+  function renderBody() {
+    if (loading) {
+      return <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />;
+    }
+
+    if (error) {
+      return (
+        <View style={styles.state}>
+          <Text style={styles.stateTitle}>{error}</Text>
+          <Pressable
+            onPress={() => {
+              setLoading(true);
+              load();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            style={({ pressed }) => [styles.retry, pressed && styles.pressed]}
+          >
+            <Text style={styles.retryText}>Try again</Text>
+          </Pressable>
+        </View>
+      );
+    }
+
     return (
-      <GroupScreen
-        group={profileGroup}
-        userId={user.id}
-        onBack={() => {
-          setProfileGroup(null);
-          load();
-        }}
-        onLeave={() => {
-          setProfileGroup(null);
-          load();
-        }}
-      />
+      <>
+        <View style={styles.body}>
+          <YearTicket
+            year={year}
+            nights={thisYear.length}
+            topGroup={topGroup}
+            topPlace={topPlace}
+            pareas={groups.length}
+            photos={photoCount}
+            streak={streak}
+            ticketCode={ticketCode(user.id)}
+            onPlan={() => onPlan?.()}
+          />
+        </View>
+
+        <View>
+          <SectionHead title="Your squad" meta={groups.length > 0 ? String(groups.length) : undefined} />
+          <View style={styles.body}>
+            <SquadSection
+              userId={user.id}
+              groups={groups}
+              unread={unread}
+              reloadKey={squadReloads}
+              onOpenProfile={setProfileGroup}
+              onOpenFollows={setFollowsOf}
+              onMake={() => setGroupForm('create')}
+              onJoin={() => setGroupForm('join')}
+            />
+          </View>
+        </View>
+
+        <View>
+          <SectionHead title="Your nights" meta={nights.length > 0 ? `${nights.length} in all` : undefined} />
+          {months.length > 0 ? (
+            <NightsArchive months={months} coverFor={coverFor} onOpen={openNight} />
+          ) : (
+            <View style={styles.body}>
+              <View style={styles.emptyCard}>
+                <Ionicons name="images-outline" size={24} color={colors.textSoft} />
+                <Text style={styles.emptyTitle}>Your nights will live here</Text>
+                <Text style={styles.emptyBody}>
+                  Every plan you say you're in lands here once it's over, with the photos from that night.
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+      </>
     );
   }
 
-  if (followsOpen && acting) {
+  if (profileGroup) {
+    const close = () => {
+      setProfileGroup(null);
+      load();
+    };
+    return <GroupScreen group={profileGroup} userId={user.id} onBack={close} onLeave={close} />;
+  }
+
+  if (followsOf) {
     return (
       <FollowsScreen
-        acting={acting}
+        acting={followsOf}
         userId={user.id}
         onBack={() => {
-          setFollowsOpen(false);
+          setFollowsOf(null);
           load();
         }}
       />
     );
   }
 
-  const squadsLine = groups.length === 1 ? 'in 1 parea' : `in ${groups.length} pareas`;
+  const since = sinceLabel(joinedAt);
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load();
+            }}
+            tintColor={colors.primary}
+          />
+        }
+      >
         <View style={styles.header}>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>Your Squad</Text>
-            <Text style={styles.subtitle} numberOfLines={1}>
-              {displayName ? `${displayName} · ${squadsLine}` : squadsLine}
-            </Text>
+          <View style={styles.topRow}>
+            <Text style={styles.date}>{todayLabel()}</Text>
+            <Pressable
+              onPress={() => setSettings(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+              hitSlop={6}
+              style={({ pressed }) => [styles.gear, pressed && styles.pressed]}
+            >
+              <Ionicons name="settings-outline" size={19} color={colors.text} />
+            </Pressable>
           </View>
-          <Monogram name={displayName || '?'} size={40} color={colors.primary} />
+
+          <View style={styles.identity}>
+            <Pressable
+              onPress={() => setAskingAvatar(true)}
+              disabled={avatarBusy}
+              accessibilityRole="button"
+              accessibilityLabel={avatarUrl ? 'Change your photo' : 'Add a photo of you'}
+              style={({ pressed }) => pressed && styles.pressed}
+            >
+              <Monogram
+                name={displayName || '?'}
+                uri={avatarUrl}
+                initials={initialsFor(displayName)}
+                size={AVATAR_SIZE}
+              />
+              <View style={styles.cameraBadge}>
+                {avatarBusy ? (
+                  <ActivityIndicator size="small" color={colors.textOnBrand} />
+                ) : (
+                  <Ionicons name="camera" size={13} color={colors.textOnBrand} />
+                )}
+              </View>
+            </Pressable>
+
+            <View style={styles.identityText}>
+              <Text style={styles.name} numberOfLines={1}>
+                {displayName || ' '}
+              </Text>
+              {since ? <Text style={styles.since}>{since}</Text> : null}
+            </View>
+          </View>
+          {avatarError ? <Text style={styles.error}>{avatarError}</Text> : null}
         </View>
 
-        {loading ? (
-          <ActivityIndicator color={colors.primary} style={styles.spinner} />
-        ) : error ? (
-          <Text style={styles.error}>{error}</Text>
-        ) : !acting ? (
-          <Text style={styles.quiet}>You are not in a parea yet.</Text>
-        ) : (
-          <>
-            <View style={styles.labels}>
-              <Text style={styles.label}>ACTING AS</Text>
-              <Text style={styles.label}>THE PUNCHED ONE</Text>
-            </View>
-
-            <ActingCard
-              group={acting}
-              nights={nights}
-              onOpenProfile={() => setProfileGroup(acting)}
-              onOpenFollows={() => setFollowsOpen(true)}
-            />
-
-            <View style={styles.info}>
-              <Ionicons name="ticket-outline" size={16} color={colors.primary} />
-              <Text style={styles.infoText}>
-                Explore, Parea and the shelf on Home speak as{' '}
-                <Text style={styles.infoStrong}>{acting.name}</Text>. Punch another one below to switch.
-              </Text>
-            </View>
-
-            {others.length > 0 ? (
-              <>
-                <View style={styles.labels}>
-                  <Text style={styles.label}>SWITCH TO</Text>
-                  {more > 0 ? (
-                    <Pressable
-                      onPress={() => setExpanded(true)}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Show ${more} more squads`}
-                    >
-                      <Text style={styles.label}>{more} MORE</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-
-                <View style={styles.list}>
-                  {shown.map((group, index) => (
-                    <SwitchRow
-                      key={group.id}
-                      group={group}
-                      unread={unread[group.id] ?? 0}
-                      first={index === 0}
-                      disabled={switching}
-                      onPress={() => switchTo(group)}
-                    />
-                  ))}
-                </View>
-
-                {switchError ? <Text style={styles.error}>{switchError}</Text> : null}
-              </>
-            ) : null}
-
-            <View style={styles.labels}>
-              <Text style={[styles.label, styles.labelShrink]} numberOfLines={1}>
-                {acting.name.toUpperCase()} FOLLOWS
-              </Text>
-              {shelf && shelf.list.length > 0 ? (
-                <Pressable
-                  onPress={() => setFollowsOpen(true)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`See all ${shelf.list.length} squads ${acting.name} follows`}
-                >
-                  <Text style={[styles.label, styles.link]}>SEE ALL {shelf.list.length}</Text>
-                </Pressable>
-              ) : null}
-            </View>
-
-            {!shelf ? (
-              <ActivityIndicator color={colors.primary} style={styles.spinner} />
-            ) : shelf.error ? (
-              <Text style={styles.error}>Could not load who you follow.</Text>
-            ) : shelf.list.length === 0 ? (
-              <Text style={styles.quiet}>Nobody yet. Follows belong to the squad, not to you.</Text>
-            ) : (
-              <FollowShelf groups={splitVisible(shelf.list, 4).shown} onOpen={setProfileGroup} />
-            )}
-          </>
-        )}
-
-        <View style={styles.startRow}>
-          <Pressable
-            onPress={() => setGroupForm('create')}
-            accessibilityRole="button"
-            accessibilityLabel="Make a squad"
-            style={({ pressed }) => [styles.start, pressed && styles.pressed]}
-          >
-            <Ionicons name="add" size={18} color={colors.text} />
-            <Text style={styles.startText}>Make a squad</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setGroupForm('join')}
-            accessibilityRole="button"
-            accessibilityLabel="Enter a code"
-            style={({ pressed }) => [styles.start, pressed && styles.pressed]}
-          >
-            <Ionicons name="ticket-outline" size={18} color={colors.text} />
-            <Text style={styles.startText}>Enter a code</Text>
-          </Pressable>
-        </View>
-
-        <Pressable
-          onPress={() => logout().catch(() => {})}
-          accessibilityRole="button"
-          accessibilityLabel="Sign out"
-          style={({ pressed }) => [styles.signOut, pressed && styles.pressed]}
-        >
-          <Text style={styles.signOutText}>Sign out</Text>
-        </Pressable>
+        {renderBody()}
       </ScrollView>
+
+      <PhotoSourceSheet
+        visible={askingAvatar}
+        title={avatarUrl ? 'Change your photo' : 'Add a photo of you'}
+        onClose={() => setAskingAvatar(false)}
+        onPick={changeAvatar}
+        onRemove={avatarUrl ? removeAvatar : undefined}
+      />
+
+      <SettingsSheet
+        visible={settings}
+        userId={user.id}
+        displayName={displayName}
+        onClose={() => setSettings(false)}
+        onNameChanged={setDisplayName}
+        onEditPhoto={() => afterSheet(() => setAskingAvatar(true))}
+        onJoinWithCode={() => afterSheet(() => setGroupForm('join'))}
+        onSignOut={() => logout().catch(() => {})}
+      />
 
       <GroupFormSheet
         visible={groupForm !== null}
@@ -315,8 +395,42 @@ export default function YouScreen({ user }: YouScreenProps) {
           load();
         }}
       />
+
+      <StoryViewer
+        key={story ? story[0].event.id : 'closed'}
+        visible={story !== null}
+        nights={story ?? []}
+        startIndex={0}
+        groupSizes={groupSizes}
+        signed={signed}
+        signPaths={signPaths}
+        onImageError={dropSigned}
+        onSeen={noop}
+        onAddYours={(night) => {
+          setStory(null);
+          setOpenEvent(night.event);
+        }}
+        onClose={() => setStory(null)}
+      />
+
+      <EventSheet
+        event={openEvent}
+        currentUserId={user.id}
+        onClose={() => setOpenEvent(null)}
+        onChanged={load}
+        onPhotosChanged={load}
+      />
     </SafeAreaView>
   );
+}
+
+function noop() {}
+
+// iOS can't present a sheet while another one is still sliding away.
+const SHEET_CLOSE_MS = 350;
+
+function afterSheet(open: () => void) {
+  setTimeout(open, SHEET_CLOSE_MS);
 }
 
 const styles = StyleSheet.create({
@@ -325,52 +439,77 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: layout.column,
     alignSelf: 'center',
-    paddingHorizontal: space.md,
-    paddingVertical: space.lg,
-    paddingBottom: 110,
+    paddingVertical: space.md,
+    paddingBottom: 130,
     gap: space.md,
   },
-  header: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  headerText: { flex: 1 },
-  title: { color: colors.text, ...typo.display, fontSize: textSize.hero, letterSpacing: -0.5 },
-  subtitle: { color: colors.textFaint, ...typo.medium, fontSize: textSize.small },
-  labels: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  label: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption, letterSpacing: 1.2 },
-  labelShrink: { flexShrink: 1 },
-  link: { color: colors.primary },
-  info: {
-    flexDirection: 'row',
-    gap: space.sm,
-    padding: space.md,
-    borderRadius: radius.md,
-    backgroundColor: paper.accentSoft,
+  pressed: { opacity: 0.7 },
+  body: { paddingHorizontal: space.lg },
+  loader: { marginTop: space.xl },
+
+  header: { paddingHorizontal: space.lg, paddingTop: space.xs, gap: space.sm },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  date: {
+    color: colors.textFaint,
+    ...typo.mono,
+    fontSize: textSize.caption,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
-  infoText: { flex: 1, color: colors.text, ...typo.medium, fontSize: textSize.body, lineHeight: 19 },
-  infoStrong: { color: colors.primary, ...typo.bold },
-  list: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-    ...shadow.card,
-  },
-  startRow: { flexDirection: 'row', gap: space.sm },
-  start: {
-    flex: 1,
-    flexDirection: 'row',
+  gear: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: space.xs,
-    paddingVertical: 14,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  startText: { color: colors.text, ...typo.semi, fontSize: textSize.base },
-  spinner: { alignSelf: 'flex-start', marginVertical: space.sm },
-  error: { color: colors.danger, ...typo.medium, fontSize: 13 },
-  quiet: { color: colors.textFaint, ...typo.medium, fontSize: 13 },
-  signOut: { alignSelf: 'flex-start', paddingVertical: space.xs },
-  signOutText: { color: colors.danger, ...typo.semi, fontSize: textSize.base },
-  pressed: { opacity: 0.6 },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  cameraBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 26,
+    height: 26,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.ink,
+    borderWidth: 2,
+    borderColor: colors.bg,
+  },
+  identityText: { flex: 1, minWidth: 0, gap: 2 },
+  name: { color: colors.text, ...typo.display, fontSize: textSize.display, letterSpacing: -0.6 },
+  since: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body },
+  error: { color: colors.danger, ...typo.medium, fontSize: textSize.body },
+
+  state: { alignItems: 'center', gap: space.sm, paddingHorizontal: space.lg, paddingVertical: space.xl },
+  stateTitle: { color: colors.text, ...typo.semi, fontSize: textSize.base, textAlign: 'center' },
+  retry: {
+    height: 40,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+  },
+  retryText: { color: colors.textOnBrand, ...typo.semi, fontSize: textSize.base },
+
+  emptyCard: {
+    alignItems: 'center',
+    gap: space.xs,
+    padding: space.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+  },
+  emptyTitle: { color: colors.text, ...typo.semi, fontSize: textSize.base },
+  emptyBody: {
+    color: colors.textSoft,
+    ...typo.medium,
+    fontSize: textSize.body,
+    lineHeight: 19,
+    textAlign: 'center',
+  },
 });

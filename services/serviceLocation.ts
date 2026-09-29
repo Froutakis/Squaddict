@@ -12,6 +12,8 @@ export type LocationResult =
 export type LocationState = "asking" | "on" | "off";
 
 const MAX_CACHE_AGE_MS = 5 * 60 * 1000;
+const WATCH_INTERVAL_MS = 15 * 1000;
+const WATCH_DISTANCE_M = 15;
 
 function toCoords(position: Location.LocationObject): Coords {
   return { lat: position.coords.latitude, lng: position.coords.longitude };
@@ -34,5 +36,25 @@ export async function getCurrentCoords(): Promise<LocationResult> {
     return { ok: true, coords: toCoords(fresh) };
   } catch {
     return { ok: false, reason: "unavailable" };
+  }
+}
+
+export async function watchCoords(onCoords: (coords: Coords) => void): Promise<(() => void) | null> {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== "granted") return null;
+
+    const subscription = await Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: WATCH_INTERVAL_MS,
+        distanceInterval: WATCH_DISTANCE_M,
+      },
+      (position) => onCoords(toCoords(position)),
+    );
+
+    return () => subscription.remove();
+  } catch {
+    return null;
   }
 }

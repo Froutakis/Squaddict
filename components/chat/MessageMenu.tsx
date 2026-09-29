@@ -54,15 +54,12 @@ export default function MessageMenu({
       onRequestClose={onClose}
       accessibilityViewIsModal
     >
-      {}
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close menu">
-        {}
         <Pressable style={styles.sheet}>
           <Text style={styles.preview} numberOfLines={2}>
             {target.content}
           </Text>
 
-          {}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -86,7 +83,6 @@ export default function MessageMenu({
               );
             })}
 
-            {}
             <Pressable
               onPress={function () {
                 setCustomOpen(function (open) {
@@ -136,7 +132,6 @@ export default function MessageMenu({
 
           <View style={styles.divider} />
 
-          {}
           <Pressable
             onPress={function () {
               onReply(target);
@@ -148,7 +143,6 @@ export default function MessageMenu({
             <Text style={styles.text}>Reply</Text>
           </Pressable>
 
-          {}
           {canEdit ? (
             <>
               <View style={styles.divider} />

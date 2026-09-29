@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent, RsvpStatus } from '../../services/serviceEvents';
@@ -15,6 +16,8 @@ const WHITE = '#FFFFFF';
 const SOFT = 'rgba(255,255,255,0.78)';
 const FAINT = 'rgba(255,255,255,0.5)';
 const HOLE = '#102163';
+// The brand blue, see-through at the top so the photo shows, solid where the text is.
+const BRAND_TINT = ['rgba(29,58,192,0.18)', 'rgba(25,50,170,0.62)', 'rgba(21,44,143,0.94)'] as const;
 
 type UpNextProps = {
   event: MyEvent;
@@ -24,8 +27,10 @@ type UpNextProps = {
   live?: boolean;
   liveText?: string;
   checkedIn?: boolean;
+  hereCount?: number;
   onCheckIn?: () => void;
   onAddPhoto?: () => void;
+  cover?: string | null;
 };
 
 export default function UpNext({
@@ -36,9 +41,13 @@ export default function UpNext({
   live = false,
   liveText,
   checkedIn = false,
+  hereCount = 0,
   onCheckIn,
   onAddPhoto,
+  cover = null,
 }: UpNextProps) {
+  const [coverFailed, setCoverFailed] = useState(false);
+  useEffect(() => setCoverFailed(false), [cover]);
   const place = placeLines(event.location, event.placeLabel);
   const answered = event.myStatus === 'in' || event.myStatus === 'out';
   const isIn = event.myStatus === 'in';
@@ -64,7 +73,9 @@ export default function UpNext({
           {checkedIn ? "You're here" : event.myStatus === 'in' ? "You're in" : 'You passed'}
         </Text>
         {checkedIn ? (
-          <Text style={styles.change}>Punched at the door</Text>
+          <Text style={styles.change}>
+            {hereCount > 1 ? `${hereCount} of ${event.going.length} here` : 'Punched at the door'}
+          </Text>
         ) : (
           <Pressable
             onPress={() => onRsvp(null)}
@@ -130,7 +141,16 @@ export default function UpNext({
   );
 
   return (
-    <Ticket tone="brand" torn={checkedIn} onPress={onPress} accessibilityLabel={event.title} stub={stub}>
+    <Ticket
+      tone="brand"
+      torn={checkedIn}
+      onPress={onPress}
+      accessibilityLabel={event.title}
+      stub={stub}
+      cover={coverFailed ? null : cover}
+      coverTint={BRAND_TINT}
+      onCoverError={() => setCoverFailed(true)}
+    >
       <View style={styles.topRow}>
         <View style={styles.groupPill}>
           <Text style={styles.groupText} numberOfLines={1}>

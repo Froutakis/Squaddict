@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import type { RealtimeChannel, User as AuthUser } from '@supabase/supabase-js';
 import {
   ActivityIndicator,
@@ -35,7 +34,7 @@ import {
 } from '../components/chat/replies';
 import SearchOverlay from '../components/chat/SearchOverlay';
 import GroupPicker from '../components/chat/GroupPicker';
-import { mentionIds, toMembers } from '../components/chat/mentions';
+import { directoryOf, mentionIds, toMembers } from '../components/chat/mentions';
 import type { Person } from '../lib/people';
 import { dropMissingImages, restoreOutbox } from '../components/chat/cache';
 import { attachmentPath, mergeSigned, pathsToSign, type SignedMap } from '../components/chat/media';
@@ -65,7 +64,7 @@ import {
   writeGroups as writeCachedGroups,
 } from '../services/serviceCache';
 import type { Group } from '../services/serviceGroup';
-import { getGroupsForUser, getMemberNames } from '../services/serviceGroup';
+import { getGroupsForUser, getMemberProfiles } from '../services/serviceGroup';
 import {
   clearReaction,
   deleteMessage,
@@ -108,6 +107,9 @@ type GroupChatScreenProps = {
   initialGroupId?: string | null;
   onBack?: () => void;
   onThreadChange?: (open: boolean) => void;
+  // When set, leaving the thread goes back to where it was opened from,
+  // instead of to the list of squads.
+  onExit?: () => void;
 };
 
 export default function GroupChatScreen({
@@ -115,6 +117,7 @@ export default function GroupChatScreen({
   initialGroupId = null,
   onBack,
   onThreadChange,
+  onExit,
 }: GroupChatScreenProps) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [activeId, setActiveId] = useState<string | null>(initialGroupId);
@@ -123,10 +126,15 @@ export default function GroupChatScreen({
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [mentionCounts, setMentionCounts] = useState<Record<string, number>>({});
   const [displayName, setDisplayName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [outbox, setOutbox] = useState<OutgoingMessage[]>([]);
   const [memberCount, setMemberCount] = useState(0);
   const [members, setMembers] = useState<Person[]>([]);
+  const avatarById = useMemo(
+    () => Object.fromEntries(members.map((member) => [member.id, member.avatarUrl ?? null])),
+    [members],
+  );
   const [messagesFor, setMessagesFor] = useState<string | null>(null);
   const [pendingImage, setPendingImage] = useState<LocalImage | null>(null);
   const [signed, setSigned] = useState<SignedMap>({});
@@ -229,6 +237,7 @@ export default function GroupChatScreen({
         const profile = await getUserById(user.id);
         if (!cancelled && profile) {
           setDisplayName(profile.name);
+          setAvatarUrl(profile.avatarUrl ?? null);
         }
       } catch {
       }
@@ -477,10 +486,10 @@ export default function GroupChatScreen({
       }
 
       try {
-        const names = await getMemberNames(groupId);
+        const { names, avatars } = directoryOf(await getMemberProfiles(groupId));
         if (!cancelled) {
           namesRef.current = names;
-          membersRef.current = toMembers(names);
+          membersRef.current = toMembers(names, avatars);
           setMembers(membersRef.current);
           setMemberCount(Object.keys(names).length);
         }
@@ -531,13 +540,13 @@ export default function GroupChatScreen({
 
     async function openChat(groupId: string) {
       try {
-        const names = await getMemberNames(groupId);
+        const { names, avatars } = directoryOf(await getMemberProfiles(groupId));
         if (cancelled) {
           return;
         }
 
         namesRef.current = names;
-        membersRef.current = toMembers(names);
+        membersRef.current = toMembers(names, avatars);
         setMembers(membersRef.current);
         const memberIds = Object.keys(names);
         setMemberCount(memberIds.length);
@@ -904,7 +913,6 @@ export default function GroupChatScreen({
     }
   }
 
-
   const typing = typingLabel(
     activeTypists(typists, Date.now()).map(function (entry) {
       return entry.name;
@@ -918,19 +926,21 @@ export default function GroupChatScreen({
     keyboardOffset = 8;
   }
 
-
   function openGroup(id: string) {
     setError(null);
     setActiveId(id);
   }
 
   function closeGroup() {
+    if (onExit) {
+      onExit();
+      return;
+    }
     setActiveId(null);
     setError(null);
     loadPreviews(groups);
     loadUnread();
   }
-
 
   function renderOlderSpinner() {
     if (!loadingOlder) {
@@ -958,6 +968,7 @@ export default function GroupChatScreen({
       <MessageBubble
         content={message.content}
         senderName={message.senderName}
+        senderAvatar={avatarById[message.senderId] ?? null}
         createdAt={message.createdAt}
         mine={isMine}
         isFirst={item.isFirst}
@@ -1010,7 +1021,6 @@ export default function GroupChatScreen({
     );
   }
 
-
   if (loadingGroups) {
     return (
       <SafeAreaView style={styles.center}>
@@ -1031,8 +1041,9 @@ export default function GroupChatScreen({
           unread={unread}
           mentions={mentionCounts}
           displayName={displayName}
+          avatarUrl={avatarUrl}
           onSelect={openGroup}
-          onBack={onBack}
+          onBack={onExit ?? onBack}
         />
 
       </SafeAreaView>
@@ -1072,7 +1083,7 @@ export default function GroupChatScreen({
           }}
           onOpenGroup={function () {
             setGroupScreen(true);
-}}
+          }}
         />
 
         <KeyboardAvoidingView
@@ -1082,7 +1093,6 @@ export default function GroupChatScreen({
         >
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          {}
           {connectionLabel(connection) ? (
             <Text style={styles.connection}>{connectionLabel(connection)}</Text>
           ) : null}
@@ -1107,10 +1117,8 @@ export default function GroupChatScreen({
             />
           )}
 
-          {}
           {typing ? <Text style={styles.typing}>{typing}</Text> : null}
 
-          {}
           <ChatComposer
             key={editing ? 'edit-' + editing.id : 'new'}
             initialText={editing ? editing.content : ''}
@@ -1171,7 +1179,6 @@ export default function GroupChatScreen({
               setViewing(null);
             }}
           >
-            {}
             <Pressable
               style={styles.viewer}
               onPress={function () {

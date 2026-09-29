@@ -15,6 +15,7 @@ Supabase Dashboard → Project Settings → API:
 ```
 EXPO_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT-REF.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+EXPO_PUBLIC_MAPTILER_KEY=...   # optional: web map tiles, falls back to OpenStreetMap
 ```
 
 The database schema lives in `supabase/schema.sql`.

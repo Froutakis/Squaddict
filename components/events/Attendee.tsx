@@ -30,6 +30,7 @@ export default function AttendeeStack({
         <Monogram
           key={person.id}
           name={person.name || '?'}
+          uri={person.avatarUrl}
           initials={initialsFor(person.name)}
           size={size}
           ring={2}

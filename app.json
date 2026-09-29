@@ -5,37 +5,74 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icon.png",
     "ios": {
-      "supportsTablet": true,
+      "bundleIdentifier": "app.squaddict",
+      "buildNumber": "1",
+      "supportsTablet": false,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Parea uses your location to show you what is happening nearby. It is never stored or shared."
+        "NSLocationWhenInUseUsageDescription": "Squaddict uses your location to show plans near you and, while a plan you're in is happening, to show your friends where you are. Your location is never stored.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "plugins": [
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Parea uses your location to show you what is happening nearby. It is never stored or shared."
+          "locationWhenInUsePermission": "Squaddict uses your location to show plans near you and, while a plan you're in is happening, to show your friends where you are. Your location is never stored."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Parea uses your photos so you can add them to a night you were part of.",
-          "cameraPermission": "Parea uses the camera so you can add a photo to a night you were part of."
+          "photosPermission": "Squaddict uses your photos so you can add them to a night you were part of or set a profile photo.",
+          "cameraPermission": "Squaddict uses the camera so you can add a photo to a night you were part of or set a profile photo.",
+          "microphonePermission": false
         }
       ],
       "expo-font",
       "expo-status-bar",
-      "react-native-maps"
+      "react-native-maps",
+      [
+        "expo-notifications",
+        {
+          "color": "#2145E6"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#1D3AC0"
+        }
+      ]
     ],
     "android": {
+      "package": "app.squaddict",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#FFFFFF"
-      }
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1D3AC0"
+      },
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
-      "bundler": "metro"
-    }
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8064a996-0e99-4119-8e0b-d1778ade326b"
+      }
+    },
+    "owner": "froutakis"
   }
 }
