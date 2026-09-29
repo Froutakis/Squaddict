@@ -14,6 +14,8 @@ type GroupSelectProps = {
   allLabel?: string;
   allAvatarLabel?: string;
   allAvatarUrl?: string | null;
+  // Off when a squad must always be chosen (no "everything" row).
+  showAll?: boolean;
 };
 
 export default function GroupSelect({
@@ -23,6 +25,7 @@ export default function GroupSelect({
   allLabel = 'You',
   allAvatarLabel = '',
   allAvatarUrl = null,
+  showAll = true,
 }: GroupSelectProps) {
   const [picker, setPicker] = useState(false);
   const [anchor, setAnchor] = useState({ top: 0, left: 0 });
@@ -81,6 +84,7 @@ export default function GroupSelect({
       >
         <Pressable style={styles.backdrop} onPress={() => setPicker(false)}>
           <View style={[styles.menu, { top: anchor.top, left: anchor.left }]}>
+            {showAll ? (
             <Pressable
               onPress={() => choose(null)}
               accessibilityRole="button"
@@ -98,6 +102,7 @@ export default function GroupSelect({
                 <Ionicons name="checkmark" size={16} color={colors.primary} />
               ) : null}
             </Pressable>
+            ) : null}
 
             {groups.map((group) => (
               <Pressable

@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import type { Group } from '../services/serviceGroup';
 import type { EventCover, MyEvent, RsvpStatus } from '../services/serviceEvents';
-import { getUserById } from '../services/serviceUser';
+import { getActingGroupId, getUserById } from '../services/serviceUser';
+import { pickActing } from '../lib/acting';
 import { getGroupsForUser } from '../services/serviceGroup';
 import { getPareaGoing, type PareaGoing } from '../services/serviceFeed';
 import { getUnreadCounts } from '../services/serviceChat';
@@ -259,9 +260,21 @@ export default function HomeScreen({
     return () => sub.remove();
   }, [load]);
 
+  // Home always looks at one squad: the acting one by default, never "all of them".
   useEffect(() => {
-    if (groupId && groups.length > 0 && !groups.some((g) => g.id === groupId)) setGroupId(null);
-  }, [groups, groupId]);
+    if (groups.length === 0) return;
+    if (groupId && groups.some((g) => g.id === groupId)) return;
+
+    let cancelled = false;
+    getActingGroupId(user.id)
+      .catch(() => null)
+      .then(function (actingId) {
+        if (!cancelled) setGroupId(pickActing(groups, actingId)?.id ?? null);
+      });
+    return function cleanup() {
+      cancelled = true;
+    };
+  }, [groups, groupId, user.id]);
 
   function applyRsvp(list: MyEvent[], eventId: string, status: RsvpStatus | null): MyEvent[] {
     return list.map(function (event) {

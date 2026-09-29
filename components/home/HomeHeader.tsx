@@ -40,6 +40,7 @@ export default function HomeHeader({
             onSelect={onGroupSelect}
             allAvatarLabel={displayName}
             allAvatarUrl={avatarUrl}
+            showAll={false}
           />
         </View>
 
