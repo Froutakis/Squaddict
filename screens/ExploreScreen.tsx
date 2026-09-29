@@ -9,8 +9,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import { searchGroups, type Group } from '../services/serviceGroup';
+import { squadSearchFilter } from '../lib/squadSearch';
+import SquadResult from '../components/explore/SquadResult';
+import GroupScreen from './GroupScreen';
 import {
   DEFAULT_RADIUS_KM,
   getFeed,
@@ -20,7 +25,7 @@ import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import { getCurrentCoords, type Coords, type LocationState } from '../services/serviceLocation';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
-import { colors, typo, layout, space, textSize } from '../theme';
+import { colors, typo, layout, radius, shadow, space, textSize } from '../theme';
 import Chip from '../components/general/Chip';
 import SectionHead from '../components/general/SectionHead';
 import ListEmpty from '../components/home/ListEmpty';
@@ -56,7 +61,13 @@ function applyRsvp(event: FeedEvent, status: RsvpStatus | null): FeedEvent {
   return { ...event, myStatus: status ?? undefined, goingCount: Math.max(0, goingCount) };
 }
 
-export default function ExploreScreen() {
+const SEARCH_DELAY_MS = 300;
+
+type ExploreScreenProps = {
+  userId: string;
+};
+
+export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const [center, setCenter] = useState<Coords | null>(null);
   const [locationState, setLocationState] = useState<LocationState>('asking');
 
@@ -72,6 +83,48 @@ export default function ExploreScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  const [squadQuery, setSquadQuery] = useState('');
+  const [squadResults, setSquadResults] = useState<Group[] | null>(null);
+  const [searchingSquads, setSearchingSquads] = useState(false);
+  const [squadError, setSquadError] = useState<string | null>(null);
+  const [profileGroup, setProfileGroup] = useState<Group | null>(null);
+
+  const squadMode = squadSearchFilter(squadQuery) !== null;
+
+  useEffect(() => {
+    if (!squadSearchFilter(squadQuery)) {
+      setSquadResults(null);
+      setSquadError(null);
+      setSearchingSquads(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSearchingSquads(true);
+
+    const timer = setTimeout(function () {
+      searchGroups(squadQuery)
+        .then(function (list) {
+          if (cancelled) return;
+          setSquadResults(list);
+          setSquadError(null);
+        })
+        .catch(function () {
+          if (cancelled) return;
+          setSquadResults([]);
+          setSquadError('Could not search. Try again.');
+        })
+        .finally(function () {
+          if (!cancelled) setSearchingSquads(false);
+        });
+    }, SEARCH_DELAY_MS);
+
+    return function cleanup() {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [squadQuery]);
 
   const askLocation = useCallback(async function ask() {
     setLocationState('asking');
@@ -162,10 +215,69 @@ export default function ExploreScreen() {
     load(page + 1, true);
   }, [visible.length, error, hasMore, loading, loadingMore, page, load]);
 
+  if (profileGroup) {
+    const close = () => setProfileGroup(null);
+    return <GroupScreen group={profileGroup} userId={userId} onBack={close} onLeave={close} />;
+  }
+
+  const squadSection = (
+    <View style={styles.squads}>
+      {squadError ? (
+        <Text style={styles.error}>{squadError}</Text>
+      ) : squadResults === null ? (
+        <ActivityIndicator color={colors.primary} style={styles.squadSpinner} />
+      ) : squadResults.length === 0 ? (
+        searchingSquads ? (
+          <ActivityIndicator color={colors.primary} style={styles.squadSpinner} />
+        ) : (
+          <Text style={styles.quiet}>No pareas match.</Text>
+        )
+      ) : (
+        <View style={styles.squadList}>
+          {squadResults.map((group, index) => (
+            <SquadResult
+              key={group.id}
+              group={group}
+              first={index === 0}
+              onPress={() => setProfileGroup(group)}
+            />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+
   const header = (
     <View style={styles.header}>
       <Text style={styles.screenTitle}>Explore</Text>
 
+      <View style={styles.search}>
+        <Ionicons name="search" size={16} color={colors.textFaint} />
+        <TextInput
+          value={squadQuery}
+          onChangeText={setSquadQuery}
+          placeholder="Find pareas"
+          placeholderTextColor={colors.textFaint}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          style={styles.searchInput}
+          accessibilityLabel="Find pareas"
+        />
+        {squadQuery.length > 0 ? (
+          <Pressable
+            onPress={() => setSquadQuery('')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+          >
+            <Ionicons name="close-circle" size={18} color={colors.textFaint} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {squadMode ? null : (
+        <>
       {locationState === 'on' ? (
         <View style={styles.locationRow}>
           <Ionicons name="location" size={14} color={colors.primary} />
@@ -209,6 +321,8 @@ export default function ExploreScreen() {
       {visible.length > 0 ? (
         <SectionHead title={center ? 'Closest to you' : 'Open to Parea'} />
       ) : null}
+        </>
+      )}
     </View>
   );
 
@@ -223,11 +337,13 @@ export default function ExploreScreen() {
   return (
     <SafeAreaView style={styles.screen}>
       <FlatList
-        data={visible}
+        data={squadMode ? [] : visible}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={header}
         ListEmptyComponent={
+          squadMode ? squadSection : (
           <View style={styles.empty}>
             {events.length > 0 ? (
               <ListEmpty
@@ -249,6 +365,7 @@ export default function ExploreScreen() {
               />
             )}
           </View>
+          )
         }
         renderItem={({ item }) => (
           <View style={styles.item}>
@@ -260,7 +377,7 @@ export default function ExploreScreen() {
             />
           </View>
         )}
-        onEndReached={loadMore}
+        onEndReached={squadMode ? undefined : loadMore}
         onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl
@@ -324,6 +441,24 @@ const styles = StyleSheet.create({
     ...typo.medium,
     fontSize: textSize.body,
   },
+
+  search: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    marginHorizontal: space.lg,
+    paddingHorizontal: space.md,
+    height: 46,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  searchInput: { flex: 1, color: colors.text, ...typo.medium, fontSize: textSize.base },
+  squads: { paddingHorizontal: space.lg },
+  squadSpinner: { alignSelf: 'flex-start', marginVertical: space.sm },
+  squadList: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden', ...shadow.card },
+  quiet: { color: colors.textFaint, ...typo.medium, fontSize: textSize.body },
 
   item: { paddingHorizontal: space.lg, paddingBottom: space.sm },
   empty: { paddingHorizontal: space.lg, paddingTop: space.sm },

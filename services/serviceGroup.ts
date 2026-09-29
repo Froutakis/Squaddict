@@ -2,6 +2,7 @@ import { supabase } from "./supabaseClient";
 import { requireUser } from "./serviceAuth";
 import { UNIQUE_VIOLATION } from "../lib/postgres";
 import type { SquadLook } from "../lib/squadLook";
+import { squadSearchFilter } from "../lib/squadSearch";
 
 export type Group = {
   id: string;
@@ -192,14 +193,13 @@ export async function getGroupByHandle(handle: string): Promise<Group | null> {
 }
 
 export async function searchGroups(query: string, limit = 20): Promise<Array<Group>> {
-  const term = query.trim();
-  if (term.length === 0) return [];
+  const filter = squadSearchFilter(query);
+  if (!filter) return [];
 
-  const pattern = `%${term}%`;
   const { data, error } = await supabase
     .from("groups")
     .select(GROUP_FIELDS)
-    .or(`handle.ilike.${pattern},name.ilike.${pattern}`)
+    .or(filter)
     .order("member_count", { ascending: false })
     .limit(limit);
   if (error) throw error;
