@@ -71,20 +71,25 @@ export default function FollowsScreen({ acting, userId, onBack }: FollowsScreenP
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Pressable
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={({ pressed }) => [styles.head, pressed && styles.pressed]}
-        >
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
+        <View style={styles.head}>
+          <Pressable
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            hitSlop={8}
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <Ionicons name="chevron-back" size={26} color={colors.text} />
+          </Pressable>
           <View style={styles.headText}>
-            <Text style={styles.title}>Your fellow squads</Text>
+            <Text style={styles.title} accessibilityRole="header">
+              Your fellow squads
+            </Text>
             <Text style={styles.summary} numberOfLines={1}>
               {summary}
             </Text>
           </View>
-        </Pressable>
+        </View>
 
         <View style={styles.search}>
           <Ionicons name="search" size={16} color={colors.textFaint} />

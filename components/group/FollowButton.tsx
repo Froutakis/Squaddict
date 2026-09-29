@@ -83,7 +83,7 @@ export default function FollowButton({ group, userId }: FollowButtonProps) {
         disabled={saving}
         accessibilityRole="button"
         accessibilityLabel={label}
-        accessibilityState={{ selected: following, disabled: saving }}
+        accessibilityState={{ checked: following, disabled: saving }}
         style={({ pressed }) => [
           styles.button,
           following ? styles.outlined : styles.solid,
@@ -113,7 +113,11 @@ export default function FollowButton({ group, userId }: FollowButtonProps) {
         </View>
       ) : null}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? (
+        <Text style={styles.error} accessibilityLiveRegion="polite">
+          {error}
+        </Text>
+      ) : null}
     </View>
   );
 }
