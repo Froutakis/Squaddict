@@ -15,6 +15,8 @@ import SquadLookSheet from '../components/group/SquadLookSheet';
 import FollowButton from '../components/group/FollowButton';
 import SquadFollows from '../components/group/SquadFollows';
 import SquadMenu from '../components/group/SquadMenu';
+import SquadTicket from '../components/group/SquadTicket';
+import { getFollowerIds, getFollowing } from '../services/serviceFollow';
 import Monogram from '../components/general/Monogram';
 import Segmented from '../components/general/Segmented';
 import { getActingSquad, setActingGroup } from '../services/serviceUser';
@@ -27,7 +29,7 @@ import {
   rotateInviteCode,
   type Group,
 } from '../services/serviceGroup';
-import { layout, paper, typo, radius, space, sun, textSize } from '../theme';
+import { layout, paper, typo, radius, shadow, space, textSize } from '../theme';
 import { getGroupPublicEvents, type FeedEvent } from '../services/serviceFeed';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
@@ -76,6 +78,10 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
   const [actingError, setActingError] = useState<string | null>(null);
   const [opened, setOpened] = useState<Group | null>(null);
   const [followsReload, setFollowsReload] = useState(0);
+  const [followCounts, setFollowCounts] = useState<{ following: number | null; followers: number | null }>({
+    following: null,
+    followers: null,
+  });
 
   useEffect(() => {
     setCurrent(group);
@@ -92,6 +98,19 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
       cancelled = true;
     };
   }, [userId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      getFollowing(group.id).then((list) => list.length).catch(() => null),
+      getFollowerIds(group.id).then((ids) => ids.length).catch(() => null),
+    ]).then(function ([following, followers]) {
+      if (!cancelled) setFollowCounts({ following, followers });
+    });
+    return function cleanup() {
+      cancelled = true;
+    };
+  }, [group.id, followsReload]);
 
   async function actAsThisSquad() {
     if (actingBusy || actingId === group.id) return;
@@ -315,41 +334,23 @@ export default function GroupScreen({ group, userId, onBack, onLeave, onChange }
           <SquadHero
             group={current}
             memberCount={count}
-            nights={nights}
+            nights={member ? 0 : nights}
             onBack={onBack}
+            onMenu={member ? () => setMenuOpen(true) : undefined}
             action={<FollowButton key={actingId ?? 'none'} group={current} userId={userId} />}
           />
 
           {member ? (
-            <View style={styles.actions}>
-              <Pressable
-                onPress={actAsThisSquad}
-                disabled={actingBusy || isActing}
-                accessibilityRole="button"
-                accessibilityLabel={isActing ? 'You are acting as this squad' : 'Act as this squad'}
-                accessibilityState={{ selected: isActing, disabled: actingBusy || isActing }}
-                style={({ pressed }) => [
-                  styles.actButton,
-                  isActing ? styles.actOn : styles.actOff,
-                  pressed && styles.pressed,
-                ]}
-              >
-                {isActing ? <View style={styles.actDot} /> : null}
-                <Text style={isActing ? styles.actOnText : styles.actOffText} numberOfLines={1}>
-                  {isActing ? 'Acting as this squad' : actingBusy ? 'Switching…' : 'Act as this squad'}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => setMenuOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel="More options"
-                hitSlop={6}
-                style={({ pressed }) => [styles.more, pressed && styles.pressed]}
-              >
-                <Ionicons name="ellipsis-horizontal" size={20} color={paper.ink} />
-              </Pressable>
-            </View>
+            <SquadTicket
+              group={current}
+              nights={nights}
+              memberCount={count}
+              following={followCounts.following}
+              followers={followCounts.followers}
+              acting={isActing}
+              switching={actingBusy}
+              onActAs={actAsThisSquad}
+            />
           ) : null}
 
           {actingError ? <Text style={styles.error}>{actingError}</Text> : null}
@@ -464,32 +465,6 @@ function afterSheet(open: () => void) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: paper.bg },
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  actButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.xs,
-    height: 38,
-    paddingHorizontal: space.md,
-    borderRadius: radius.sm,
-  },
-  actOff: { backgroundColor: paper.ink },
-  actOn: { backgroundColor: paper.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: paper.line },
-  actDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: sun },
-  actOffText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.body },
-  actOnText: { color: paper.ink, ...typo.semi, fontSize: textSize.body },
-  more: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: paper.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: paper.line,
-  },
   pressed: { opacity: 0.6 },
 
   content: { padding: space.md, gap: space.md, paddingBottom: space.xl },
@@ -511,8 +486,9 @@ const styles = StyleSheet.create({
     gap: space.sm,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     backgroundColor: paper.surface,
+    ...shadow.card,
   },
   inviteText: { flex: 1, gap: 2 },
   inviteLabel: { color: paper.inkFaint, ...typo.mono, fontSize: textSize.micro, letterSpacing: 1.2 },
@@ -525,7 +501,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: paper.bg,
   },
-  memberList: { borderRadius: radius.md, backgroundColor: paper.surface, overflow: 'hidden' },
+  memberList: { borderRadius: radius.lg, backgroundColor: paper.surface, overflow: 'hidden', ...shadow.card },
   member: {
     flexDirection: 'row',
     alignItems: 'center',

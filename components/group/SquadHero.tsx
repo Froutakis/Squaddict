@@ -17,13 +17,14 @@ type SquadHeroProps = {
   nights: number;
   onBack: () => void;
   action?: ReactNode;
+  onMenu?: () => void;
 };
 
 function plural(count: number, one: string, many: string) {
   return `${count} ${count === 1 ? one : many}`;
 }
 
-export default function SquadHero({ group, memberCount, nights, onBack, action }: SquadHeroProps) {
+export default function SquadHero({ group, memberCount, nights, onBack, action, onMenu }: SquadHeroProps) {
   const [bannerBroken, setBannerBroken] = useState(false);
   const [viewing, setViewing] = useState<'banner' | 'avatar' | null>(null);
 
@@ -67,6 +68,17 @@ export default function SquadHero({ group, memberCount, nights, onBack, action }
         >
           <Ionicons name="chevron-back" size={20} color={paper.ink} />
         </Pressable>
+
+        {onMenu ? (
+          <Pressable
+            onPress={onMenu}
+            accessibilityRole="button"
+            accessibilityLabel="More options"
+            style={({ pressed }) => [styles.back, styles.menu, pressed && styles.pressed]}
+          >
+            <Ionicons name="ellipsis-horizontal" size={19} color={paper.ink} />
+          </Pressable>
+        ) : null}
 
         {nights > 0 ? (
           <View style={styles.tag}>
@@ -134,6 +146,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  menu: { left: undefined, right: space.sm },
   pressed: { opacity: 0.6 },
   tag: {
     position: 'absolute',

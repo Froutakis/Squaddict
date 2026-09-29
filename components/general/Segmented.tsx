@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, textSize, typo } from '../../theme';
+import { colors, radius, textSize, typo } from '../../theme';
 
 type SegmentedProps<T extends string> = {
   options: { value: T; label: string }[];
@@ -7,7 +7,7 @@ type SegmentedProps<T extends string> = {
   onChange: (value: T) => void;
 };
 
-// Profile-style tabs: plain labels on a hairline, the chosen one underlined.
+// A row of tabs in one pill: the chosen one sits on a white chip.
 export default function Segmented<T extends string>({ options, value, onChange }: SegmentedProps<T>) {
   return (
     <View style={styles.track} accessibilityRole="tablist">
@@ -21,10 +21,9 @@ export default function Segmented<T extends string>({ options, value, onChange }
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={option.label}
-            style={styles.item}
+            style={[styles.item, active && styles.itemActive]}
           >
             <Text style={[styles.label, active && styles.labelActive]}>{option.label}</Text>
-            <View style={[styles.bar, active && styles.barActive]} />
           </Pressable>
         );
       })}
@@ -35,12 +34,26 @@ export default function Segmented<T extends string>({ options, value, onChange }
 const styles = StyleSheet.create({
   track: {
     flexDirection: 'row',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderStrong,
+    gap: 3,
+    padding: 3,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
   },
-  item: { flex: 1, alignItems: 'center', paddingTop: 10, gap: 9 },
-  label: { color: colors.textFaint, ...typo.semi, fontSize: textSize.base },
+  item: {
+    flex: 1,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.sm,
+  },
+  itemActive: {
+    backgroundColor: colors.surface,
+    shadowColor: '#0C1926',
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  label: { color: colors.textSoft, ...typo.semi, fontSize: textSize.body },
   labelActive: { color: colors.text },
-  bar: { height: 2, width: 28, borderRadius: 1, backgroundColor: 'transparent' },
-  barActive: { backgroundColor: colors.text },
 });
