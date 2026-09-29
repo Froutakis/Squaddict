@@ -14,9 +14,11 @@ import { logout } from '../services/serviceAuth';
 import { getActingGroupId, getUserById, setActingGroup } from '../services/serviceUser';
 import { getGroupsForUser, getNightsKept, type Group } from '../services/serviceGroup';
 import { getUnreadCounts } from '../services/serviceChat';
+import { getFollowing } from '../services/serviceFollow';
 import { pickActing, splitVisible, switchList } from '../lib/acting';
 import Monogram from '../components/general/Monogram';
 import ActingCard from '../components/you/ActingCard';
+import FollowShelf from '../components/you/FollowShelf';
 import SwitchRow from '../components/you/SwitchRow';
 import GroupScreen from './GroupScreen';
 import GroupFormSheet from '../components/group/GroupFormSheet';
@@ -40,6 +42,8 @@ export default function YouScreen({ user }: YouScreenProps) {
   const [expanded, setExpanded] = useState(false);
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
   const [groupForm, setGroupForm] = useState<'create' | 'join' | null>(null);
+  const [follows, setFollows] = useState<{ forId: string; list: Group[]; error: boolean } | null>(null);
+  const [followsOpen, setFollowsOpen] = useState(false);
   const switchSeq = useRef(0);
 
   const load = useCallback(
@@ -80,6 +84,7 @@ export default function YouScreen({ user }: YouScreenProps) {
   const acting = pickActing(groups, actingId);
   const others = switchList(groups, acting);
   const { shown, more } = expanded ? { shown: others, more: 0 } : splitVisible(others);
+  const shelf = acting && follows?.forId === acting.id ? follows : null;
 
   useEffect(() => {
     if (!acting) return;
@@ -91,6 +96,24 @@ export default function YouScreen({ user }: YouScreenProps) {
         if (!cancelled) setNights(count);
       })
       .catch(function () {});
+
+    return function cleanup() {
+      cancelled = true;
+    };
+  }, [acting?.id, reloads]);
+
+  useEffect(() => {
+    if (!acting) return;
+
+    const forId = acting.id;
+    let cancelled = false;
+    getFollowing(forId)
+      .then(function (list) {
+        if (!cancelled) setFollows({ forId, list, error: false });
+      })
+      .catch(function () {
+        if (!cancelled) setFollows({ forId, list: [], error: true });
+      });
 
     return function cleanup() {
       cancelled = true;
@@ -162,7 +185,12 @@ export default function YouScreen({ user }: YouScreenProps) {
               <Text style={styles.label}>THE PUNCHED ONE</Text>
             </View>
 
-            <ActingCard group={acting} nights={nights} onOpenProfile={() => setProfileGroup(acting)} />
+            <ActingCard
+              group={acting}
+              nights={nights}
+              onOpenProfile={() => setProfileGroup(acting)}
+              onOpenFollows={() => setFollowsOpen(true)}
+            />
 
             <View style={styles.info}>
               <Ionicons name="ticket-outline" size={16} color={colors.primary} />
@@ -204,6 +232,32 @@ export default function YouScreen({ user }: YouScreenProps) {
                 {switchError ? <Text style={styles.error}>{switchError}</Text> : null}
               </>
             ) : null}
+
+            <View style={styles.labels}>
+              <Text style={[styles.label, styles.labelShrink]} numberOfLines={1}>
+                {acting.name.toUpperCase()} FOLLOWS
+              </Text>
+              {shelf && shelf.list.length > 0 ? (
+                <Pressable
+                  onPress={() => setFollowsOpen(true)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`See all ${shelf.list.length} squads ${acting.name} follows`}
+                >
+                  <Text style={[styles.label, styles.link]}>SEE ALL {shelf.list.length}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            {!shelf ? (
+              <ActivityIndicator color={colors.primary} style={styles.spinner} />
+            ) : shelf.error ? (
+              <Text style={styles.error}>Could not load who you follow.</Text>
+            ) : shelf.list.length === 0 ? (
+              <Text style={styles.quiet}>Nobody yet. Follows belong to the squad, not to you.</Text>
+            ) : (
+              <FollowShelf groups={splitVisible(shelf.list, 4).shown} onOpen={setProfileGroup} />
+            )}
           </>
         )}
 
@@ -268,6 +322,8 @@ const styles = StyleSheet.create({
   subtitle: { color: colors.textFaint, ...typo.medium, fontSize: textSize.small },
   labels: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   label: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption, letterSpacing: 1.2 },
+  labelShrink: { flexShrink: 1 },
+  link: { color: colors.primary },
   info: {
     flexDirection: 'row',
     gap: space.sm,

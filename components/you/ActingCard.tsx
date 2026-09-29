@@ -16,9 +16,10 @@ type ActingCardProps = {
   group: Group;
   nights: number;
   onOpenProfile: () => void;
+  onOpenFollows: () => void;
 };
 
-export default function ActingCard({ group, nights, onOpenProfile }: ActingCardProps) {
+export default function ActingCard({ group, nights, onOpenProfile, onOpenFollows }: ActingCardProps) {
   const [bannerBroken, setBannerBroken] = useState(false);
 
   useEffect(() => {
@@ -76,17 +77,15 @@ export default function ActingCard({ group, nights, onOpenProfile }: ActingCardP
             <Text style={styles.primaryText}>Open profile</Text>
           </Pressable>
 
-          <View
-            accessible
+          <Pressable
+            onPress={onOpenFollows}
             accessibilityRole="button"
-            accessibilityLabel="Who we follow, coming soon"
-            accessibilityState={{ disabled: true }}
-            style={styles.secondary}
+            accessibilityLabel={`Who ${group.name} follows`}
+            style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
           >
-            <Ionicons name="people-outline" size={16} color={colors.textFaint} />
+            <Ionicons name="people-outline" size={16} color={colors.text} />
             <Text style={styles.secondaryText}>Who we follow</Text>
-            <Text style={styles.soon}>soon</Text>
-          </View>
+          </Pressable>
         </View>
       </View>
     </View>
@@ -141,9 +140,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    opacity: 0.6,
   },
-  secondaryText: { color: colors.textFaint, ...typo.semi, fontSize: textSize.base },
-  soon: { color: colors.textFaint, ...typo.mono, fontSize: textSize.micro },
+  secondaryText: { color: colors.text, ...typo.semi, fontSize: textSize.base },
   pressed: { opacity: 0.7 },
 });
