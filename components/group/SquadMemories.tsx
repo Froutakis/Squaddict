@@ -11,7 +11,7 @@ import { dayMonth } from '../../lib/datetime';
 import StoryViewer from '../events/StoryViewer';
 import { capture, messageFor, PhotoSourceSheet, type PhotoSource } from '../events/EventPhotos';
 import type { MemoryNight } from '../home/memories';
-import { paper, radius, solidFor, space, textSize, typo } from '../../theme';
+import { paper, radius, solidFor, space, sun, textSize, typo } from '../../theme';
 
 type SquadMemoriesProps = {
   group: Group;
@@ -172,19 +172,15 @@ export default function SquadMemories({
 
                       <LinearGradient colors={SHADE} style={styles.shade} pointerEvents="none" />
 
-                      {memory.photoCount > 1 ? (
-                        <View style={styles.count}>
-                          <Ionicons name="copy" size={10} color="#FFFFFF" />
-                          <Text style={styles.countText}>{memory.photoCount}</Text>
-                        </View>
-                      ) : null}
+                      <Text style={styles.stamp}>{dayMonth(memory.event.date).toUpperCase()}</Text>
+                      <View style={styles.punch} />
 
                       <View style={styles.caption}>
-                        <Text style={styles.title} numberOfLines={1}>
+                        <Text style={styles.title} numberOfLines={2}>
                           {memory.event.title}
                         </Text>
                         <Text style={styles.meta} numberOfLines={1}>
-                          {dayMonth(memory.event.date).toUpperCase()}
+                          {memory.photoCount} {memory.photoCount === 1 ? 'PHOTO' : 'PHOTOS'}
                         </Text>
                       </View>
                     </Pressable>
@@ -260,19 +256,29 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.8 },
   shade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '55%' },
-  count: {
+  // The date stamped on the stub, and the hole punched when the night was kept.
+  stamp: {
     position: 'absolute',
+    left: 7,
     top: 6,
-    right: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 5,
-    height: 18,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    color: '#FFFFFF',
+    ...typo.mono,
+    fontSize: 9.5,
+    letterSpacing: 0.8,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowRadius: 3,
   },
-  countText: { color: '#FFFFFF', ...typo.bold, fontSize: 10 },
+  punch: {
+    position: 'absolute',
+    right: 7,
+    top: 7,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderWidth: 2,
+    borderColor: sun,
+  },
   caption: { position: 'absolute', left: 7, right: 7, bottom: 6, gap: 1 },
   title: { color: '#FFFFFF', ...typo.bold, fontSize: textSize.small },
   meta: { color: 'rgba(255,255,255,0.8)', ...typo.mono, fontSize: 9, letterSpacing: 0.8 },

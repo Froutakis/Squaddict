@@ -17,6 +17,7 @@ import SquadProfileHeader from '../components/group/SquadProfileHeader';
 import { getFollowerIds, getFollowing } from '../services/serviceFollow';
 import Monogram from '../components/general/Monogram';
 import IconTabs from '../components/general/IconTabs';
+import Punch from '../components/general/Punch';
 import { getActingSquad, setActingGroup } from '../services/serviceUser';
 import {
   getGroupById,
@@ -42,9 +43,9 @@ type Member = {
 type Tab = 'memories' | 'following' | 'members';
 
 const TABS = [
-  { value: 'memories' as const, label: 'Memories', icon: 'grid-outline' as const, activeIcon: 'grid' as const },
+  { value: 'memories' as const, label: 'Wall', icon: 'grid-outline' as const, activeIcon: 'grid' as const },
   { value: 'following' as const, label: 'Following', icon: 'compass-outline' as const, activeIcon: 'compass' as const },
-  { value: 'members' as const, label: 'Members', icon: 'people-outline' as const, activeIcon: 'people' as const },
+  { value: 'members' as const, label: 'Squad', icon: 'people-outline' as const, activeIcon: 'people' as const },
 ];
 
 type GroupScreenProps = {
@@ -363,6 +364,7 @@ export default function GroupScreen({
             <>
               <SquadProfileHeader
                 group={current}
+                nights={nights}
                 acting={isActing}
                 stats={[
                   { value: nights, label: nights === 1 ? 'night' : 'nights' },
@@ -375,7 +377,7 @@ export default function GroupScreen({
               <View style={styles.buttons}>
                 {isActing ? (
                   <View style={[styles.button, styles.buttonActing]} accessibilityLabel="You are acting as this squad">
-                    <View style={styles.actingDot} />
+                    <Punch state="in" size={14} holeColor={paper.accentSoft} />
                     <Text style={styles.buttonActingText} numberOfLines={1}>
                       Acting
                     </Text>
@@ -389,6 +391,7 @@ export default function GroupScreen({
                     accessibilityHint="Follows will be made in this squad's name"
                     style={({ pressed }) => [styles.button, styles.buttonPrimary, (pressed || actingBusy) && styles.pressed]}
                   >
+                    <Punch state="open" size={14} onDark />
                     <Text style={styles.buttonPrimaryText} numberOfLines={1}>
                       {actingBusy ? 'Switching…' : 'Act as'}
                     </Text>
@@ -568,7 +571,7 @@ const styles = StyleSheet.create({
     backgroundColor: paper.surfaceAlt,
   },
   buttonText: { color: paper.ink, ...typo.semi, fontSize: textSize.body },
-  buttonPrimary: { backgroundColor: paper.accent },
+  buttonPrimary: { backgroundColor: paper.ink },
   buttonPrimaryText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.body },
   buttonActing: { backgroundColor: paper.accentSoft },
   buttonActingText: { color: paper.accent, ...typo.semi, fontSize: textSize.body },
