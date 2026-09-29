@@ -96,7 +96,6 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [feedGroups, setFeedGroups] = useState<CardGroup[]>([]);
-  const [following, setFollowing] = useState<Record<string, true>>({});
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
 
   useEffect(() => {
@@ -104,10 +103,6 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
 
     readJson<Record<string, true>>(userPrefix(user.id) + 'checkedin').then((stored) => {
       if (!cancelled && stored) setCheckedIn(stored);
-    });
-
-    readJson<Record<string, true>>(userPrefix(user.id) + 'following').then((stored) => {
-      if (!cancelled && stored) setFollowing(stored);
     });
 
     getFeed()
@@ -144,15 +139,6 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
     const next = { ...checkedIn, [eventId]: true as const };
     setCheckedIn(next);
     writeJson(userPrefix(user.id) + 'checkedin', next);
-  }
-
-  function toggleFollow(groupId: string) {
-    const next = { ...following };
-    if (next[groupId]) delete next[groupId];
-    else next[groupId] = true;
-
-    setFollowing(next);
-    writeJson(userPrefix(user.id) + 'following', next);
   }
 
   const load = useCallback(
@@ -501,9 +487,7 @@ export default function HomeScreen({ user, createNonce = 0 }: HomeScreenProps) {
                 <GroupCard
                   key={group.id}
                   group={group}
-                  following={following[group.id] === true}
                   onPress={() => openProfile(group)}
-                  onFollow={() => toggleFollow(group.id)}
                 />
               ))}
             </ScrollView>
