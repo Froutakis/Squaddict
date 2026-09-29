@@ -6,11 +6,7 @@ import Monogram from '../general/Monogram';
 import ImageViewer from '../general/ImageViewer';
 import { colors, radius, space, textSize, typo } from '../../theme';
 
-// The banner keeps the photo's own shape so nobody gets cropped out; only very
-// tall or very long photos are held to a sensible band.
-const DEFAULT_RATIO = 16 / 9;
-const MIN_RATIO = 1.25;
-const MAX_RATIO = 3;
+const BANNER = 200;
 const AVATAR = 112;
 const RING = 4;
 // The one colour that marks the squad you act as: the red of the logo.
@@ -28,25 +24,9 @@ type SquadProfileHeaderProps = {
 export default function SquadProfileHeader({ group, stats }: SquadProfileHeaderProps) {
   const [bannerBroken, setBannerBroken] = useState(false);
   const [viewing, setViewing] = useState<'banner' | 'avatar' | null>(null);
-  const [ratio, setRatio] = useState(DEFAULT_RATIO);
 
   useEffect(() => {
     setBannerBroken(false);
-    setRatio(DEFAULT_RATIO);
-    if (!group.bannerUrl) return;
-
-    let cancelled = false;
-    Image.getSize(
-      group.bannerUrl,
-      function (width, height) {
-        if (cancelled || !width || !height) return;
-        setRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, width / height)));
-      },
-      function () {},
-    );
-    return function cleanup() {
-      cancelled = true;
-    };
   }, [group.bannerUrl]);
 
   const banner = group.bannerUrl && !bannerBroken ? group.bannerUrl : null;
@@ -59,15 +39,20 @@ export default function SquadProfileHeader({ group, stats }: SquadProfileHeaderP
         accessibilityRole={banner ? 'imagebutton' : undefined}
         accessibilityLabel={`${group.name} banner`}
         accessibilityHint={banner ? 'Opens the full image' : undefined}
-        style={({ pressed }) => [styles.banner, { aspectRatio: ratio }, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.banner, pressed && styles.pressed]}
       >
         {banner ? (
-          <Image
-            source={{ uri: banner }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-            onError={() => setBannerBroken(true)}
-          />
+          <>
+            {/* The same photo, blurred, fills the frame; the sharp one sits whole on top. */}
+            <Image source={{ uri: banner }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={24} />
+            <View style={styles.dim} />
+            <Image
+              source={{ uri: banner }}
+              style={StyleSheet.absoluteFill}
+              resizeMode="contain"
+              onError={() => setBannerBroken(true)}
+            />
+          </>
         ) : (
           <LinearGradient colors={['#1B2A44', '#3A2E3F']} style={StyleSheet.absoluteFill} />
         )}
@@ -112,11 +97,12 @@ export default function SquadProfileHeader({ group, stats }: SquadProfileHeaderP
 
 const styles = StyleSheet.create({
   banner: {
-    width: '100%',
+    height: BANNER,
     borderRadius: radius.xl,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
   },
+  dim: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(12,25,38,0.25)' },
   pressed: { opacity: 0.85 },
   // Half the photo rides on the banner's bottom edge.
   avatarRow: { marginTop: -(AVATAR / 2 + RING), paddingLeft: space.md },
