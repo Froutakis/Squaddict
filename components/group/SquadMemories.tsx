@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { Group } from '../../services/serviceGroup';
 import { getGroupMemories } from '../../services/serviceEvents';
 import { signImages } from '../../services/serviceMedia';
@@ -116,57 +118,82 @@ export default function SquadMemories({
 
   if (hidden) {
     return (
-      <View style={styles.section}>
-        <Text style={styles.label}>MEMORIES</Text>
-        <Text style={styles.quiet}>{nightsLabel(nights)} kept · memories are private</Text>
+      <View style={styles.empty}>
+        <Ionicons name="lock-closed-outline" size={22} color={paper.inkSoft} />
+        <Text style={styles.emptyTitle}>{nightsLabel(nights)} kept</Text>
+        <Text style={styles.quiet}>Their memories are private.</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.section}>
-      <Text style={styles.label}>MEMORIES</Text>
-
       {loading ? (
         <ActivityIndicator color={paper.accent} style={styles.loader} />
       ) : error && memories.length === 0 ? (
         <Text style={styles.error}>{error}</Text>
       ) : memories.length === 0 ? (
-        <Text style={styles.quiet}>No nights on the wall yet.</Text>
+        <View style={styles.empty}>
+          <Ionicons name="camera-outline" size={22} color={paper.inkSoft} />
+          <Text style={styles.emptyTitle}>No nights on the wall yet</Text>
+          <Text style={styles.quiet}>Photos from your plans land here the night after.</Text>
+        </View>
       ) : (
         <View style={styles.grid}>
-          {memories.map(function (memory, index) {
-            const url = signed[memory.cover.path]?.url;
-
+          {rowsOf(memories, 3).map(function (row, r) {
             return (
-              <Pressable
-                key={memory.event.id}
-                onPress={function () {
-                  setOpen(index);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`${memory.event.title}, ${dayMonth(memory.event.date)}, ${memory.photoCount} photos`}
-                style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
-              >
-                {url ? (
-                  <Image
-                    source={{ uri: url }}
-                    style={styles.cover}
-                    resizeMode="cover"
-                    onError={function () {
-                      forget(memory.cover.path);
-                    }}
-                  />
-                ) : (
-                  <View style={[styles.cover, { backgroundColor: solidFor(group.name) }]} />
-                )}
-                <Text style={styles.title} numberOfLines={1}>
-                  {memory.event.title}
-                </Text>
-                <Text style={styles.meta} numberOfLines={1}>
-                  {dayMonth(memory.event.date)} · {memory.photoCount} {memory.photoCount === 1 ? 'photo' : 'photos'}
-                </Text>
-              </Pressable>
+              <View key={r} style={styles.row}>
+                {row.map(function (memory, c) {
+                  const index = r * 3 + c;
+                  const url = signed[memory.cover.path]?.url;
+
+                  return (
+                    <Pressable
+                      key={memory.event.id}
+                      onPress={function () {
+                        setOpen(index);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${memory.event.title}, ${dayMonth(memory.event.date)}, ${memory.photoCount} photos`}
+                      style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
+                    >
+                      {url ? (
+                        <Image
+                          source={{ uri: url }}
+                          style={StyleSheet.absoluteFill}
+                          resizeMode="cover"
+                          onError={function () {
+                            forget(memory.cover.path);
+                          }}
+                        />
+                      ) : (
+                        <View style={[StyleSheet.absoluteFill, { backgroundColor: solidFor(group.name) }]} />
+                      )}
+
+                      <LinearGradient colors={SHADE} style={styles.shade} pointerEvents="none" />
+
+                      {memory.photoCount > 1 ? (
+                        <View style={styles.count}>
+                          <Ionicons name="copy" size={10} color="#FFFFFF" />
+                          <Text style={styles.countText}>{memory.photoCount}</Text>
+                        </View>
+                      ) : null}
+
+                      <View style={styles.caption}>
+                        <Text style={styles.title} numberOfLines={1}>
+                          {memory.event.title}
+                        </Text>
+                        <Text style={styles.meta} numberOfLines={1}>
+                          {dayMonth(memory.event.date).toUpperCase()}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+                {Array.from({ length: 3 - row.length }).map(function (_, i) {
+                  return <View key={'pad' + i} style={styles.pad} />;
+                })}
+              </View>
             );
           })}
         </View>
@@ -205,16 +232,48 @@ export default function SquadMemories({
   );
 }
 
+// Bottom shade so white captions read on any photo.
+const SHADE = ['rgba(0,0,0,0)', 'rgba(0,0,0,0.65)'] as const;
+
+function rowsOf<T>(list: T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < list.length; i += size) rows.push(list.slice(i, i + size));
+  return rows;
+}
+
 const styles = StyleSheet.create({
   section: { gap: space.sm },
-  label: { color: paper.inkFaint, ...typo.mono, fontSize: textSize.caption, letterSpacing: 1.2 },
-  loader: { alignSelf: 'flex-start', marginVertical: space.sm },
-  quiet: { color: paper.inkFaint, ...typo.medium, fontSize: textSize.body },
+  loader: { alignSelf: 'center', marginVertical: space.lg },
+  quiet: { color: paper.inkFaint, ...typo.medium, fontSize: textSize.body, textAlign: 'center' },
   error: { color: paper.danger, ...typo.medium, fontSize: textSize.body },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
-  tile: { width: '32%', gap: 3 },
-  pressed: { opacity: 0.7 },
-  cover: { width: '100%', aspectRatio: 1, borderRadius: radius.md, backgroundColor: paper.surfaceAlt },
-  title: { color: paper.ink, ...typo.semi, fontSize: textSize.small },
-  meta: { color: paper.inkFaint, ...typo.mono, fontSize: textSize.micro },
+  empty: { alignItems: 'center', gap: space.xxs, paddingVertical: space.xl },
+  emptyTitle: { color: paper.ink, ...typo.bold, fontSize: textSize.base, marginTop: space.xxs },
+  grid: { gap: 3 },
+  row: { flexDirection: 'row', gap: 3 },
+  pad: { flex: 1 },
+  tile: {
+    flex: 1,
+    aspectRatio: 3 / 4,
+    borderRadius: radius.sm,
+    overflow: 'hidden',
+    backgroundColor: paper.surfaceAlt,
+  },
+  pressed: { opacity: 0.8 },
+  shade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '55%' },
+  count: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 5,
+    height: 18,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  countText: { color: '#FFFFFF', ...typo.bold, fontSize: 10 },
+  caption: { position: 'absolute', left: 7, right: 7, bottom: 6, gap: 1 },
+  title: { color: '#FFFFFF', ...typo.bold, fontSize: textSize.small },
+  meta: { color: 'rgba(255,255,255,0.8)', ...typo.mono, fontSize: 9, letterSpacing: 0.8 },
 });

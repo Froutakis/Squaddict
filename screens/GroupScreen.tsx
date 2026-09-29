@@ -9,16 +9,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import SquadHero from '../components/group/SquadHero';
 import SquadMemories from '../components/group/SquadMemories';
 import SquadLookSheet from '../components/group/SquadLookSheet';
 import FollowButton from '../components/group/FollowButton';
 import SquadFollows from '../components/group/SquadFollows';
-import SquadMenu from '../components/group/SquadMenu';
-import SquadStats from '../components/group/SquadStats';
+import SquadProfileHeader from '../components/group/SquadProfileHeader';
 import { getFollowerIds, getFollowing } from '../services/serviceFollow';
 import Monogram from '../components/general/Monogram';
-import Segmented from '../components/general/Segmented';
+import IconTabs from '../components/general/IconTabs';
 import { getActingSquad, setActingGroup } from '../services/serviceUser';
 import {
   getGroupById,
@@ -29,7 +27,7 @@ import {
   rotateInviteCode,
   type Group,
 } from '../services/serviceGroup';
-import { layout, paper, typo, radius, shadow, space, textSize } from '../theme';
+import { layout, paper, typo, radius, space, textSize } from '../theme';
 import { getGroupPublicEvents, type FeedEvent } from '../services/serviceFeed';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
@@ -43,10 +41,10 @@ type Member = {
 
 type Tab = 'memories' | 'following' | 'members';
 
-const TABS: { value: Tab; label: string }[] = [
-  { value: 'memories', label: 'Memories' },
-  { value: 'following', label: 'Following' },
-  { value: 'members', label: 'Members' },
+const TABS = [
+  { value: 'memories' as const, label: 'Memories', icon: 'grid-outline' as const, activeIcon: 'grid' as const },
+  { value: 'following' as const, label: 'Following', icon: 'compass-outline' as const, activeIcon: 'compass' as const },
+  { value: 'members' as const, label: 'Members', icon: 'people-outline' as const, activeIcon: 'people' as const },
 ];
 
 type GroupScreenProps = {
@@ -81,7 +79,8 @@ export default function GroupScreen({
   const [nights, setNights] = useState(0);
   const [editing, setEditing] = useState(false);
   const [tab, setTab] = useState<Tab>('memories');
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   const [actingBusy, setActingBusy] = useState(false);
   const [actingError, setActingError] = useState<string | null>(null);
@@ -269,15 +268,16 @@ export default function GroupScreen({
 
   async function handleLeave() {
     setError(null);
+    setLeaving(true);
 
     try {
       await leaveGroup(group.id);
-      setMenuOpen(false);
       if (onLeave) onLeave();
       else onBack();
     } catch {
-      setMenuOpen(false);
       setError('Could not leave the squad. Try again.');
+      setLeaving(false);
+      setConfirmLeave(false);
     }
   }
 
@@ -349,77 +349,81 @@ export default function GroupScreen({
             hitSlop={8}
             style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
           >
-            <Ionicons name="chevron-back" size={22} color={paper.ink} />
+            <Ionicons name="chevron-back" size={24} color={paper.ink} />
             <Text style={styles.backText} numberOfLines={1}>
               {backLabel}
             </Text>
           </Pressable>
-
-          {member ? (
-            <Pressable
-              onPress={() => setMenuOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="More options"
-              hitSlop={8}
-              style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}
-            >
-              <Ionicons name="ellipsis-horizontal" size={20} color={paper.ink} />
-            </Pressable>
-          ) : null}
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
-          <SquadHero
-            group={current}
-            memberCount={count}
-            nights={member ? 0 : nights}
-            action={<FollowButton key={actingId ?? 'none'} group={current} userId={userId} />}
-          />
-
-          {member ? (
-            <>
-              <SquadStats
-                stats={[
-                  { value: count, label: count === 1 ? 'member' : 'members' },
-                  { value: nights, label: nights === 1 ? 'night' : 'nights' },
-                  { value: followCounts.following, label: 'follows' },
-                  { value: followCounts.followers, label: followCounts.followers === 1 ? 'follower' : 'followers' },
-                ]}
-              />
-
-              {isActing ? (
-                <View style={styles.actingPill} accessibilityLabel="You are acting as this squad">
-                  <View style={styles.actingDot} />
-                  <Text style={styles.actingText}>Acting as this squad</Text>
-                </View>
-              ) : (
-                <Pressable
-                  onPress={actAsThisSquad}
-                  disabled={actingBusy}
-                  accessibilityRole="button"
-                  accessibilityLabel="Act as this squad"
-                  accessibilityHint="Follows will be made in this squad's name"
-                  style={({ pressed }) => [styles.actButton, (pressed || actingBusy) && styles.pressed]}
-                >
-                  {actingBusy ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Ionicons name="flash" size={15} color="#FFFFFF" />
-                  )}
-                  <Text style={styles.actText}>Act as this squad</Text>
-                </Pressable>
-              )}
-            </>
-          ) : null}
-
-          {actingError ? <Text style={styles.error}>{actingError}</Text> : null}
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-
           {loading ? (
             <ActivityIndicator color={paper.accent} style={styles.loader} />
           ) : (
             <>
-              <Segmented options={TABS} value={tab} onChange={setTab} />
+              <SquadProfileHeader
+                group={current}
+                acting={isActing}
+                stats={[
+                  { value: nights, label: nights === 1 ? 'night' : 'nights' },
+                  { value: count, label: count === 1 ? 'member' : 'members' },
+                  { value: followCounts.followers, label: followCounts.followers === 1 ? 'follower' : 'followers' },
+                  { value: followCounts.following, label: 'following' },
+                ]}
+              />
+
+              <View style={styles.buttons}>
+                {isActing ? (
+                  <View style={[styles.button, styles.buttonActing]} accessibilityLabel="You are acting as this squad">
+                    <View style={styles.actingDot} />
+                    <Text style={styles.buttonActingText} numberOfLines={1}>
+                      Acting
+                    </Text>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={actAsThisSquad}
+                    disabled={actingBusy}
+                    accessibilityRole="button"
+                    accessibilityLabel="Act as this squad"
+                    accessibilityHint="Follows will be made in this squad's name"
+                    style={({ pressed }) => [styles.button, styles.buttonPrimary, (pressed || actingBusy) && styles.pressed]}
+                  >
+                    <Text style={styles.buttonPrimaryText} numberOfLines={1}>
+                      {actingBusy ? 'Switching…' : 'Act as'}
+                    </Text>
+                  </Pressable>
+                )}
+
+                <Pressable
+                  onPress={() => setEditing(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit look"
+                  style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+                >
+                  <Text style={styles.buttonText} numberOfLines={1}>
+                    Edit look
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => setTab('members')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Invite people"
+                  style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+                >
+                  <Text style={styles.buttonText} numberOfLines={1}>
+                    Invite
+                  </Text>
+                </Pressable>
+              </View>
+
+              <FollowButton key={actingId ?? 'none'} group={current} userId={userId} />
+
+              {actingError ? <Text style={styles.error}>{actingError}</Text> : null}
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+
+              <IconTabs options={TABS} value={tab} onChange={setTab} />
 
               {tab === 'memories' ? (
                 <SquadMemories
@@ -437,30 +441,28 @@ export default function GroupScreen({
 
               {tab === 'members' ? (
                 <View style={styles.membersTab}>
-                  {member ? (
-                    <View style={styles.invite}>
-                      <View style={styles.inviteText}>
-                        <Text style={styles.inviteLabel}>INVITE CODE</Text>
-                        <Text style={styles.code} selectable>
-                          {code ?? '——————'}
-                        </Text>
-                      </View>
-                      <Pressable
-                        onPress={handleRotate}
-                        disabled={rotating}
-                        accessibilityRole="button"
-                        accessibilityLabel="Make a new invite code"
-                        hitSlop={6}
-                        style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}
-                      >
-                        {rotating ? (
-                          <ActivityIndicator size="small" color={paper.ink} />
-                        ) : (
-                          <Ionicons name="refresh" size={17} color={paper.ink} />
-                        )}
-                      </Pressable>
+                  <View style={styles.invite}>
+                    <View style={styles.inviteText}>
+                      <Text style={styles.inviteLabel}>INVITE CODE</Text>
+                      <Text style={styles.code} selectable>
+                        {code ?? '——————'}
+                      </Text>
                     </View>
-                  ) : null}
+                    <Pressable
+                      onPress={handleRotate}
+                      disabled={rotating}
+                      accessibilityRole="button"
+                      accessibilityLabel="Make a new invite code"
+                      hitSlop={6}
+                      style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}
+                    >
+                      {rotating ? (
+                        <ActivityIndicator size="small" color={paper.ink} />
+                      ) : (
+                        <Ionicons name="refresh" size={17} color={paper.ink} />
+                      )}
+                    </Pressable>
+                  </View>
 
                   {restricted ? (
                     <Text style={styles.hint}>Only members see who is in this squad.</Text>
@@ -468,7 +470,7 @@ export default function GroupScreen({
                     <View style={styles.memberList}>
                       {members.map((person, index) => (
                         <View key={person.id} style={[styles.member, index > 0 && styles.memberDivider]}>
-                          <Monogram name={person.name} uri={person.avatarUrl} size={38} />
+                          <Monogram name={person.name} uri={person.avatarUrl} size={40} />
                           <Text style={styles.memberName} numberOfLines={1}>
                             {person.name}
                           </Text>
@@ -477,27 +479,47 @@ export default function GroupScreen({
                       ))}
                     </View>
                   )}
+
+                  {confirmLeave ? (
+                    <View style={styles.leaveConfirm}>
+                      <Text style={styles.leaveQuestion}>Leave {current.name}? You can come back with a code.</Text>
+                      <View style={styles.buttons}>
+                        <Pressable
+                          onPress={() => setConfirmLeave(false)}
+                          disabled={leaving}
+                          accessibilityRole="button"
+                          accessibilityLabel="Cancel"
+                          style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+                        >
+                          <Text style={styles.buttonText}>Cancel</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={handleLeave}
+                          disabled={leaving}
+                          accessibilityRole="button"
+                          accessibilityLabel={'Leave ' + current.name}
+                          style={({ pressed }) => [styles.button, styles.buttonDanger, pressed && styles.pressed]}
+                        >
+                          <Text style={styles.buttonDangerText}>{leaving ? 'Leaving…' : 'Leave'}</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={() => setConfirmLeave(true)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Leave this squad"
+                      style={({ pressed }) => [styles.leaveLink, pressed && styles.pressed]}
+                    >
+                      <Text style={styles.leaveLinkText}>Leave squad</Text>
+                    </Pressable>
+                  )}
                 </View>
               ) : null}
             </>
           )}
         </ScrollView>
       </View>
-
-      <SquadMenu
-        visible={menuOpen}
-        squadName={current.name}
-        onClose={() => setMenuOpen(false)}
-        onEditLook={() => {
-          setMenuOpen(false);
-          afterSheet(() => setEditing(true));
-        }}
-        onInvite={() => {
-          setMenuOpen(false);
-          setTab('members');
-        }}
-        onLeave={handleLeave}
-      />
 
       <SquadLookSheet
         visible={editing}
@@ -514,58 +536,16 @@ export default function GroupScreen({
   );
 }
 
-// iOS can't present a sheet while another one is still sliding away.
-const SHEET_CLOSE_MS = 350;
-
-function afterSheet(open: () => void) {
-  setTimeout(open, SHEET_CLOSE_MS);
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: paper.bg },
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
   pressed: { opacity: 0.6 },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: space.sm,
-    height: 48,
-  },
+
+  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xs, height: 48 },
   backButton: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 1, paddingRight: space.sm },
-  backText: { color: paper.ink, ...typo.semi, fontSize: textSize.lead },
-  moreButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: paper.surface,
-  },
-  actButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: paper.ink,
-  },
-  actText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.base },
-  actingPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: paper.accentSoft,
-  },
-  actingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: paper.accent },
-  actingText: { color: paper.accent, ...typo.semi, fontSize: textSize.base },
+  backText: { color: paper.ink, ...typo.bold, fontSize: textSize.lead },
 
   content: { paddingHorizontal: space.md, paddingBottom: space.xl, gap: space.md },
-
   loader: { marginVertical: space.xl },
   error: { color: paper.danger, ...typo.medium, fontSize: textSize.body },
   hint: {
@@ -576,6 +556,26 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
   },
 
+  buttons: { flexDirection: 'row', gap: 6 },
+  button: {
+    flex: 1,
+    height: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: radius.sm,
+    backgroundColor: paper.surfaceAlt,
+  },
+  buttonText: { color: paper.ink, ...typo.semi, fontSize: textSize.body },
+  buttonPrimary: { backgroundColor: paper.accent },
+  buttonPrimaryText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.body },
+  buttonActing: { backgroundColor: paper.accentSoft },
+  buttonActingText: { color: paper.accent, ...typo.semi, fontSize: textSize.body },
+  actingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: paper.accent },
+  buttonDanger: { backgroundColor: paper.danger },
+  buttonDangerText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.body },
+
   membersTab: { gap: space.md },
   invite: {
     flexDirection: 'row',
@@ -583,9 +583,8 @@ const styles = StyleSheet.create({
     gap: space.sm,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     backgroundColor: paper.surface,
-    ...shadow.card,
   },
   inviteText: { flex: 1, gap: 2 },
   inviteLabel: { color: paper.inkFaint, ...typo.mono, fontSize: textSize.micro, letterSpacing: 1.2 },
@@ -596,17 +595,15 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: paper.bg,
+    backgroundColor: paper.surfaceAlt,
   },
-  memberList: { borderRadius: radius.lg, backgroundColor: paper.surface, overflow: 'hidden', ...shadow.card },
-  member: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    paddingHorizontal: space.md,
-    paddingVertical: 10,
-  },
-  memberDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: paper.line },
-  memberName: { flex: 1, color: paper.ink, ...typo.medium, fontSize: textSize.base },
+  memberList: { gap: 2 },
+  member: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 8 },
+  memberDivider: {},
+  memberName: { flex: 1, color: paper.ink, ...typo.semi, fontSize: textSize.base },
   you: { color: paper.inkFaint, ...typo.medium, fontSize: textSize.small },
+  leaveConfirm: { gap: space.sm },
+  leaveQuestion: { color: paper.ink, ...typo.medium, fontSize: textSize.body, textAlign: 'center' },
+  leaveLink: { alignSelf: 'center', paddingVertical: space.sm },
+  leaveLinkText: { color: paper.danger, ...typo.semi, fontSize: textSize.body },
 });
