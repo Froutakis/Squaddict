@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import type { Group } from '../../services/serviceGroup';
 import { getGroupMemories } from '../../services/serviceEvents';
 import { signImages } from '../../services/serviceMedia';
@@ -11,7 +10,7 @@ import { dayMonth } from '../../lib/datetime';
 import StoryViewer from '../events/StoryViewer';
 import { capture, messageFor, PhotoSourceSheet, type PhotoSource } from '../events/EventPhotos';
 import type { MemoryNight } from '../home/memories';
-import { paper, radius, solidFor, space, sun, textSize, typo } from '../../theme';
+import { paper, radius, space, textSize, typo } from '../../theme';
 
 type SquadMemoriesProps = {
   group: Group;
@@ -148,42 +147,35 @@ export default function SquadMemories({
                   const url = signed[memory.cover.path]?.url;
 
                   return (
-                    <Pressable
-                      key={memory.event.id}
-                      onPress={function () {
-                        setOpen(index);
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${memory.event.title}, ${dayMonth(memory.event.date)}, ${memory.photoCount} photos`}
-                      style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
-                    >
-                      {url ? (
-                        <Image
-                          source={{ uri: url }}
-                          style={StyleSheet.absoluteFill}
-                          resizeMode="cover"
-                          onError={function () {
-                            forget(memory.cover.path);
-                          }}
-                        />
-                      ) : (
-                        <View style={[StyleSheet.absoluteFill, { backgroundColor: solidFor(group.name) }]} />
-                      )}
-
-                      <LinearGradient colors={SHADE} style={styles.shade} pointerEvents="none" />
-
-                      <Text style={styles.stamp}>{dayMonth(memory.event.date).toUpperCase()}</Text>
-                      <View style={styles.punch} />
-
-                      <View style={styles.caption}>
-                        <Text style={styles.title} numberOfLines={2}>
-                          {memory.event.title}
-                        </Text>
-                        <Text style={styles.meta} numberOfLines={1}>
-                          {memory.photoCount} {memory.photoCount === 1 ? 'PHOTO' : 'PHOTOS'}
-                        </Text>
-                      </View>
-                    </Pressable>
+                    <View key={memory.event.id} style={styles.tile}>
+                      <Pressable
+                        onPress={function () {
+                          setOpen(index);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${memory.event.title}, ${dayMonth(memory.event.date)}, ${memory.photoCount} photos`}
+                        style={({ pressed }) => [styles.photo, pressed && styles.pressed]}
+                      >
+                        {url ? (
+                          <Image
+                            source={{ uri: url }}
+                            style={StyleSheet.absoluteFill}
+                            resizeMode="cover"
+                            onError={function () {
+                              forget(memory.cover.path);
+                            }}
+                          />
+                        ) : (
+                          <View style={[StyleSheet.absoluteFill, styles.blank]} />
+                        )}
+                      </Pressable>
+                      <Text style={styles.title} numberOfLines={1}>
+                        {memory.event.title}
+                      </Text>
+                      <Text style={styles.meta} numberOfLines={1}>
+                        {dayMonth(memory.event.date)} · {memory.photoCount} {memory.photoCount === 1 ? 'photo' : 'photos'}
+                      </Text>
+                    </View>
                   );
                 })}
                 {Array.from({ length: 3 - row.length }).map(function (_, i) {
@@ -228,9 +220,6 @@ export default function SquadMemories({
   );
 }
 
-// Bottom shade so white captions read on any photo.
-const SHADE = ['rgba(0,0,0,0)', 'rgba(0,0,0,0.65)'] as const;
-
 function rowsOf<T>(list: T[], size: number): T[][] {
   const rows: T[][] = [];
   for (let i = 0; i < list.length; i += size) rows.push(list.slice(i, i + size));
@@ -244,42 +233,20 @@ const styles = StyleSheet.create({
   error: { color: paper.danger, ...typo.medium, fontSize: textSize.body },
   empty: { alignItems: 'center', gap: space.xxs, paddingVertical: space.xl },
   emptyTitle: { color: paper.ink, ...typo.bold, fontSize: textSize.base, marginTop: space.xxs },
-  grid: { gap: 3 },
-  row: { flexDirection: 'row', gap: 3 },
+  grid: { gap: space.md },
+  row: { flexDirection: 'row', gap: space.sm },
   pad: { flex: 1 },
-  tile: {
-    flex: 1,
+  tile: { flex: 1, gap: 2 },
+  photo: {
+    width: '100%',
     aspectRatio: 3 / 4,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     overflow: 'hidden',
     backgroundColor: paper.surfaceAlt,
+    marginBottom: 4,
   },
+  blank: { backgroundColor: paper.surfaceAlt },
   pressed: { opacity: 0.8 },
-  shade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '55%' },
-  // The date stamped on the stub, and the hole punched when the night was kept.
-  stamp: {
-    position: 'absolute',
-    left: 7,
-    top: 6,
-    color: '#FFFFFF',
-    ...typo.mono,
-    fontSize: 9.5,
-    letterSpacing: 0.8,
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowRadius: 3,
-  },
-  punch: {
-    position: 'absolute',
-    right: 7,
-    top: 7,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderWidth: 2,
-    borderColor: sun,
-  },
-  caption: { position: 'absolute', left: 7, right: 7, bottom: 6, gap: 1 },
-  title: { color: '#FFFFFF', ...typo.bold, fontSize: textSize.small },
-  meta: { color: 'rgba(255,255,255,0.8)', ...typo.mono, fontSize: 9, letterSpacing: 0.8 },
+  title: { color: paper.ink, ...typo.medium, fontSize: textSize.small },
+  meta: { color: paper.inkFaint, ...typo.regular, fontSize: textSize.caption },
 });

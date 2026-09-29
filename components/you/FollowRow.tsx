@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Group } from '../../services/serviceGroup';
-import { colors, paper, radius, space, textSize, typo } from '../../theme';
+import { colors, radius, space, textSize, typo } from '../../theme';
 
 type FollowRowProps = {
   group: Group;
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  chipMutual: { borderColor: paper.accentSoft, backgroundColor: paper.accentSoft },
+  chipMutual: { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
   chipText: { color: colors.textSoft, ...typo.semi, fontSize: textSize.caption },
-  chipTextMutual: { color: colors.primary },
+  chipTextMutual: { color: colors.text },
 });

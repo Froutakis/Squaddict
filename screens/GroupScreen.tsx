@@ -13,11 +13,10 @@ import SquadMemories from '../components/group/SquadMemories';
 import SquadLookSheet from '../components/group/SquadLookSheet';
 import FollowButton from '../components/group/FollowButton';
 import SquadFollows from '../components/group/SquadFollows';
-import SquadProfileHeader from '../components/group/SquadProfileHeader';
+import SquadProfileHeader, { ACTING_ACCENT } from '../components/group/SquadProfileHeader';
 import { getFollowerIds, getFollowing } from '../services/serviceFollow';
 import Monogram from '../components/general/Monogram';
 import IconTabs from '../components/general/IconTabs';
-import Punch from '../components/general/Punch';
 import { getActingSquad, setActingGroup } from '../services/serviceUser';
 import {
   getGroupById,
@@ -43,9 +42,9 @@ type Member = {
 type Tab = 'memories' | 'following' | 'members';
 
 const TABS = [
-  { value: 'memories' as const, label: 'Wall', icon: 'grid-outline' as const, activeIcon: 'grid' as const },
+  { value: 'memories' as const, label: 'Memories', icon: 'grid-outline' as const, activeIcon: 'grid' as const },
   { value: 'following' as const, label: 'Following', icon: 'compass-outline' as const, activeIcon: 'compass' as const },
-  { value: 'members' as const, label: 'Squad', icon: 'people-outline' as const, activeIcon: 'people' as const },
+  { value: 'members' as const, label: 'Members', icon: 'people-outline' as const, activeIcon: 'people' as const },
 ];
 
 type GroupScreenProps = {
@@ -364,7 +363,6 @@ export default function GroupScreen({
             <>
               <SquadProfileHeader
                 group={current}
-                nights={nights}
                 acting={isActing}
                 stats={[
                   { value: nights, label: nights === 1 ? 'night' : 'nights' },
@@ -377,7 +375,7 @@ export default function GroupScreen({
               <View style={styles.buttons}>
                 {isActing ? (
                   <View style={[styles.button, styles.buttonActing]} accessibilityLabel="You are acting as this squad">
-                    <Punch state="in" size={14} holeColor={paper.accentSoft} />
+                    <View style={styles.actingDot} />
                     <Text style={styles.buttonActingText} numberOfLines={1}>
                       Acting
                     </Text>
@@ -391,7 +389,6 @@ export default function GroupScreen({
                     accessibilityHint="Follows will be made in this squad's name"
                     style={({ pressed }) => [styles.button, styles.buttonPrimary, (pressed || actingBusy) && styles.pressed]}
                   >
-                    <Punch state="open" size={14} onDark />
                     <Text style={styles.buttonPrimaryText} numberOfLines={1}>
                       {actingBusy ? 'Switching…' : 'Act as'}
                     </Text>
@@ -446,7 +443,7 @@ export default function GroupScreen({
                 <View style={styles.membersTab}>
                   <View style={styles.invite}>
                     <View style={styles.inviteText}>
-                      <Text style={styles.inviteLabel}>INVITE CODE</Text>
+                      <Text style={styles.inviteLabel}>Invite code</Text>
                       <Text style={styles.code} selectable>
                         {code ?? '——————'}
                       </Text>
@@ -546,9 +543,9 @@ const styles = StyleSheet.create({
 
   topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xs, height: 48 },
   backButton: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 1, paddingRight: space.sm },
-  backText: { color: paper.ink, ...typo.bold, fontSize: textSize.lead },
+  backText: { color: paper.ink, ...typo.medium, fontSize: textSize.lead },
 
-  content: { paddingHorizontal: space.md, paddingBottom: space.xl, gap: space.md },
+  content: { paddingHorizontal: space.lg, paddingTop: space.xs, paddingBottom: space.xl, gap: space.lg },
   loader: { marginVertical: space.xl },
   error: { color: paper.danger, ...typo.medium, fontSize: textSize.body },
   hint: {
@@ -560,24 +557,27 @@ const styles = StyleSheet.create({
   },
 
   buttons: { flexDirection: 'row', gap: 6 },
+  // Calm, neutral buttons: white with a hairline, the same for every action.
   button: {
     flex: 1,
-    height: 34,
+    height: 38,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    borderRadius: radius.sm,
-    backgroundColor: paper.surfaceAlt,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: paper.line,
+    backgroundColor: paper.surface,
   },
-  buttonText: { color: paper.ink, ...typo.semi, fontSize: textSize.body },
-  buttonPrimary: { backgroundColor: paper.ink },
-  buttonPrimaryText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.body },
-  buttonActing: { backgroundColor: paper.accentSoft },
-  buttonActingText: { color: paper.accent, ...typo.semi, fontSize: textSize.body },
-  actingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: paper.accent },
-  buttonDanger: { backgroundColor: paper.danger },
-  buttonDangerText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.body },
+  buttonText: { color: paper.ink, ...typo.medium, fontSize: textSize.body },
+  buttonPrimary: {},
+  buttonPrimaryText: { color: paper.ink, ...typo.medium, fontSize: textSize.body },
+  buttonActing: { backgroundColor: paper.bg },
+  buttonActingText: { color: paper.inkSoft, ...typo.medium, fontSize: textSize.body },
+  actingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: ACTING_ACCENT },
+  buttonDanger: { borderColor: paper.danger },
+  buttonDangerText: { color: paper.danger, ...typo.medium, fontSize: textSize.body },
 
   membersTab: { gap: space.md },
   invite: {
@@ -586,11 +586,13 @@ const styles = StyleSheet.create({
     gap: space.sm,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: paper.line,
     backgroundColor: paper.surface,
   },
   inviteText: { flex: 1, gap: 2 },
-  inviteLabel: { color: paper.inkFaint, ...typo.mono, fontSize: textSize.micro, letterSpacing: 1.2 },
+  inviteLabel: { color: paper.inkSoft, ...typo.regular, fontSize: textSize.small },
   code: { color: paper.ink, ...typo.mono, fontSize: textSize.heading, letterSpacing: 3 },
   roundButton: {
     width: 36,
