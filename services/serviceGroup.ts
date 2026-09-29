@@ -16,12 +16,12 @@ export type Group = {
   createdAt: string;
 };
 
-const GROUP_FIELDS =
+export const GROUP_FIELDS =
   "id, handle, name, bio, avatar_url, banner_url, wallpaper_url, memories_public, member_count, created_at";
 
 export const HANDLE_PATTERN = /^[a-z0-9_]{3,30}$/;
 
-function toGroup(row: any): Group {
+export function toGroup(row: any): Group {
   return {
     id: row.id,
     handle: row.handle,

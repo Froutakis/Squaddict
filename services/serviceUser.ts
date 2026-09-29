@@ -1,5 +1,7 @@
 import { supabase } from "./supabaseClient";
 import type { User } from "./serviceAuth";
+import { getGroupsForUser, type Group } from "./serviceGroup";
+import { pickActing } from "../lib/acting";
 
 type ProfileRow = {
   id: string;
@@ -50,4 +52,13 @@ export async function setActingGroup(userId: string, groupId: string | null): Pr
     .from("user_prefs")
     .upsert({ user_id: userId, acting_group_id: groupId }, { onConflict: "user_id" });
   if (error) throw error;
+}
+
+export async function getActingSquad(userId: string): Promise<Group | null> {
+  const [groups, actingId] = await Promise.all([
+    getGroupsForUser(userId),
+    getActingGroupId(userId).catch(() => null),
+  ]);
+
+  return pickActing(groups, actingId);
 }
