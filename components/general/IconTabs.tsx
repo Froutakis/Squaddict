@@ -52,6 +52,6 @@ const styles = StyleSheet.create({
   },
   itemActive: { backgroundColor: colors.surfaceAlt },
   pressed: { opacity: 0.6 },
-  label: { color: colors.textFaint, ...typo.medium, fontSize: textSize.body },
+  label: { color: colors.textFaint, ...typo.semi, fontSize: textSize.body },
   labelActive: { color: colors.text },
 });

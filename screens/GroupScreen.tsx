@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
 
   topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xs, height: 48 },
   backButton: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 1, paddingRight: space.sm },
-  backText: { color: paper.ink, ...typo.medium, fontSize: textSize.lead },
+  backText: { color: paper.ink, ...typo.semi, fontSize: textSize.lead },
 
   content: { paddingHorizontal: space.lg, paddingTop: space.xs, paddingBottom: space.xl, gap: space.lg },
   loader: { marginVertical: space.xl },
@@ -570,14 +570,14 @@ const styles = StyleSheet.create({
     borderColor: paper.line,
     backgroundColor: paper.surface,
   },
-  buttonText: { color: paper.ink, ...typo.medium, fontSize: textSize.body },
+  buttonText: { color: paper.ink, ...typo.semi, fontSize: textSize.body },
   buttonPrimary: {},
-  buttonPrimaryText: { color: paper.ink, ...typo.medium, fontSize: textSize.body },
+  buttonPrimaryText: { color: paper.ink, ...typo.semi, fontSize: textSize.body },
   buttonActing: { backgroundColor: paper.bg },
-  buttonActingText: { color: paper.inkSoft, ...typo.medium, fontSize: textSize.body },
+  buttonActingText: { color: paper.inkSoft, ...typo.semi, fontSize: textSize.body },
   actingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: ACTING_ACCENT },
   buttonDanger: { borderColor: paper.danger },
-  buttonDangerText: { color: paper.danger, ...typo.medium, fontSize: textSize.body },
+  buttonDangerText: { color: paper.danger, ...typo.semi, fontSize: textSize.body },
 
   membersTab: { gap: space.md },
   invite: {
