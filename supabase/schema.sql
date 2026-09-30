@@ -1221,3 +1221,93 @@ grant execute on function public.cancel_follow_proposal(uuid) to authenticated;
 -- insert and delete on squad_follows (repeated here so this block stands alone).
 drop policy if exists "follow as my squad" on public.squad_follows;
 drop policy if exists "unfollow as my squad" on public.squad_follows;
+
+-- ─── photo reactions ───
+-- One emoji per person per photo, given in the name of a squad they are in.
+-- You can react to any photo you can see: your own squads' photos, and past
+-- nights of squads that made their memories public.
+create or replace function public.can_see_photo(p_photo_id uuid)
+returns boolean language sql stable security definer set search_path to 'public' as $function$
+  select exists (
+    select 1
+      from public.event_photos p
+      join public.events e on e.id = p.event_id
+      join public.groups g on g.id = e.group_id
+     where p.id = p_photo_id
+       and (
+         e.group_id in (select public.my_group_ids())
+         or (g.memories_public and e.date < current_date)
+       )
+  );
+$function$;
+
+revoke all on function public.can_see_photo(uuid) from public, anon;
+grant execute on function public.can_see_photo(uuid) to authenticated;
+
+create table if not exists public.photo_reactions (
+  photo_id   uuid        not null references public.event_photos(id) on delete cascade,
+  user_id    uuid        not null references public.profiles(id)     on delete cascade,
+  group_id   uuid        not null references public.groups(id)       on delete cascade,
+  emoji      text        not null,
+  created_at timestamptz not null default now(),
+  primary key (photo_id, user_id),
+  constraint photo_reactions_emoji check (emoji in ('🔥', '😂', '😍', '🍻'))
+);
+
+alter table public.photo_reactions enable row level security;
+
+drop policy if exists "read reactions of photos i can see" on public.photo_reactions;
+drop policy if exists "react to a photo as self"           on public.photo_reactions;
+drop policy if exists "change own photo reaction"          on public.photo_reactions;
+drop policy if exists "remove own photo reaction"          on public.photo_reactions;
+
+create policy "read reactions of photos i can see" on public.photo_reactions
+  for select to authenticated
+  using (public.can_see_photo(photo_id));
+
+create policy "react to a photo as self" on public.photo_reactions
+  for insert to authenticated
+  with check (
+    user_id = auth.uid()
+    and group_id in (select public.my_group_ids())
+    and public.can_see_photo(photo_id)
+  );
+
+create policy "change own photo reaction" on public.photo_reactions
+  for update to authenticated
+  using (user_id = auth.uid())
+  with check (
+    user_id = auth.uid()
+    and group_id in (select public.my_group_ids())
+    and public.can_see_photo(photo_id)
+  );
+
+create policy "remove own photo reaction" on public.photo_reactions
+  for delete to authenticated
+  using (user_id = auth.uid());
+
+-- Reactions with the reactor's name and squad. Profiles are normally only
+-- readable by squadmates, so this hands out just the name and photo of people
+-- who reacted, and only for photos the caller can see.
+create or replace function public.photo_reactions_for(p_photo_ids uuid[])
+returns table (
+  photo_id     uuid,
+  user_id      uuid,
+  emoji        text,
+  display_name text,
+  avatar_url   text,
+  group_id     uuid,
+  group_name   text
+)
+language sql stable security definer set search_path to 'public' as $function$
+  select r.photo_id, r.user_id, r.emoji, pr.display_name, pr.avatar_url, r.group_id, g.name
+    from public.photo_reactions r
+    join public.profiles pr on pr.id = r.user_id
+    join public.groups g on g.id = r.group_id
+   where r.photo_id = any (p_photo_ids)
+     and public.can_see_photo(r.photo_id)
+   order by r.created_at;
+$function$;
+
+revoke all on function public.photo_reactions_for(uuid[]) from public, anon;
+grant execute on function public.photo_reactions_for(uuid[]) to authenticated;

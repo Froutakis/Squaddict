@@ -42,6 +42,9 @@ import { useNow } from '../components/home/useNow';
 import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
 import PhotoPrompt from '../components/home/PhotoPrompt';
+import PhotoFeed from '../components/home/PhotoFeed';
+import type { FeedPhoto } from '../services/servicePhotoFeed';
+import GroupScreen from './GroupScreen';
 import { MEMORY_LIMIT, toMemoryNights, type MemoryNight } from '../components/home/memories';
 import DayPlansSheet from '../components/home/DayPlansSheet';
 import StoryViewer from '../components/events/StoryViewer';
@@ -122,6 +125,7 @@ export default function HomeScreen({
   const [showCreate, setShowCreate] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileGroup, setProfileGroup] = useState<Group | null>(null);
   const [fullCalendar, setFullCalendar] = useState(false);
   const [formDate, setFormDate] = useState<string | null>(null);
   const [openEvent, setOpenEvent] = useState<SheetEvent | null>(null);
@@ -487,6 +491,12 @@ export default function HomeScreen({
     else setDayPlans(key);
   }
 
+  // A photo from the feed opens its night in the story viewer.
+  function openFeedNight(item: FeedPhoto) {
+    const mine = events.find((event) => event.id === item.event.id);
+    setDayStory([{ event: mine ?? item.event, cover: item.photo, latestAt: item.photo.createdAt }]);
+  }
+
   function coverFor(event: MyEvent): string | null {
     if (event.coverUrl) return event.coverUrl;
     const photo = coverPhotos[event.id];
@@ -602,6 +612,19 @@ export default function HomeScreen({
           </View>
         ) : null}
 
+        {activeGroup ? (
+          <PhotoFeed
+            group={activeGroup}
+            me={{ id: user.id, name: displayName, avatarUrl }}
+            signed={signed}
+            signPaths={signPaths}
+            onImageError={dropSigned}
+            reloadKey={photoNonce}
+            onOpenNight={openFeedNight}
+            onOpenGroup={setProfileGroup}
+          />
+        ) : null}
+
         {friendsPlans.length > 0 ? (
           <View>
             <SectionHead
@@ -687,6 +710,22 @@ export default function HomeScreen({
         ) : null}
 
       </>
+    );
+  }
+
+  // A squad opened from the photo feed stacks on top of Home.
+  if (profileGroup) {
+    return (
+      <GroupScreen
+        group={profileGroup}
+        userId={user.id}
+        onBack={() => setProfileGroup(null)}
+        onLeave={() => {
+          setProfileGroup(null);
+          load(true);
+        }}
+        backLabel="Home"
+      />
     );
   }
 

@@ -31,6 +31,7 @@
     "test-follows": "tsx debug/test-follows.ts",
     "test-banner": "tsx debug/test-banner.ts",
     "test-follow-vote": "tsx debug/test-follow-vote.ts",
+    "test-photo-feed": "tsx debug/test-photo-feed.ts",
     "listen": "tsx --env-file=.env debug/listen.ts",
     "send": "tsx --env-file=.env debug/send.ts",
     "seed": "tsx --env-file=.env debug/seed.ts"
