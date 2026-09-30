@@ -655,15 +655,13 @@ export default function HomeScreen({
           </View>
         ) : null}
 
-        <View style={styles.body}>
-          <CalendarCard
-            events={visible}
-            selectedDate={null}
-            onSelectDate={openDay}
-            onAddEvent={() => openNewEvent(null)}
-            covers={covers}
-          />
-        </View>
+        <CalendarCard
+          events={visible}
+          selectedDate={null}
+          onSelectDate={openDay}
+          onAddEvent={() => openNewEvent(null)}
+          covers={covers}
+        />
 
         {rsvpError ? (
           <View style={styles.body}>
