@@ -862,12 +862,8 @@ export default function HomeScreen({
           squadName={groups.find((group) => group.id === groupId)?.name}
           events={visible}
           covers={covers}
-          toCard={(event) => toCardData(event, coverFor(event))}
           onBack={() => setFullCalendar(false)}
-          onOpenEvent={setOpenEvent}
-          onRsvp={handleRsvp}
-          onPlan={openNewEvent}
-          onPlayDay={openDay}
+          onSelectDate={openDay}
         />
       ) : null}
     </SafeAreaView>
