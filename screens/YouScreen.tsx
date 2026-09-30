@@ -22,7 +22,7 @@ import Monogram, { initialsFor } from '../components/general/Monogram';
 import SectionHead from '../components/general/SectionHead';
 import GroupFormSheet from '../components/group/GroupFormSheet';
 import YearTicket from '../components/you/YearTicket';
-import SquadGrid from '../components/you/SquadGrid';
+import SquadSlider from '../components/you/SquadSlider';
 import { getPendingVoteCounts } from '../services/serviceFollow';
 import GroupScreen from './GroupScreen';
 import SettingsSheet from '../components/you/SettingsSheet';
@@ -191,16 +191,14 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
 
         <View>
           <SectionHead title="Your squads" meta={groups.length > 0 ? String(groups.length) : undefined} />
-          <View style={styles.body}>
-            <SquadGrid
-              groups={groups}
-              actingId={acting?.id ?? null}
-              unread={unread}
-              votes={votes}
-              onOpen={setProfileGroup}
-              onNew={() => setGroupForm('create')}
-            />
-          </View>
+          <SquadSlider
+            groups={groups}
+            actingId={acting?.id ?? null}
+            unread={unread}
+            votes={votes}
+            onOpen={setProfileGroup}
+            onNew={() => setGroupForm('create')}
+          />
         </View>
       </>
     );

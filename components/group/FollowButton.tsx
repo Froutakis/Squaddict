@@ -18,13 +18,15 @@ import { colors, paper, radius, space, textSize, typo } from '../../theme';
 type FollowButtonProps = {
   group: Group;
   userId: string;
+  // Full width, for a row of its own under the profile buttons.
+  block?: boolean;
   // Called when a vote opens, moves or settles.
   onChanged?: () => void;
 };
 
 // Following is the acting squad's call, not one member's: the button puts it
 // to that squad's vote, and shows the vote while it is open.
-export default function FollowButton({ group, userId, onChanged }: FollowButtonProps) {
+export default function FollowButton({ group, userId, block = false, onChanged }: FollowButtonProps) {
   const [acting, setActing] = useState<Group | null>(null);
   const [following, setFollowing] = useState<boolean | null>(null);
   const [vote, setVote] = useState<FollowVote | null>(null);
@@ -116,7 +118,7 @@ export default function FollowButton({ group, userId, onChanged }: FollowButtonP
   const icon = vote ? (waiting ? 'time-outline' : 'thumbs-up-outline') : following ? 'checkmark' : 'add';
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, block && styles.wrapBlock]}>
       <Pressable
         onPress={press}
         disabled={saving || waiting}
@@ -128,7 +130,9 @@ export default function FollowButton({ group, userId, onChanged }: FollowButtonP
         accessibilityState={{ disabled: saving || waiting }}
         style={({ pressed }) => [
           styles.button,
+          block && styles.buttonBlock,
           quiet ? styles.outlined : styles.solid,
+          block && !quiet && styles.solidBlock,
           (pressed || saving) && styles.pressed,
         ]}
       >
@@ -178,6 +182,9 @@ export default function FollowButton({ group, userId, onChanged }: FollowButtonP
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'flex-end', gap: space.xxs, maxWidth: '100%' },
+  wrapBlock: { alignItems: 'center' },
+  buttonBlock: { alignSelf: 'stretch', justifyContent: 'center', height: 40 },
+  solidBlock: { backgroundColor: colors.primary },
   button: {
     flexDirection: 'row',
     alignItems: 'center',

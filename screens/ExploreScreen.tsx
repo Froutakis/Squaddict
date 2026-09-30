@@ -39,6 +39,7 @@ import SectionHead from '../components/general/SectionHead';
 import ListEmpty from '../components/home/ListEmpty';
 import GroupCard, { type CardGroup } from '../components/group/GroupCard';
 import GroupScreen from './GroupScreen';
+import Monogram from '../components/general/Monogram';
 import Glass from '../components/general/Glass';
 import PopIn from '../components/general/PopIn';
 import DropdownChip from '../components/general/DropdownChip';
@@ -47,7 +48,10 @@ import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
 
-const RADII = [5, 10, 25, 50];
+const RADII = [5, 10, 25, 50, 100];
+// Where the map looks before we know where you are: Thessaloniki.
+const DEFAULT_MAP_CENTER = { lat: 40.6401, lng: 22.9444 };
+const RADIUS_OPTIONS = RADII.map((km) => ({ key: String(km), label: `${km} km` }));
 
 const MIN_VISIBLE = 6;
 
@@ -148,7 +152,9 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const [followsNonce, setFollowsNonce] = useState(0);
   const [voteNotice, setVoteNotice] = useState<string | null>(null);
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
-  const [mode, setMode] = useState<ViewMode>('list');
+  // The map is the front page of Explore; the list is one tap away.
+  const [mode, setMode] = useState<ViewMode>('map');
+  const [mapSearching, setMapSearching] = useState(false);
   const [openEvent, setOpenEvent] = useState<SheetEvent | null>(null);
   const [islandsBottom, setIslandsBottom] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -166,7 +172,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
 
   const followedIds = Object.keys(following).sort().join(',');
   const followFilter = followingOnly ? followedIds : null;
-  const activeSearch = mode === 'map' ? '' : search;
+  const activeSearch = search;
 
   const askLocation = useCallback(async function ask() {
     setLocationState('asking');
@@ -382,9 +388,9 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
     return () => toggleFollow(groupId);
   }
 
-  function cycleRadius() {
-    const i = RADII.indexOf(radiusKm);
-    setRadiusKm(RADII[(i + 1) % RADII.length]);
+  // "Search wider": the next radius up, staying at the widest.
+  function widenRadius() {
+    setRadiusKm(RADII.find((km) => km > radiusKm) ?? RADII[RADII.length - 1]);
   }
 
   async function handleRsvp(eventId: string, status: RsvpStatus | null) {
@@ -451,7 +457,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
       title={emptyTitle()}
       body={emptyBody()}
       actionLabel={hasFilters ? 'Clear filters' : 'Search wider'}
-      onAction={hasFilters ? clearFilters : cycleRadius}
+      onAction={hasFilters ? clearFilters : widenRadius}
     />
   );
 
@@ -469,11 +475,27 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
     return (
       <View style={[styles.titleRow, floating && styles.flush]}>
         <Text style={styles.screenTitle}>Explore</Text>
+        <View style={styles.titleActions}>
+        {floating ? (
+          <Pressable
+            onPress={() => setMapSearching(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Search the map"
+            hitSlop={6}
+            style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="search" size={17} color={colors.text} />
+          </Pressable>
+        ) : null}
         <View style={styles.toggle}>
-          {(['list', 'map'] as const).map((option) => (
+          {(['map', 'list'] as const).map((option) => (
             <Pressable
               key={option}
-              onPress={() => setMode(option)}
+              onPress={() => {
+                setMode(option);
+                // A search typed in the list stays visible on the map.
+                if (option === 'map') setMapSearching(query !== '');
+              }}
               accessibilityRole="button"
               accessibilityLabel={option === 'list' ? 'Show as a list' : 'Show on a map'}
               accessibilityState={{ selected: mode === option }}
@@ -487,13 +509,19 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
             </Pressable>
           ))}
         </View>
+        </View>
       </View>
     );
   }
 
-  function searchBar() {
+  function closeMapSearch() {
+    setMapSearching(false);
+    setQuery('');
+  }
+
+  function searchBar(floating = false) {
     return (
-      <View style={styles.search}>
+      <View style={[styles.search, floating && styles.searchFloating]}>
         <Ionicons name="search" size={17} color={colors.textFaint} />
         <TextInput
           value={query}
@@ -503,6 +531,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
           returnKeyType="search"
           autoCapitalize="none"
           autoCorrect={false}
+          autoFocus={floating}
           accessibilityLabel="Search plans and pareas"
           style={styles.searchInput}
         />
@@ -561,7 +590,16 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={[styles.chips, floating && styles.chipsFloating]}
       >
-        <Chip label={`${radiusKm} km`} icon="resize-outline" mono onPress={cycleRadius} />
+        <DropdownChip
+          value={String(radiusKm)}
+          options={RADIUS_OPTIONS}
+          placeholder={`${radiusKm} km`}
+          icon="resize-outline"
+          clearable={false}
+          onChange={(km) => {
+            if (km) setRadiusKm(Number(km));
+          }}
+        />
         <Chip
           label="Live"
           icon={liveOnly ? 'radio' : 'radio-outline'}
@@ -747,27 +785,29 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   );
 
   if (mode === 'map') {
+    const nothingFound = !loading && !error && onMap.length === 0;
+
     return (
       <View style={styles.screen}>
-        {onMap.length > 0 ? (
-          <MapView
-            pins={onMap.map((event) => ({
-              id: event.id,
-              lat: event.lat,
-              lng: event.lng,
-              label: event.title,
-              color: event.myStatus === 'in' ? colors.success : colors.accent,
-              selected: event.id === selectedId,
-            }))}
-            showsUserLocation={locationState === 'on'}
-            interactive
-            spanKm={2}
-            onPressPin={setSelectedId}
-            onPress={() => setSelectedId(null)}
-            insets={{ top: islandsBottom + space.sm, bottom: NAV_CLEARANCE }}
-            style={styles.mapFull}
-          />
-        ) : null}
+        {/* Always up: a filter that finds nothing just leaves the map without pins. */}
+        <MapView
+          pins={onMap.map((event) => ({
+            id: event.id,
+            lat: event.lat,
+            lng: event.lng,
+            label: event.title,
+            color: event.myStatus === 'in' ? colors.success : colors.accent,
+            selected: event.id === selectedId,
+          }))}
+          showsUserLocation={locationState === 'on'}
+          interactive
+          spanKm={2}
+          onPressPin={setSelectedId}
+          onPress={() => setSelectedId(null)}
+          insets={{ top: islandsBottom + space.sm, bottom: NAV_CLEARANCE }}
+          fallbackCenter={center ?? DEFAULT_MAP_CENTER}
+          style={styles.mapFull}
+        />
 
         <SafeAreaView style={styles.floating} pointerEvents="box-none">
           <View
@@ -776,9 +816,57 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
             onLayout={(e) => setIslandsBottom(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}
           >
             <Glass style={styles.island}>
-              {titleRow(true)}
-              {locationInfo(true)}
+              {mapSearching ? (
+                <View style={styles.mapSearchRow}>
+                  <View style={styles.mapSearchField}>{searchBar(true)}</View>
+                  <Pressable
+                    onPress={closeMapSearch}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close search"
+                    hitSlop={6}
+                    style={({ pressed }) => pressed && styles.pressed}
+                  >
+                    <Text style={styles.cancelText}>Cancel</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <>
+                  {titleRow(true)}
+                  {locationInfo(true)}
+                </>
+              )}
+              {nothingFound ? (
+                <Text style={styles.nothingFound} accessibilityLiveRegion="polite">
+                  Nothing found
+                </Text>
+              ) : null}
             </Glass>
+
+            {mapSearching && foundGroups.length > 0 ? (
+              <Glass radius={radius.lg} style={styles.chipIsland}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={styles.chipsFloating}
+                >
+                  {foundGroups.map((group) => (
+                    <Pressable
+                      key={group.id}
+                      onPress={() => openProfile(group)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open ${group.name}`}
+                      style={({ pressed }) => [styles.foundSquad, pressed && styles.pressed]}
+                    >
+                      <Monogram name={group.name} uri={group.avatarUrl} size={26} />
+                      <Text style={styles.foundName} numberOfLines={1}>
+                        {group.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </Glass>
+            ) : null}
 
             <Glass radius={radius.pill} style={styles.chipIsland}>
               {chipRow(true)}
@@ -790,14 +878,6 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
               </Glass>
             ) : null}
           </View>
-
-          {onMap.length === 0 ? (
-            <View style={[styles.column, styles.islands]} pointerEvents="box-none">
-              <Glass radius={radius.lg} style={styles.island}>
-                {nothingOpen}
-              </Glass>
-            </View>
-          ) : null}
         </SafeAreaView>
 
         {selected ? (
@@ -834,7 +914,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
                 title="That is everything, for now"
                 body="You have answered every open plan around here. Widen the radius or come back later."
                 actionLabel="Search wider"
-                onAction={cycleRadius}
+                onAction={widenRadius}
               />
             ) : (
               nothingOpen
@@ -905,6 +985,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toggleItemActive: { backgroundColor: colors.primary },
+  titleActions: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  searchButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+  },
+  mapSearchRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  mapSearchField: { flex: 1 },
+  searchFloating: { marginHorizontal: 0 },
+  cancelText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
+  nothingFound: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body },
+  foundSquad: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    maxWidth: 200,
+    height: 36,
+    paddingLeft: 5,
+    paddingRight: space.sm,
+    marginRight: space.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+  },
+  foundName: { flexShrink: 1, color: colors.text, ...typo.semi, fontSize: textSize.body },
   mapFull: {
     position: 'absolute',
     top: 0,

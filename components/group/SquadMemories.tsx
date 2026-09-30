@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { Group } from '../../services/serviceGroup';
 import { getGroupMemories } from '../../services/serviceEvents';
 import { signImages } from '../../services/serviceMedia';
@@ -168,13 +169,22 @@ export default function SquadMemories({
                         ) : (
                           <View style={[StyleSheet.absoluteFill, styles.blank]} />
                         )}
+                        <LinearGradient
+                          colors={['rgba(6,14,22,0)', 'rgba(6,14,22,0.75)']}
+                          style={styles.shade}
+                          pointerEvents="none"
+                        />
+                        <View style={styles.count}>
+                          <Ionicons name="images" size={10} color="#FFFFFF" />
+                          <Text style={styles.countText}>{memory.photoCount}</Text>
+                        </View>
+                        <View style={styles.caption} pointerEvents="none">
+                          <Text style={styles.date}>{dayMonth(memory.event.date)}</Text>
+                          <Text style={styles.title} numberOfLines={2}>
+                            {memory.event.title}
+                          </Text>
+                        </View>
                       </Pressable>
-                      <Text style={styles.title} numberOfLines={1}>
-                        {memory.event.title}
-                      </Text>
-                      <Text style={styles.meta} numberOfLines={1}>
-                        {dayMonth(memory.event.date)} · {memory.photoCount} {memory.photoCount === 1 ? 'photo' : 'photos'}
-                      </Text>
                     </View>
                   );
                 })}
@@ -233,20 +243,41 @@ const styles = StyleSheet.create({
   error: { color: paper.danger, ...typo.medium, fontSize: textSize.body },
   empty: { alignItems: 'center', gap: space.xxs, paddingVertical: space.xl },
   emptyTitle: { color: paper.ink, ...typo.bold, fontSize: textSize.base, marginTop: space.xxs },
-  grid: { gap: space.md },
-  row: { flexDirection: 'row', gap: space.sm },
+  grid: { gap: space.xs },
+  row: { flexDirection: 'row', gap: space.xs },
   pad: { flex: 1 },
-  tile: { flex: 1, gap: 2 },
+  tile: { flex: 1 },
   photo: {
     width: '100%',
     aspectRatio: 3 / 4,
     borderRadius: radius.md,
     overflow: 'hidden',
+    justifyContent: 'flex-end',
     backgroundColor: paper.surfaceAlt,
-    marginBottom: 4,
   },
   blank: { backgroundColor: paper.surfaceAlt },
   pressed: { opacity: 0.8 },
-  title: { color: paper.ink, ...typo.medium, fontSize: textSize.small },
-  meta: { color: paper.inkFaint, ...typo.regular, fontSize: textSize.caption },
+  shade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '55%' },
+  count: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    height: 18,
+    paddingHorizontal: 6,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(6,14,22,0.55)',
+  },
+  countText: { color: '#FFFFFF', ...typo.bold, fontSize: textSize.micro },
+  caption: { padding: space.xs, gap: 1 },
+  date: {
+    color: 'rgba(255,255,255,0.8)',
+    ...typo.mono,
+    fontSize: textSize.micro,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  title: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.small, lineHeight: 15 },
 });

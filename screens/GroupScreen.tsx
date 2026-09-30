@@ -14,7 +14,7 @@ import SquadLookSheet from '../components/group/SquadLookSheet';
 import FollowButton from '../components/group/FollowButton';
 import SquadFollows from '../components/group/SquadFollows';
 import SquadVotes from '../components/group/SquadVotes';
-import SquadProfileHeader, { ACTING_ACCENT } from '../components/group/SquadProfileHeader';
+import SquadProfileHeader from '../components/group/SquadProfileHeader';
 import { getFollowerIds, getFollowing, getOpenVotes, type FollowVote } from '../services/serviceFollow';
 import Monogram from '../components/general/Monogram';
 import IconTabs from '../components/general/IconTabs';
@@ -42,6 +42,9 @@ type Member = {
 };
 
 type Tab = 'memories' | 'following' | 'members';
+
+// Roughly where the banner has left the screen.
+const SOLID_BAR_AFTER = 170;
 
 const TABS = [
   { value: 'memories' as const, label: 'Memories', icon: 'grid-outline' as const, activeIcon: 'grid' as const },
@@ -89,6 +92,7 @@ export default function GroupScreen({
   const [opened, setOpened] = useState<Group | null>(null);
   const [followsReload, setFollowsReload] = useState(0);
   const [votes, setVotes] = useState<FollowVote[]>([]);
+  const [scrolled, setScrolled] = useState(false);
   const [followCounts, setFollowCounts] = useState<{ following: number | null; followers: number | null }>({
     following: null,
     followers: null,
@@ -359,22 +363,14 @@ export default function GroupScreen({
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.column}>
-        <View style={styles.topBar}>
-          <Pressable
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel={'Back to ' + backLabel}
-            hitSlop={8}
-            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
-          >
-            <Ionicons name="chevron-back" size={24} color={paper.ink} />
-            <Text style={styles.backText} numberOfLines={1}>
-              {backLabel}
-            </Text>
-          </Pressable>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          scrollEventThrottle={32}
+          onScroll={(event) => {
+            const past = event.nativeEvent.contentOffset.y > SOLID_BAR_AFTER;
+            if (past !== scrolled) setScrolled(past);
+          }}
+        >
           {loading ? (
             <ActivityIndicator color={paper.accent} style={styles.loader} />
           ) : (
@@ -382,6 +378,7 @@ export default function GroupScreen({
               <SquadProfileHeader
                 group={current}
                 canReposition={member}
+                acting={isActing}
                 stats={[
                   { value: nights, label: nights === 1 ? 'night' : 'nights' },
                   { value: count, label: count === 1 ? 'member' : 'members' },
@@ -390,17 +387,8 @@ export default function GroupScreen({
                 ]}
               />
 
-              <DashedDivider />
-
               <View style={styles.buttons}>
-                {isActing ? (
-                  <View style={[styles.button, styles.buttonActing]} accessibilityLabel="You are acting as this squad">
-                    <View style={styles.actingDot} />
-                    <Text style={styles.buttonActingText} numberOfLines={1}>
-                      Acting
-                    </Text>
-                  </View>
-                ) : (
+                {isActing ? null : (
                   <Pressable
                     onPress={actAsThisSquad}
                     disabled={actingBusy}
@@ -409,6 +397,7 @@ export default function GroupScreen({
                     accessibilityHint="Follows will be made in this squad's name"
                     style={({ pressed }) => [styles.button, styles.buttonPrimary, (pressed || actingBusy) && styles.pressed]}
                   >
+                    <Ionicons name="swap-horizontal" size={16} color={paper.onMine} />
                     <Text style={styles.buttonPrimaryText} numberOfLines={1}>
                       {actingBusy ? 'Switching…' : 'Act as'}
                     </Text>
@@ -421,6 +410,7 @@ export default function GroupScreen({
                   accessibilityLabel="Edit look"
                   style={({ pressed }) => [styles.button, pressed && styles.pressed]}
                 >
+                  <Ionicons name="color-palette-outline" size={16} color={paper.ink} />
                   <Text style={styles.buttonText} numberOfLines={1}>
                     Edit look
                   </Text>
@@ -432,6 +422,7 @@ export default function GroupScreen({
                   accessibilityLabel="Invite people"
                   style={({ pressed }) => [styles.button, pressed && styles.pressed]}
                 >
+                  <Ionicons name="person-add-outline" size={16} color={paper.ink} />
                   <Text style={styles.buttonText} numberOfLines={1}>
                     Invite
                   </Text>
@@ -442,6 +433,7 @@ export default function GroupScreen({
                 key={actingId ?? 'none'}
                 group={current}
                 userId={userId}
+                block
                 onChanged={() => setFollowsReload((n) => n + 1)}
               />
 
@@ -563,6 +555,25 @@ export default function GroupScreen({
             </>
           )}
         </ScrollView>
+
+        {/* Floats over the banner, so the cover photo gets the whole top; once the
+            banner scrolls away it turns into a plain bar with the squad's name. */}
+        <View style={[styles.topBar, scrolled && styles.topBarSolid]} pointerEvents="box-none">
+          <Pressable
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel={'Back to ' + backLabel}
+            hitSlop={8}
+            style={({ pressed }) => [styles.backButton, scrolled && styles.backButtonPlain, pressed && styles.pressed]}
+          >
+            <Ionicons name="chevron-back" size={22} color={scrolled ? paper.ink : '#FFFFFF'} />
+          </Pressable>
+          {scrolled ? (
+            <Text style={styles.topTitle} numberOfLines={1}>
+              {current.name}
+            </Text>
+          ) : null}
+        </View>
       </View>
 
       <SquadLookSheet
@@ -585,11 +596,34 @@ const styles = StyleSheet.create({
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
   pressed: { opacity: 0.6 },
 
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xs, height: 48 },
-  backButton: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 1, paddingRight: space.sm },
-  backText: { color: paper.ink, ...typo.semi, fontSize: textSize.lead },
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    paddingHorizontal: space.md,
+  },
+  topBarSolid: {
+    backgroundColor: paper.bg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: paper.line,
+  },
+  topTitle: { flex: 1, color: paper.ink, ...typo.bold, fontSize: textSize.lead },
+  backButtonPlain: { backgroundColor: paper.surface },
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(12,25,38,0.5)',
+  },
 
-  content: { paddingHorizontal: space.lg, paddingTop: space.xs, paddingBottom: space.xl, gap: space.lg },
+  content: { paddingHorizontal: space.lg, paddingBottom: 130, gap: space.md },
   loader: { marginVertical: space.xl },
   error: { color: paper.danger, ...typo.medium, fontSize: textSize.body },
   hint: {
@@ -600,26 +634,23 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
   },
 
-  buttons: { flexDirection: 'row', gap: 6 },
-  // Calm, neutral buttons: white with a hairline, the same for every action.
+  buttons: { flexDirection: 'row', gap: space.xs },
+  // White with a hairline; only "Act as" is dark, since it is the one real choice.
   button: {
     flex: 1,
-    height: 38,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: paper.line,
     backgroundColor: paper.surface,
   },
   buttonText: { color: paper.ink, ...typo.semi, fontSize: textSize.body },
-  buttonPrimary: {},
-  buttonPrimaryText: { color: paper.ink, ...typo.semi, fontSize: textSize.body },
-  buttonActing: { backgroundColor: paper.bg },
-  buttonActingText: { color: paper.inkSoft, ...typo.semi, fontSize: textSize.body },
-  actingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: ACTING_ACCENT },
+  buttonPrimary: { backgroundColor: paper.mine, borderColor: paper.mine },
+  buttonPrimaryText: { color: paper.onMine, ...typo.semi, fontSize: textSize.body },
   buttonDanger: { borderColor: paper.danger },
   buttonDangerText: { color: paper.danger, ...typo.semi, fontSize: textSize.body },
 
@@ -646,9 +677,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: paper.surfaceAlt,
   },
-  memberList: { gap: 2 },
-  member: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 8 },
-  memberDivider: {},
+  memberList: {
+    paddingHorizontal: space.md,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: paper.line,
+    backgroundColor: paper.surface,
+  },
+  member: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: space.sm },
+  memberDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: paper.lineSoft },
   memberName: { flex: 1, color: paper.ink, ...typo.semi, fontSize: textSize.base },
   you: { color: paper.inkFaint, ...typo.medium, fontSize: textSize.small },
   leaveConfirm: { gap: space.sm },
