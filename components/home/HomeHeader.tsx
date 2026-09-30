@@ -2,71 +2,54 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Group } from '../../services/serviceGroup';
 import { todayLabel } from '../../lib/datetime';
-import GroupSelect from '../general/GroupSelect';
+import Monogram from '../general/Monogram';
 import { colors, radius, space, textSize, typo } from '../../theme';
 
 type HomeHeaderProps = {
-  displayName: string;
-  avatarUrl?: string | null;
-  groups: Group[];
-  groupId: string | null;
-  onGroupSelect: (groupId: string | null) => void;
-  onMenu?: () => void;
+  // The squad Home is showing; switching squads happens in the side menu.
+  squad?: Group;
+  onMenu: () => void;
   // Unread messages across every squad, shown on the menu button.
   menuUnread?: number;
 };
 
-// Chat and new plans live in the side menu, so the header is just the menu
-// button and the squad you are looking at.
-export default function HomeHeader({
-  displayName,
-  avatarUrl = null,
-  groups,
-  groupId,
-  onGroupSelect,
-  onMenu,
-  menuUnread = 0,
-}: HomeHeaderProps) {
-  const active = groups.find((group) => group.id === groupId);
-
+// The menu button and the squad you are looking at. Tapping either opens the
+// side menu, where chat, plans and the other squads are.
+export default function HomeHeader({ squad, onMenu, menuUnread = 0 }: HomeHeaderProps) {
   return (
     <View style={styles.header}>
       <Text style={styles.date}>{todayLabel()}</Text>
 
       <View style={styles.top}>
-        {onMenu ? (
+        <Pressable
+          onPress={onMenu}
+          accessibilityRole="button"
+          accessibilityLabel={menuUnread > 0 ? `Open the menu, ${menuUnread} unread` : 'Open the menu'}
+          hitSlop={6}
+          style={({ pressed }) => [styles.menu, pressed && styles.pressed]}
+        >
+          <Ionicons name="menu" size={19} color={colors.text} />
+          {menuUnread > 0 ? (
+            <View style={styles.unread}>
+              <Text style={styles.unreadText}>{menuUnread > 99 ? '99+' : menuUnread}</Text>
+            </View>
+          ) : null}
+        </Pressable>
+
+        {squad ? (
           <Pressable
             onPress={onMenu}
             accessibilityRole="button"
-            accessibilityLabel={menuUnread > 0 ? `Open the menu, ${menuUnread} unread` : 'Open the menu'}
-            hitSlop={6}
-            style={({ pressed }) => [styles.menu, pressed && styles.pressed]}
+            accessibilityLabel={`${squad.name}. Open the menu to switch squads`}
+            style={({ pressed }) => [styles.squad, pressed && styles.pressed]}
           >
-            <Ionicons name="menu" size={19} color={colors.text} />
-            {menuUnread > 0 ? (
-              <View style={styles.unread}>
-                <Text style={styles.unreadText}>{menuUnread > 99 ? '99+' : menuUnread}</Text>
-              </View>
-            ) : null}
+            <Monogram name={squad.name} uri={squad.avatarUrl} size={30} />
+            <Text style={styles.name} numberOfLines={1}>
+              {squad.name}
+            </Text>
           </Pressable>
         ) : null}
-        <View style={styles.picker}>
-          <GroupSelect
-            groups={groups}
-            groupId={groupId}
-            onSelect={onGroupSelect}
-            allAvatarLabel={displayName}
-            allAvatarUrl={avatarUrl}
-            showAll={false}
-          />
-        </View>
       </View>
-
-      {!active && groups.length > 1 ? (
-        <Text style={styles.hint} numberOfLines={1}>
-          All your pareas · tap to pick one
-        </Text>
-      ) : null}
     </View>
   );
 }
@@ -81,8 +64,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   top: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: 3 },
-  picker: { flex: 1, minWidth: 0, alignItems: 'flex-start' },
-  hint: { marginTop: space.xs, color: colors.textFaint, ...typo.medium, fontSize: textSize.small },
   menu: {
     width: 38,
     height: 38,
@@ -108,5 +89,7 @@ const styles = StyleSheet.create({
     borderColor: colors.bg,
   },
   unreadText: { color: '#FFFFFF', ...typo.bold, fontSize: 9 },
+  squad: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  name: { flexShrink: 1, color: colors.text, ...typo.display, fontSize: textSize.heading, letterSpacing: -0.4 },
   pressed: { opacity: 0.7 },
 });

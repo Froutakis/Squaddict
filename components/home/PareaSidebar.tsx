@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Animated, Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import type { Group } from '../../services/serviceGroup';
 import Monogram from '../general/Monogram';
 import Glass from '../general/Glass';
@@ -37,6 +37,8 @@ type PareaSidebarProps = {
   onChat: () => void;
   onPlan: () => void;
   onCalendar: () => void;
+  // Leaves the current squad; throws if it could not.
+  onLeaveSquad: () => Promise<void>;
   onClose: () => void;
 };
 
@@ -52,6 +54,7 @@ export default function PareaSidebar({
   onChat,
   onPlan,
   onCalendar,
+  onLeaveSquad,
   onClose,
 }: PareaSidebarProps) {
   const slide = useRef(new Animated.Value(0)).current;
@@ -59,10 +62,18 @@ export default function PareaSidebar({
   const [mounted, setMounted] = useState(visible);
   const [label, setLabel] = useState<{ text: string; y: number } | null>(null);
   const labelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Where the "leave?" question sits, next to the leave button.
+  const [confirmAt, setConfirmAt] = useState<number | null>(null);
+  const [leaving, setLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) setMounted(true);
-    else setLabel(null);
+    else {
+      setLabel(null);
+      setConfirmAt(null);
+      setLeaveError(null);
+    }
     Animated.timing(slide, {
       toValue: visible ? 1 : 0,
       duration: SLIDE_MS,
@@ -87,6 +98,19 @@ export default function PareaSidebar({
   // Tapping a tool that isn't built yet just says so.
   function soon(name: string) {
     return (y: number) => showLabel(`${name} · coming soon`, y);
+  }
+
+  async function leave() {
+    setLeaving(true);
+    setLeaveError(null);
+    try {
+      await onLeaveSquad();
+      setConfirmAt(null);
+    } catch {
+      setLeaveError('Could not leave. Try again.');
+    } finally {
+      setLeaving(false);
+    }
   }
 
   const active = squads.find((squad) => squad.id === activeId);
@@ -160,8 +184,60 @@ export default function PareaSidebar({
               ) : null}
             </RailButton>
           ))}
+
+          {active ? (
+            <>
+              <View style={styles.sep} />
+              <RailButton
+                label={`Leave ${active.name}`}
+                onPressAt={(y) => {
+                  setLabel(null);
+                  setLeaveError(null);
+                  setConfirmAt(y);
+                }}
+                onHold={showLabel}
+                accessibilityLabel={`Leave ${active.name}`}
+              >
+                <View style={styles.leave}>
+                  <Ionicons name="exit-outline" size={19} color={colors.danger} />
+                </View>
+              </RailButton>
+            </>
+          ) : null}
           </Glass>
         </Animated.View>
+
+        {confirmAt !== null && active ? (
+          <View style={[styles.confirm, { top: confirmAt }]}>
+            <Text style={styles.confirmTitle}>Leave {active.name}?</Text>
+            <Text style={styles.confirmBody}>You can come back with a code.</Text>
+            {leaveError ? <Text style={styles.confirmError}>{leaveError}</Text> : null}
+            <View style={styles.confirmRow}>
+              <Pressable
+                onPress={() => setConfirmAt(null)}
+                disabled={leaving}
+                accessibilityRole="button"
+                accessibilityLabel="Stay in the squad"
+                style={({ pressed }) => [styles.confirmButton, pressed && styles.pressed]}
+              >
+                <Text style={styles.confirmCancel}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={leave}
+                disabled={leaving}
+                accessibilityRole="button"
+                accessibilityLabel={`Leave ${active.name}`}
+                style={({ pressed }) => [styles.confirmButton, styles.confirmLeave, (pressed || leaving) && styles.pressed]}
+              >
+                {leaving ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.confirmLeaveText}>Leave</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
 
         {label ? (
           <View style={[styles.label, { top: label.y }]} pointerEvents="none">
@@ -288,4 +364,42 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
   },
   labelText: { color: colors.onInk, ...typo.semi, fontSize: textSize.small },
+  leave: {
+    width: TOOL,
+    height: TOOL,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Sits beside the leave button, so the question is where the finger is.
+  confirm: {
+    position: 'absolute',
+    left: RAIL + space.md,
+    marginTop: space.lg,
+    width: 220,
+    padding: space.md,
+    gap: space.xxs,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    shadowColor: '#0C1926',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.22,
+    shadowRadius: 26,
+    elevation: 14,
+  },
+  confirmTitle: { color: colors.text, ...typo.bold, fontSize: textSize.base },
+  confirmBody: { color: colors.textSoft, ...typo.medium, fontSize: textSize.small },
+  confirmError: { color: colors.danger, ...typo.medium, fontSize: textSize.small },
+  confirmRow: { flexDirection: 'row', gap: space.xs, marginTop: space.sm },
+  confirmButton: {
+    flex: 1,
+    height: 36,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceAlt,
+  },
+  confirmCancel: { color: colors.text, ...typo.semi, fontSize: textSize.body },
+  confirmLeave: { backgroundColor: colors.danger },
+  confirmLeaveText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.body },
 });

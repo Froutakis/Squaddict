@@ -14,7 +14,7 @@ import type { Group } from '../services/serviceGroup';
 import type { EventCover, MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getActingGroupId, getUserById, setActingGroup } from '../services/serviceUser';
 import { pickActing } from '../lib/acting';
-import { getGroupsForUser } from '../services/serviceGroup';
+import { getGroupsForUser, leaveGroup } from '../services/serviceGroup';
 import { getPareaGoing, type PareaGoing } from '../services/serviceFeed';
 import { getUnreadCounts } from '../services/serviceChat';
 import ShowMore, { visibleSlice } from '../components/general/ShowMore';
@@ -105,7 +105,6 @@ export default function HomeScreen({
 }: HomeScreenProps) {
   const { signed, signPaths, dropSigned } = useSignedImages();
   const [displayName, setDisplayName] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [events, setEvents] = useState<MyEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -198,7 +197,6 @@ export default function HomeScreen({
 
         setGoing(friendsPlans);
         setDisplayName(profile?.name ?? '');
-        setAvatarUrl(profile?.avatarUrl ?? null);
         setGroups(myGroups);
         setEvents(myEvents);
       } catch {
@@ -699,11 +697,7 @@ export default function HomeScreen({
         }
       >
         <HomeHeader
-          displayName={displayName}
-          avatarUrl={avatarUrl}
-          groups={groups}
-          groupId={groupId}
-          onGroupSelect={chooseSquad}
+          squad={groups.find((group) => group.id === groupId)}
           onMenu={() => setMenuOpen(true)}
           menuUnread={Object.values(unread).reduce((sum, count) => sum + count, 0)}
         />
@@ -824,6 +818,14 @@ export default function HomeScreen({
         onCalendar={() => {
           setMenuOpen(false);
           afterMenu(() => setFullCalendar(true));
+        }}
+        onLeaveSquad={async () => {
+          if (!groupId) return;
+          await leaveGroup(groupId);
+          setMenuOpen(false);
+          // Home falls back to another squad (the acting one if you still have one).
+          setGroupId(null);
+          load(true);
         }}
         onClose={() => setMenuOpen(false)}
       />
