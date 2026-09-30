@@ -43,9 +43,7 @@ import PhotoPrompt from '../components/home/PhotoPrompt';
 import { MEMORY_LIMIT, toMemoryNights, type MemoryNight } from '../components/home/memories';
 import DayPlansSheet from '../components/home/DayPlansSheet';
 import StoryViewer from '../components/events/StoryViewer';
-import ListEmpty from '../components/home/ListEmpty';
 import SectionHead from '../components/general/SectionHead';
-import PlanCard from '../components/home/PlanCard';
 import Button from '../components/general/Button';
 import CalendarCard from '../components/events/CalendarCard';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
@@ -76,14 +74,6 @@ type HomeScreenProps = {
   // Set from elsewhere (You) to open Parea on one squad.
   selectGroup?: { id: string; nonce: number } | null;
 };
-
-function planLine(event: MyEvent): string {
-  const parts: string[] = [];
-  if (event.startTime) parts.push(event.startTime);
-  if (event.placeLabel ?? event.location) parts.push((event.placeLabel ?? event.location) as string);
-  parts.push(`${event.going.length} in`);
-  return parts.join(' · ');
-}
 
 function toCardData(event: MyEvent, coverUrl?: string | null): CardEvent {
   return {
@@ -372,7 +362,6 @@ export default function HomeScreen({
   const livePeople = useLiveLocations(sharingEvent?.id, { id: user.id, name: displayName });
   const pool = upcoming.filter((e) => e.id !== heroEvent?.id);
   const waiting = pool.filter((e) => e.myStatus === undefined);
-  const later = pool.filter((e) => e.myStatus !== undefined);
   const clockNow = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const recent = visible.filter((e) => inPhotoWindow(e.date, e.startTime, e.endTime, now));
   const recentIds = recent.map((e) => e.id).sort().join(',');
@@ -663,45 +652,6 @@ export default function HomeScreen({
           </View>
         ) : null}
 
-        <View>
-          <SectionHead
-            title="Later"
-            meta={later.length > 0 ? `${later.length} plans` : undefined}
-          />
-
-          {later.length === 0 ? (
-            <View style={styles.body}>
-              {waiting.length === 0 ? (
-                <ListEmpty
-                  title="Nothing else planned"
-                  body="A free evening is a terrible thing to waste."
-                  actionLabel="Propose something"
-                  onAction={() => openNewEvent(null)}
-                />
-              ) : (
-                <Text style={styles.quiet}>Nothing else on the books.</Text>
-              )}
-            </View>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.row}
-            >
-              {later.map((event) => (
-                <PlanCard
-                  key={event.id}
-                  title={event.title}
-                  date={event.date}
-                  line={planLine(event)}
-                  groupName={groupId === null ? event.groupName : undefined}
-                  onPress={() => setOpenEvent(event)}
-                />
-              ))}
-            </ScrollView>
-          )}
-        </View>
-
         {waiting.length > 0 ? (
           <View>
             <SectionHead title="Waiting on you" count={waiting.length} />
@@ -844,7 +794,6 @@ export default function HomeScreen({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  row: { gap: space.sm, paddingHorizontal: space.lg },
   content: {
     width: '100%',
     maxWidth: layout.column,
@@ -855,7 +804,6 @@ const styles = StyleSheet.create({
   },
   body: { paddingHorizontal: space.lg, gap: space.sm },
   error: { color: colors.danger, ...typo.medium, fontSize: 13 },
-  quiet: { color: colors.textFaint, ...typo.medium, fontSize: 13 },
   state: { alignItems: 'center', paddingHorizontal: space.lg, paddingVertical: space.xl, gap: space.xs },
   stateTitle: {
     color: colors.text,
