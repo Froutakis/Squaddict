@@ -107,6 +107,8 @@ export default function HomeScreen({
 }: HomeScreenProps) {
   const { signed, signPaths, dropSigned } = useSignedImages();
   const [displayName, setDisplayName] = useState('');
+  // Shown next to your reactions in the memories feed.
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [events, setEvents] = useState<MyEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -200,6 +202,7 @@ export default function HomeScreen({
 
         setGoing(friendsPlans);
         setDisplayName(profile?.name ?? '');
+        setAvatarUrl(profile?.avatarUrl ?? null);
         setGroups(myGroups);
         setEvents(myEvents);
       } catch {
