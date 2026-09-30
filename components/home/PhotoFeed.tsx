@@ -31,7 +31,8 @@ type PhotoFeedProps = {
   onOpenGroup: (group: Group) => void;
 };
 
-// Photos from your squad and the squads it follows, newest first.
+// Memories from your squad and the squads it follows, newest first: one
+// photo for each night that was kept.
 export default function PhotoFeed({
   group,
   me,
@@ -111,7 +112,7 @@ export default function PhotoFeed({
 
   return (
     <View>
-      <SectionHead title="Photos" />
+      <SectionHead title="Memories" />
 
       <View style={styles.list}>
         {visible.map((item) => (
@@ -140,7 +141,7 @@ export default function PhotoFeed({
         <Pressable
           onPress={() => setShown(shown + PAGE)}
           accessibilityRole="button"
-          accessibilityLabel="Show more photos"
+          accessibilityLabel="Show more memories"
           style={({ pressed }) => [styles.more, pressed && styles.pressed]}
         >
           <Text style={styles.moreText}>Show more</Text>

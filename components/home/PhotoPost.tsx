@@ -11,6 +11,7 @@ import {
   type PhotoReaction,
 } from '../../lib/photoFeed';
 import Monogram from '../general/Monogram';
+import { dayMonth } from '../../lib/datetime';
 import { colors, space, textSize, typo } from '../../theme';
 
 const DOUBLE_TAP_MS = 260;
@@ -27,8 +28,8 @@ type PhotoPostProps = {
   onImageError: () => void;
 };
 
-// One photo in the feed: who and where on top, the photo edge to edge, the
-// reactions and a line of words under it.
+// One memory in the feed: the squad and the night it is from on top, the
+// photo edge to edge, the reactions and a line of words under it.
 export default function PhotoPost({
   item,
   url,
@@ -46,6 +47,7 @@ export default function PhotoPost({
 
   const tally = tallyReactions(reactions, userId);
   const line = reactorsLine(reactions, userId);
+  const place = item.event.placeLabel ?? item.event.location;
 
   function pop() {
     burst.setValue(0);
@@ -85,7 +87,7 @@ export default function PhotoPost({
             {item.group.name}
           </Text>
           <Text style={styles.place} numberOfLines={1}>
-            {item.event.placeLabel ?? item.event.location ?? item.event.title}
+            {item.event.title}
           </Text>
         </View>
       </Pressable>
@@ -151,7 +153,8 @@ export default function PhotoPost({
         ) : null}
 
         <Text style={styles.text} numberOfLines={2}>
-          <Text style={styles.strong}>{item.group.handle}</Text> {item.event.title}
+          From <Text style={styles.strong}>{item.event.title}</Text>
+          {place ? ` at ${place}` : ''} · {dayMonth(item.event.date)}
         </Text>
 
         <Text style={styles.time}>{postedAgo(item.photo.createdAt, new Date())}</Text>
@@ -161,7 +164,7 @@ export default function PhotoPost({
 }
 
 const styles = StyleSheet.create({
-  post: { width: '100%', maxWidth: 480, alignSelf: 'center' },
+  post: { width: '100%' },
   pressed: { opacity: 0.6 },
 
   head: {

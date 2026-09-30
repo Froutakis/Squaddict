@@ -37,7 +37,7 @@ import {
 } from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
 import PareaSidebar from '../components/home/PareaSidebar';
-import CalendarSheet from '../components/home/CalendarSheet';
+import CalendarScreen from './CalendarScreen';
 import { useNow } from '../components/home/useNow';
 import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
@@ -50,7 +50,6 @@ import DayPlansSheet from '../components/home/DayPlansSheet';
 import StoryViewer from '../components/events/StoryViewer';
 import SectionHead from '../components/general/SectionHead';
 import Button from '../components/general/Button';
-import CalendarStrip from '../components/events/CalendarStrip';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
 import UpNext from '../components/events/UpNext';
 import {
@@ -671,16 +670,6 @@ export default function HomeScreen({
           </View>
         ) : null}
 
-        <View style={styles.body}>
-          <CalendarStrip
-            events={visible}
-            selectedDate={null}
-            onSelectDate={openDay}
-            onExpand={() => setFullCalendar(true)}
-            covers={covers}
-          />
-        </View>
-
         {rsvpError ? (
           <View style={styles.body}>
             <Text style={styles.error}>{rsvpError}</Text>
@@ -867,18 +856,20 @@ export default function HomeScreen({
         onClose={() => setMenuOpen(false)}
       />
 
-      <CalendarSheet
-        visible={fullCalendar}
-        title={groups.find((group) => group.id === groupId)?.name}
-        events={visible}
-        covers={covers}
-        onSelectDate={(date) => {
-          setFullCalendar(false);
-          // The day's plans or photos open in their own sheet, after this one.
-          afterMenu(() => openDay(date));
-        }}
-        onClose={() => setFullCalendar(false)}
-      />
+      {/* The calendar is a page of its own, on top of Home, like the chat. */}
+      {fullCalendar ? (
+        <CalendarScreen
+          squadName={groups.find((group) => group.id === groupId)?.name}
+          events={visible}
+          covers={covers}
+          toCard={(event) => toCardData(event, coverFor(event))}
+          onBack={() => setFullCalendar(false)}
+          onOpenEvent={setOpenEvent}
+          onRsvp={handleRsvp}
+          onPlan={openNewEvent}
+          onPlayDay={openDay}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

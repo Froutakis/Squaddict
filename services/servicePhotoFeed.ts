@@ -6,7 +6,7 @@ import type { EventPhoto, MyEvent } from "./serviceEvents";
 import { keyOf } from "../lib/datetime";
 import { capPerNight, type PhotoReaction } from "../lib/photoFeed";
 
-// One photo in the Home feed, with the night and the squad it belongs to.
+// One memory in the Home feed: a photo, with the night and the squad it is from.
 export type FeedPhoto = {
   photo: EventPhoto;
   event: MyEvent;
@@ -15,7 +15,8 @@ export type FeedPhoto = {
 
 const NIGHTS = 40;
 const PHOTOS = 80;
-const PER_NIGHT = 2;
+// One post per night: the feed is about the memory, not every photo in it.
+const PER_NIGHT = 1;
 
 // The newest photos of a squad's own nights and of the squads it follows.
 // Other squads only show what they made public: the database decides that.
