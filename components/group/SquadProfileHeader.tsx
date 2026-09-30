@@ -6,14 +6,13 @@ import { getBannerFocus, setBannerFocus, type Group } from '../../services/servi
 import { clampFocus, coverPlacement, DEFAULT_FOCUS, focusAfterDrag } from '../../lib/bannerCrop';
 import Monogram from '../general/Monogram';
 import ImageViewer from '../general/ImageViewer';
-import { colors, radius, shadow, solidFor, space, sun, textSize, tint, typo } from '../../theme';
+import { colors, radius, space, textSize, typo } from '../../theme';
 
-const BANNER = 210;
-const AVATAR = 104;
+const BANNER = 200;
+const AVATAR = 112;
 const RING = 4;
-// The one colour that marks the squad you act as, the same on You and here.
-// Not red: red already means unread.
-export const ACTING_ACCENT = sun;
+// The one colour that marks the squad you act as: the red of the logo.
+export const ACTING_ACCENT = colors.accent;
 
 export type ProfileStat = { value: number | null; label: string };
 
@@ -24,18 +23,11 @@ type SquadProfileHeaderProps = {
   stats: ProfileStat[];
   // Members can drag the banner to choose what shows, like a Facebook cover.
   canReposition?: boolean;
-  // Shows the "acting as" chip under the name.
-  acting?: boolean;
 };
 
 // Banner with the squad's photo sitting on its bottom edge, cut out by a ring in
 // the page colour, then the name, the numbers as one line of text, and the bio.
-export default function SquadProfileHeader({
-  group,
-  stats,
-  canReposition = false,
-  acting = false,
-}: SquadProfileHeaderProps) {
+export default function SquadProfileHeader({ group, stats, canReposition = false }: SquadProfileHeaderProps) {
   const [bannerBroken, setBannerBroken] = useState(false);
   const [viewing, setViewing] = useState<'banner' | 'avatar' | null>(null);
   const [frame, setFrame] = useState<Size | null>(null);
@@ -131,7 +123,7 @@ export default function SquadProfileHeader({
       onError={() => setBannerBroken(true)}
     />
   ) : (
-    <LinearGradient colors={[solidFor(group.name), colors.ink]} style={StyleSheet.absoluteFill} />
+    <LinearGradient colors={['#1B2A44', '#3A2E3F']} style={StyleSheet.absoluteFill} />
   );
 
   return (
@@ -223,35 +215,16 @@ export default function SquadProfileHeader({
         <Text style={styles.name} numberOfLines={2}>
           {group.name}
         </Text>
-        {group.handle || acting ? (
-          <View style={styles.subline}>
-            {group.handle ? <Text style={styles.handle}>@{group.handle}</Text> : null}
-            {acting ? (
-              <View style={styles.actingChip} accessibilityLabel="You are acting as this squad">
-                <View style={styles.actingDot} />
-                <Text style={styles.actingText}>Acting as this squad</Text>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
+
+        <View style={styles.stats}>
+          {stats.map((stat) => (
+            <Text key={stat.label} style={styles.stat}>
+              <Text style={styles.statValue}>{stat.value === null ? '–' : stat.value}</Text> {stat.label}
+            </Text>
+          ))}
+        </View>
 
         {group.bio ? <Text style={styles.bio}>{group.bio}</Text> : null}
-      </View>
-
-      <View style={styles.stats}>
-        {stats.map((stat, index) => (
-          <View
-            key={stat.label}
-            style={[styles.stat, index > 0 && styles.statDivider]}
-            accessible
-            accessibilityLabel={`${stat.value ?? 'No'} ${stat.label}`}
-          >
-            <Text style={styles.statValue}>{stat.value === null ? '–' : stat.value}</Text>
-            <Text style={styles.statLabel} numberOfLines={1}>
-              {stat.label}
-            </Text>
-          </View>
-        ))}
       </View>
 
       <ImageViewer
@@ -264,10 +237,9 @@ export default function SquadProfileHeader({
 }
 
 const styles = StyleSheet.create({
-  // Edge to edge, like a cover photo: the page's side padding is cancelled out.
   banner: {
     height: BANNER,
-    marginHorizontal: -space.lg,
+    borderRadius: radius.xl,
     overflow: 'hidden',
     backgroundColor: colors.surfaceAlt,
   },
@@ -302,33 +274,11 @@ const styles = StyleSheet.create({
   error: { marginTop: space.xs, color: colors.danger, ...typo.medium, fontSize: textSize.body },
   // Half the photo rides on the banner's bottom edge.
   avatarRow: { marginTop: -(AVATAR / 2 + RING), paddingLeft: space.md, alignSelf: 'flex-start' },
-  identity: { gap: space.xxs, marginTop: space.sm },
+  identity: { gap: space.xs, marginTop: space.sm },
   name: { color: colors.text, ...typo.display, fontSize: textSize.display, letterSpacing: -0.6 },
-  subline: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.xs },
-  handle: { color: colors.textSoft, ...typo.medium, fontSize: textSize.base },
-  actingChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    height: 24,
-    paddingHorizontal: 10,
-    borderRadius: radius.pill,
-    backgroundColor: tint.sun,
-  },
-  actingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: sun },
-  actingText: { color: colors.text, ...typo.semi, fontSize: textSize.small },
+  // The numbers read as a sentence, like a profile on Instagram's web page.
+  stats: { flexDirection: 'row', flexWrap: 'wrap', columnGap: space.lg, rowGap: 2 },
+  stat: { color: colors.textSoft, ...typo.regular, fontSize: textSize.base },
+  statValue: { color: colors.text, ...typo.bold },
   bio: { marginTop: space.xxs, color: colors.text, ...typo.regular, fontSize: textSize.base, lineHeight: 21 },
-  // Four equal cells, so the numbers never wrap onto a second line.
-  stats: {
-    flexDirection: 'row',
-    marginTop: space.md,
-    paddingVertical: space.sm,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    ...shadow.card,
-  },
-  stat: { flex: 1, alignItems: 'center', gap: 1 },
-  statDivider: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border },
-  statValue: { color: colors.text, ...typo.bold, fontSize: textSize.heading, letterSpacing: -0.4 },
-  statLabel: { color: colors.textFaint, ...typo.medium, fontSize: textSize.small },
 });
