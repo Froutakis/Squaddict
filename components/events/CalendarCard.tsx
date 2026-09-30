@@ -216,7 +216,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tileToday: { backgroundColor: colors.surfaceAlt },
-  tileSelected: { backgroundColor: colors.ink },
+  // The ring keeps the choice visible on a day that shows a photo.
+  tileSelected: { backgroundColor: colors.ink, borderWidth: 2, borderColor: colors.ink },
   tileOutside: { opacity: 0.35 },
 
   cover: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },

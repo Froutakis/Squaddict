@@ -37,17 +37,19 @@ import {
 } from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
 import PareaSidebar from '../components/home/PareaSidebar';
-import CalendarSheet from '../components/home/CalendarSheet';
+import CalendarScreen from './CalendarScreen';
 import { useNow } from '../components/home/useNow';
 import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
 import PhotoPrompt from '../components/home/PhotoPrompt';
+import PhotoFeed from '../components/home/PhotoFeed';
+import type { FeedPhoto } from '../services/servicePhotoFeed';
+import GroupScreen from './GroupScreen';
 import { MEMORY_LIMIT, toMemoryNights, type MemoryNight } from '../components/home/memories';
 import DayPlansSheet from '../components/home/DayPlansSheet';
 import StoryViewer from '../components/events/StoryViewer';
 import SectionHead from '../components/general/SectionHead';
 import Button from '../components/general/Button';
-import CalendarStrip from '../components/events/CalendarStrip';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
 import UpNext from '../components/events/UpNext';
 import {
@@ -121,6 +123,7 @@ export default function HomeScreen({
   const [showCreate, setShowCreate] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profileGroup, setProfileGroup] = useState<Group | null>(null);
   const [fullCalendar, setFullCalendar] = useState(false);
   const [formDate, setFormDate] = useState<string | null>(null);
   const [openEvent, setOpenEvent] = useState<SheetEvent | null>(null);
@@ -485,6 +488,12 @@ export default function HomeScreen({
     else setDayPlans(key);
   }
 
+  // A photo from the feed opens its night in the story viewer.
+  function openFeedNight(item: FeedPhoto) {
+    const mine = events.find((event) => event.id === item.event.id);
+    setDayStory([{ event: mine ?? item.event, cover: item.photo, latestAt: item.photo.createdAt }]);
+  }
+
   function coverFor(event: MyEvent): string | null {
     if (event.coverUrl) return event.coverUrl;
     const photo = coverPhotos[event.id];
@@ -600,6 +609,19 @@ export default function HomeScreen({
           </View>
         ) : null}
 
+        {activeGroup ? (
+          <PhotoFeed
+            group={activeGroup}
+            me={{ id: user.id, name: displayName, avatarUrl }}
+            signed={signed}
+            signPaths={signPaths}
+            onImageError={dropSigned}
+            reloadKey={photoNonce}
+            onOpenNight={openFeedNight}
+            onOpenGroup={setProfileGroup}
+          />
+        ) : null}
+
         {friendsPlans.length > 0 ? (
           <View>
             <SectionHead
@@ -646,16 +668,6 @@ export default function HomeScreen({
           </View>
         ) : null}
 
-        <View style={styles.body}>
-          <CalendarStrip
-            events={visible}
-            selectedDate={null}
-            onSelectDate={openDay}
-            onExpand={() => setFullCalendar(true)}
-            covers={covers}
-          />
-        </View>
-
         {rsvpError ? (
           <View style={styles.body}>
             <Text style={styles.error}>{rsvpError}</Text>
@@ -685,6 +697,22 @@ export default function HomeScreen({
         ) : null}
 
       </>
+    );
+  }
+
+  // A squad opened from the photo feed stacks on top of Home.
+  if (profileGroup) {
+    return (
+      <GroupScreen
+        group={profileGroup}
+        userId={user.id}
+        onBack={() => setProfileGroup(null)}
+        onLeave={() => {
+          setProfileGroup(null);
+          load(true);
+        }}
+        backLabel="Home"
+      />
     );
   }
 
@@ -830,18 +858,16 @@ export default function HomeScreen({
         onClose={() => setMenuOpen(false)}
       />
 
-      <CalendarSheet
-        visible={fullCalendar}
-        title={groups.find((group) => group.id === groupId)?.name}
-        events={visible}
-        covers={covers}
-        onSelectDate={(date) => {
-          setFullCalendar(false);
-          // The day's plans or photos open in their own sheet, after this one.
-          afterMenu(() => openDay(date));
-        }}
-        onClose={() => setFullCalendar(false)}
-      />
+      {/* The calendar is a page of its own, on top of Home, like the chat. */}
+      {fullCalendar ? (
+        <CalendarScreen
+          squadName={groups.find((group) => group.id === groupId)?.name}
+          events={visible}
+          covers={covers}
+          onBack={() => setFullCalendar(false)}
+          onSelectDate={openDay}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
