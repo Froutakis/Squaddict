@@ -13,6 +13,8 @@ type CalendarCardProps = {
   onSelectDate: (date: string) => void;
   onAddEvent?: () => void;
   covers?: Record<string, string>;
+  // Without the section title and side padding, for use inside a sheet.
+  bare?: boolean;
 };
 
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -33,6 +35,7 @@ export default function CalendarCard({
   selectedDate,
   onSelectDate,
   covers = {},
+  bare = false,
 }: CalendarCardProps) {
   const today = useMemo(() => new Date(), []);
   const todayKey = keyOf(today);
@@ -59,10 +62,10 @@ export default function CalendarCard({
 
   return (
     <View>
-      <SectionHead title="Calendar" />
+      {bare ? null : <SectionHead title="Calendar" />}
 
-      <View style={styles.frame}>
-      <View style={styles.card}>
+      <View style={bare ? null : styles.frame}>
+      <View style={[styles.card, bare && styles.cardBare]}>
         <View style={styles.head}>
           <Pressable
             onPress={() => setMonth(addMonths(today, 0))}
@@ -185,6 +188,7 @@ const styles = StyleSheet.create({
     paddingBottom: space.md,
     ...shadow.card,
   },
+  cardBare: { borderWidth: 0, shadowOpacity: 0, elevation: 0, paddingHorizontal: space.xs },
   head: { flexDirection: 'row', alignItems: 'center', marginBottom: space.xs },
   monthButton: { flex: 1, minHeight: 44, justifyContent: 'center' },
   month: { color: colors.text, ...typo.semi, fontSize: 15 },

@@ -36,6 +36,8 @@ import {
   liveLabel,
 } from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
+import PareaSidebar from '../components/home/PareaSidebar';
+import CalendarSheet from '../components/home/CalendarSheet';
 import { useNow } from '../components/home/useNow';
 import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
@@ -45,7 +47,7 @@ import DayPlansSheet from '../components/home/DayPlansSheet';
 import StoryViewer from '../components/events/StoryViewer';
 import SectionHead from '../components/general/SectionHead';
 import Button from '../components/general/Button';
-import CalendarCard from '../components/events/CalendarCard';
+import CalendarStrip from '../components/events/CalendarStrip';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
 import UpNext from '../components/events/UpNext';
 import {
@@ -119,6 +121,8 @@ export default function HomeScreen({
   const [goingSaving, setGoingSaving] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [fullCalendar, setFullCalendar] = useState(false);
   const [formDate, setFormDate] = useState<string | null>(null);
   const [openEvent, setOpenEvent] = useState<SheetEvent | null>(null);
   const [editEvent, setEditEvent] = useState<MyEvent | null>(null);
@@ -644,13 +648,15 @@ export default function HomeScreen({
           </View>
         ) : null}
 
-        <CalendarCard
-          events={visible}
-          selectedDate={null}
-          onSelectDate={openDay}
-          onAddEvent={() => openNewEvent(null)}
-          covers={covers}
-        />
+        <View style={styles.body}>
+          <CalendarStrip
+            events={visible}
+            selectedDate={null}
+            onSelectDate={openDay}
+            onExpand={() => setFullCalendar(true)}
+            covers={covers}
+          />
+        </View>
 
         {rsvpError ? (
           <View style={styles.body}>
@@ -698,9 +704,8 @@ export default function HomeScreen({
           groups={groups}
           groupId={groupId}
           onGroupSelect={chooseSquad}
-          onChat={onOpenChat}
-          onPlan={() => openNewEvent(null)}
-          chatUnread={groupId ? unread[groupId] ?? 0 : 0}
+          onMenu={() => setMenuOpen(true)}
+          menuUnread={Object.values(unread).reduce((sum, count) => sum + count, 0)}
         />
         {renderBody()}
       </ScrollView>
@@ -794,8 +799,56 @@ export default function HomeScreen({
           setShowCreate(true);
         }}
       />
+
+      <PareaSidebar
+        visible={menuOpen}
+        squads={groups}
+        activeId={groupId}
+        unread={unread}
+        onSelectSquad={(id) => {
+          chooseSquad(id);
+          setMenuOpen(false);
+        }}
+        onNewSquad={() => {
+          setMenuOpen(false);
+          afterMenu(() => setShowGroupForm(true));
+        }}
+        onChat={() => {
+          setMenuOpen(false);
+          if (groupId) onOpenChat?.(groupId);
+        }}
+        onPlan={() => {
+          setMenuOpen(false);
+          afterMenu(() => openNewEvent(null));
+        }}
+        onCalendar={() => {
+          setMenuOpen(false);
+          afterMenu(() => setFullCalendar(true));
+        }}
+        onClose={() => setMenuOpen(false)}
+      />
+
+      <CalendarSheet
+        visible={fullCalendar}
+        title={groups.find((group) => group.id === groupId)?.name}
+        events={visible}
+        covers={covers}
+        onSelectDate={(date) => {
+          setFullCalendar(false);
+          // The day's plans or photos open in their own sheet, after this one.
+          afterMenu(() => openDay(date));
+        }}
+        onClose={() => setFullCalendar(false)}
+      />
     </SafeAreaView>
   );
+}
+
+// iOS can't present a sheet while the side menu is still sliding away.
+const MENU_CLOSE_MS = 260;
+
+function afterMenu(open: () => void) {
+  setTimeout(open, MENU_CLOSE_MS);
 }
 
 const styles = StyleSheet.create({
