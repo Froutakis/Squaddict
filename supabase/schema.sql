@@ -966,18 +966,10 @@ create policy "read follows of my squads" on public.squad_follows
     or followed_group_id in (select public.my_group_ids())
   );
 
+-- No member writes follows directly any more: a follow or an unfollow only
+-- happens when a vote passes (see "follow votes" below).
 drop policy if exists "follow as my squad" on public.squad_follows;
-create policy "follow as my squad" on public.squad_follows
-  for insert to authenticated
-  with check (
-    follower_group_id in (select public.my_group_ids())
-    and created_by = auth.uid()
-  );
-
 drop policy if exists "unfollow as my squad" on public.squad_follows;
-create policy "unfollow as my squad" on public.squad_follows
-  for delete to authenticated
-  using (follower_group_id in (select public.my_group_ids()));
 
 -- ─── banner position (reposition like a cover photo) ───
 -- 0 = show the top of the banner photo, 1 = its bottom, 0.5 = the middle.
@@ -1007,3 +999,225 @@ $function$;
 
 revoke all on function public.set_banner_focus(uuid, real) from public;
 grant execute on function public.set_banner_focus(uuid, real) to authenticated;
+
+-- ─── follow votes ───
+-- A squad follows or unfollows another only when more than half of its members
+-- say yes. A member proposes (their own yes is counted), the others vote, and
+-- resolve_follow_proposal makes the change the moment the count is decided.
+create table if not exists public.squad_follow_proposals (
+  id              uuid        primary key default gen_random_uuid(),
+  group_id        uuid        not null references public.groups(id) on delete cascade,
+  target_group_id uuid        not null references public.groups(id) on delete cascade,
+  action          text        not null,
+  proposed_by     uuid        references public.profiles(id) on delete set null,
+  status          text        not null default 'open',
+  created_at      timestamptz not null default now(),
+  closed_at       timestamptz,
+  constraint squad_follow_proposals_action check (action in ('follow', 'unfollow')),
+  constraint squad_follow_proposals_status check (status in ('open', 'passed', 'rejected', 'cancelled')),
+  constraint squad_follow_proposals_not_self check (group_id <> target_group_id)
+);
+
+-- One open vote per pair of squads.
+create unique index if not exists squad_follow_proposals_one_open
+  on public.squad_follow_proposals (group_id, target_group_id) where status = 'open';
+
+create table if not exists public.squad_follow_ballots (
+  proposal_id uuid        not null references public.squad_follow_proposals(id) on delete cascade,
+  user_id     uuid        not null references public.profiles(id) on delete cascade,
+  approve     boolean     not null,
+  voted_at    timestamptz not null default now(),
+  primary key (proposal_id, user_id)
+);
+
+alter table public.squad_follow_proposals enable row level security;
+alter table public.squad_follow_ballots enable row level security;
+
+-- Members read their own squad's votes. Nobody writes these tables directly:
+-- proposing, voting and cancelling all go through the functions below.
+drop policy if exists "read votes of my squads" on public.squad_follow_proposals;
+create policy "read votes of my squads" on public.squad_follow_proposals
+  for select to authenticated
+  using (group_id in (select public.my_group_ids()));
+
+drop policy if exists "read ballots of my squads" on public.squad_follow_ballots;
+create policy "read ballots of my squads" on public.squad_follow_ballots
+  for select to authenticated
+  using (
+    proposal_id in (
+      select id from public.squad_follow_proposals
+       where group_id in (select public.my_group_ids())
+    )
+  );
+
+-- Counts the ballots of the squad's current members and closes the vote when
+-- it is decided. Returns the status afterwards.
+create or replace function public.resolve_follow_proposal(p_id uuid)
+returns text language plpgsql security definer set search_path to 'public' as $function$
+declare
+  v public.squad_follow_proposals%rowtype;
+  v_members integer;
+  v_yes integer;
+  v_no integer;
+begin
+  select * into v from public.squad_follow_proposals where id = p_id for update;
+  if not found then
+    return null;
+  end if;
+  if v.status <> 'open' then
+    return v.status;
+  end if;
+
+  select count(*) into v_members from public.group_members where group_id = v.group_id;
+
+  select count(*) filter (where b.approve), count(*) filter (where not b.approve)
+    into v_yes, v_no
+    from public.squad_follow_ballots b
+    join public.group_members m on m.group_id = v.group_id and m.user_id = b.user_id
+   where b.proposal_id = p_id;
+
+  if v_yes * 2 > v_members then
+    if v.action = 'follow' then
+      insert into public.squad_follows (follower_group_id, followed_group_id, created_by)
+      values (v.group_id, v.target_group_id, v.proposed_by)
+      on conflict do nothing;
+    else
+      delete from public.squad_follows
+       where follower_group_id = v.group_id and followed_group_id = v.target_group_id;
+    end if;
+
+    update public.squad_follow_proposals set status = 'passed', closed_at = now() where id = p_id;
+    return 'passed';
+  end if;
+
+  -- The members still to vote can no longer make a majority.
+  if (v_members - v_no) * 2 <= v_members then
+    update public.squad_follow_proposals set status = 'rejected', closed_at = now() where id = p_id;
+    return 'rejected';
+  end if;
+
+  return 'open';
+end;
+$function$;
+
+revoke all on function public.resolve_follow_proposal(uuid) from public, anon, authenticated;
+
+create or replace function public.propose_follow(p_group_id uuid, p_target_id uuid, p_action text)
+returns public.squad_follow_proposals
+language plpgsql security definer set search_path to 'public' as $function$
+declare
+  v public.squad_follow_proposals%rowtype;
+  v_following boolean;
+begin
+  if auth.uid() is null or not exists (
+    select 1 from public.group_members
+     where group_id = p_group_id and user_id = auth.uid()
+  ) then
+    raise exception 'Only members can put a follow to the vote.';
+  end if;
+
+  if p_action is null or p_action not in ('follow', 'unfollow') then
+    raise exception 'A vote is to follow or to unfollow.';
+  end if;
+
+  if p_group_id = p_target_id then
+    raise exception 'A squad cannot follow itself.';
+  end if;
+
+  if not exists (select 1 from public.groups where id = p_target_id) then
+    raise exception 'That squad does not exist.';
+  end if;
+
+  v_following := exists (
+    select 1 from public.squad_follows
+     where follower_group_id = p_group_id and followed_group_id = p_target_id
+  );
+
+  if p_action = 'follow' and v_following then
+    raise exception 'Your squad already follows them.';
+  end if;
+  if p_action = 'unfollow' and not v_following then
+    raise exception 'Your squad does not follow them.';
+  end if;
+
+  -- Proposing again while a vote is open is simply a yes on that vote.
+  select * into v from public.squad_follow_proposals
+   where group_id = p_group_id and target_group_id = p_target_id and status = 'open';
+
+  if not found then
+    insert into public.squad_follow_proposals (group_id, target_group_id, action, proposed_by)
+    values (p_group_id, p_target_id, p_action, auth.uid())
+    returning * into v;
+  end if;
+
+  insert into public.squad_follow_ballots (proposal_id, user_id, approve)
+  values (v.id, auth.uid(), true)
+  on conflict (proposal_id, user_id) do update set approve = true, voted_at = now();
+
+  perform public.resolve_follow_proposal(v.id);
+
+  select * into v from public.squad_follow_proposals where id = v.id;
+  return v;
+end;
+$function$;
+
+revoke all on function public.propose_follow(uuid, uuid, text) from public;
+grant execute on function public.propose_follow(uuid, uuid, text) to authenticated;
+
+create or replace function public.vote_follow(p_proposal_id uuid, p_approve boolean)
+returns public.squad_follow_proposals
+language plpgsql security definer set search_path to 'public' as $function$
+declare
+  v public.squad_follow_proposals%rowtype;
+begin
+  select * into v from public.squad_follow_proposals where id = p_proposal_id;
+
+  if not found or auth.uid() is null or not exists (
+    select 1 from public.group_members
+     where group_id = v.group_id and user_id = auth.uid()
+  ) then
+    raise exception 'Only members can vote.';
+  end if;
+
+  if p_approve is null then
+    raise exception 'A vote is yes or no.';
+  end if;
+
+  if v.status <> 'open' then
+    raise exception 'That vote is closed.';
+  end if;
+
+  insert into public.squad_follow_ballots (proposal_id, user_id, approve)
+  values (v.id, auth.uid(), p_approve)
+  on conflict (proposal_id, user_id) do update set approve = excluded.approve, voted_at = now();
+
+  perform public.resolve_follow_proposal(v.id);
+
+  select * into v from public.squad_follow_proposals where id = v.id;
+  return v;
+end;
+$function$;
+
+revoke all on function public.vote_follow(uuid, boolean) from public;
+grant execute on function public.vote_follow(uuid, boolean) to authenticated;
+
+create or replace function public.cancel_follow_proposal(p_proposal_id uuid)
+returns void language plpgsql security definer set search_path to 'public' as $function$
+begin
+  update public.squad_follow_proposals
+     set status = 'cancelled', closed_at = now()
+   where id = p_proposal_id and status = 'open' and proposed_by = auth.uid();
+
+  if not found then
+    raise exception 'Only the member who opened an open vote can cancel it.';
+  end if;
+end;
+$function$;
+
+revoke all on function public.cancel_follow_proposal(uuid) from public;
+grant execute on function public.cancel_follow_proposal(uuid) to authenticated;
+
+-- From here on a follow only happens through a vote: members lose the direct
+-- insert and delete on squad_follows (repeated here so this block stands alone).
+drop policy if exists "follow as my squad" on public.squad_follows;
+drop policy if exists "unfollow as my squad" on public.squad_follows;

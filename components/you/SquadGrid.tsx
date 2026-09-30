@@ -9,6 +9,7 @@ type SquadGridProps = {
   groups: Group[];
   actingId: string | null;
   unread: Record<string, number>;
+  votes?: Record<string, number>;
   onOpen: (group: Group) => void;
   onNew: () => void;
 };
@@ -18,7 +19,7 @@ type Cell = { kind: 'squad'; group: Group } | { kind: 'new' };
 // Every squad you are in, with a last tile to start or join one. Two to a row
 // on a phone, three once there is room, so the cards never sprawl.
 const WIDE = 520;
-export default function SquadGrid({ groups, actingId, unread, onOpen, onNew }: SquadGridProps) {
+export default function SquadGrid({ groups, actingId, unread, votes = {}, onOpen, onNew }: SquadGridProps) {
   const [columns, setColumns] = useState(2);
   const cells: Cell[] = [...groups.map((group) => ({ kind: 'squad' as const, group })), { kind: 'new' }];
   const rows: Cell[][] = [];
@@ -38,6 +39,7 @@ export default function SquadGrid({ groups, actingId, unread, onOpen, onNew }: S
                 group={cell.group}
                 acting={cell.group.id === actingId}
                 unread={unread[cell.group.id] ?? 0}
+                votes={votes[cell.group.id] ?? 0}
                 onPress={() => onOpen(cell.group)}
               />
             ) : (

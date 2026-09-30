@@ -16,10 +16,12 @@ type SquadTileProps = {
   group: Group;
   acting?: boolean;
   unread?: number;
+  // Open follow votes this member has not answered.
+  votes?: number;
   onPress: () => void;
 };
 
-export default function SquadTile({ group, acting = false, unread = 0, onPress }: SquadTileProps) {
+export default function SquadTile({ group, acting = false, unread = 0, votes = 0, onPress }: SquadTileProps) {
   const [bannerBroken, setBannerBroken] = useState(false);
   const [ratio, setRatio] = useState(DEFAULT_RATIO);
 
@@ -45,7 +47,8 @@ export default function SquadTile({ group, acting = false, unread = 0, onPress }
   }, [group.bannerUrl]);
   const badge = unreadLabel(unread);
   const members = `${group.memberCount} ${group.memberCount === 1 ? 'member' : 'members'}`;
-  const label = [group.name, members, acting ? 'acting squad' : null, badge ? `${badge} unread` : null]
+  const waiting = votes > 0 ? `${votes} ${votes === 1 ? 'vote' : 'votes'} waiting` : null;
+  const label = [group.name, members, acting ? 'acting squad' : null, badge ? `${badge} unread` : null, waiting]
     .filter(Boolean)
     .join(', ');
 
@@ -90,8 +93,8 @@ export default function SquadTile({ group, acting = false, unread = 0, onPress }
           <Text style={styles.name} numberOfLines={1}>
             {group.name}
           </Text>
-          <Text style={styles.meta} numberOfLines={1}>
-            {members}
+          <Text style={[styles.meta, waiting !== null && styles.metaWaiting]} numberOfLines={1}>
+            {waiting ?? members}
           </Text>
         </View>
       </View>
@@ -149,4 +152,5 @@ const styles = StyleSheet.create({
   text: { flex: 1, minWidth: 0 },
   name: { color: colors.text, ...typo.bold, fontSize: textSize.body },
   meta: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption },
+  metaWaiting: { color: colors.accent },
 });

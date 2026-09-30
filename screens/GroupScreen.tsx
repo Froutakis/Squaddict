@@ -13,8 +13,9 @@ import SquadMemories from '../components/group/SquadMemories';
 import SquadLookSheet from '../components/group/SquadLookSheet';
 import FollowButton from '../components/group/FollowButton';
 import SquadFollows from '../components/group/SquadFollows';
+import SquadVotes from '../components/group/SquadVotes';
 import SquadProfileHeader, { ACTING_ACCENT } from '../components/group/SquadProfileHeader';
-import { getFollowerIds, getFollowing } from '../services/serviceFollow';
+import { getFollowerIds, getFollowing, getOpenVotes, type FollowVote } from '../services/serviceFollow';
 import Monogram from '../components/general/Monogram';
 import IconTabs from '../components/general/IconTabs';
 import DashedDivider from '../components/general/DashedDivider';
@@ -87,6 +88,7 @@ export default function GroupScreen({
   const [actingError, setActingError] = useState<string | null>(null);
   const [opened, setOpened] = useState<Group | null>(null);
   const [followsReload, setFollowsReload] = useState(0);
+  const [votes, setVotes] = useState<FollowVote[]>([]);
   const [followCounts, setFollowCounts] = useState<{ following: number | null; followers: number | null }>({
     following: null,
     followers: null,
@@ -120,6 +122,21 @@ export default function GroupScreen({
       cancelled = true;
     };
   }, [group.id, followsReload]);
+
+  // Open votes of this squad. Outsiders get nothing back, which is fine.
+  useEffect(() => {
+    let cancelled = false;
+    getOpenVotes(group.id, userId)
+      .then(function (open) {
+        if (!cancelled) setVotes(open);
+      })
+      .catch(function () {
+        if (!cancelled) setVotes([]);
+      });
+    return function cleanup() {
+      cancelled = true;
+    };
+  }, [group.id, userId, followsReload]);
 
   async function actAsThisSquad() {
     if (actingBusy || actingId === group.id) return;
@@ -421,14 +438,27 @@ export default function GroupScreen({
                 </Pressable>
               </View>
 
-              <FollowButton key={actingId ?? 'none'} group={current} userId={userId} />
+              <FollowButton
+                key={actingId ?? 'none'}
+                group={current}
+                userId={userId}
+                onChanged={() => setFollowsReload((n) => n + 1)}
+              />
 
               {actingError ? <Text style={styles.error}>{actingError}</Text> : null}
               {error ? <Text style={styles.error}>{error}</Text> : null}
 
               <DashedDivider />
 
-              <IconTabs options={TABS} value={tab} onChange={setTab} />
+              <IconTabs
+                options={TABS.map((option) =>
+                  option.value === 'following'
+                    ? { ...option, dot: votes.some((vote) => vote.myVote === null) }
+                    : option,
+                )}
+                value={tab}
+                onChange={setTab}
+              />
 
               {tab === 'memories' ? (
                 <SquadMemories
@@ -441,7 +471,16 @@ export default function GroupScreen({
               ) : null}
 
               {tab === 'following' ? (
-                <SquadFollows group={current} reloadKey={followsReload} onOpen={setOpened} />
+                <>
+                  <SquadVotes
+                    votes={votes}
+                    members={count}
+                    userId={userId}
+                    onOpen={setOpened}
+                    onChanged={() => setFollowsReload((n) => n + 1)}
+                  />
+                  <SquadFollows group={current} reloadKey={followsReload} onOpen={setOpened} />
+                </>
               ) : null}
 
               {tab === 'members' ? (

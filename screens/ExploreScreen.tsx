@@ -27,7 +27,7 @@ import { isHappeningNow } from '../lib/datetime';
 import { useNow } from '../components/home/useNow';
 import { getGroupsForUser, searchGroups, type Group } from '../services/serviceGroup';
 import { getActingSquad } from '../services/serviceUser';
-import { followSquad, getFollowing, unfollowSquad } from '../services/serviceFollow';
+import { getFollowing, proposeFollow } from '../services/serviceFollow';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import { getCurrentCoords, type Coords, type LocationState } from '../services/serviceLocation';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
@@ -146,6 +146,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const [acting, setActing] = useState<Group | null>(null);
   const [following, setFollowing] = useState<Record<string, true>>({});
   const [followsNonce, setFollowsNonce] = useState(0);
+  const [voteNotice, setVoteNotice] = useState<string | null>(null);
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
   const [mode, setMode] = useState<ViewMode>('list');
   const [openEvent, setOpenEvent] = useState<SheetEvent | null>(null);
@@ -336,20 +337,26 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   async function toggleFollow(groupId: string) {
     if (!acting || acting.id === groupId) return;
 
-    const previous = following;
     const wasFollowing = following[groupId] === true;
-    const next = { ...following };
-    if (wasFollowing) delete next[groupId];
-    else next[groupId] = true;
-
-    setFollowing(next);
     setError(null);
+    setVoteNotice(null);
 
     try {
-      if (wasFollowing) await unfollowSquad(acting.id, groupId);
-      else await followSquad(acting.id, groupId);
+      const status = await proposeFollow(acting.id, groupId, wasFollowing ? 'unfollow' : 'follow');
+
+      if (status === 'passed') {
+        const next = { ...following };
+        if (wasFollowing) delete next[groupId];
+        else next[groupId] = true;
+        setFollowing(next);
+      } else if (status === 'open') {
+        setVoteNotice(
+          `Put to the vote in ${acting.name}. It ${wasFollowing ? 'unfollows' : 'follows'} once most members say yes.`,
+        );
+      } else {
+        setVoteNotice(`${acting.name} voted this down.`);
+      }
     } catch {
-      setFollowing(previous);
       setError('Could not update who you follow. Try again.');
     }
   }
@@ -595,6 +602,11 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
       {locationInfo(false)}
       {chipRow(false)}
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {voteNotice ? (
+        <Text style={styles.notice} accessibilityLiveRegion="polite">
+          {voteNotice}
+        </Text>
+      ) : null}
     </>
   );
 
@@ -969,6 +981,12 @@ const styles = StyleSheet.create({
   error: {
     paddingHorizontal: space.lg,
     color: colors.danger,
+    ...typo.medium,
+    fontSize: textSize.body,
+  },
+  notice: {
+    paddingHorizontal: space.lg,
+    color: colors.textSoft,
     ...typo.medium,
     fontSize: textSize.body,
   },

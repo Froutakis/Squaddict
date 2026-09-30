@@ -23,6 +23,7 @@ import SectionHead from '../components/general/SectionHead';
 import GroupFormSheet from '../components/group/GroupFormSheet';
 import YearTicket from '../components/you/YearTicket';
 import SquadGrid from '../components/you/SquadGrid';
+import { getPendingVoteCounts } from '../services/serviceFollow';
 import GroupScreen from './GroupScreen';
 import SettingsSheet from '../components/you/SettingsSheet';
 import { keyOf, parseLocal, todayLabel } from '../lib/datetime';
@@ -53,6 +54,7 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [events, setEvents] = useState<MyEvent[]>([]);
   const [unread, setUnread] = useState<Record<string, number>>({});
+  const [votes, setVotes] = useState<Record<string, number>>({});
   const [photoCount, setPhotoCount] = useState(0);
   const [actingId, setActingId] = useState<string | null>(null);
 
@@ -73,13 +75,14 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
   const load = useCallback(
     async function load() {
       try {
-        const [profile, myGroups, myEvents, counts, photos, stored] = await Promise.all([
+        const [profile, myGroups, myEvents, counts, photos, stored, waiting] = await Promise.all([
           getUserById(user.id),
           getGroupsForUser(user.id),
           getMyEvents(user.id),
           getUnreadCounts().catch(() => ({}) as Record<string, number>),
           countMyPhotos(user.id).catch(() => 0),
           getActingGroupId(user.id).catch(() => null),
+          getPendingVoteCounts(user.id).catch(() => ({}) as Record<string, number>),
         ]);
 
         setDisplayName(profile?.name ?? '');
@@ -88,6 +91,7 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
         setGroups(myGroups);
         setEvents(myEvents);
         setUnread(counts);
+        setVotes(waiting);
         setPhotoCount(photos);
         setActingId(stored);
         setError(null);
@@ -192,6 +196,7 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
               groups={groups}
               actingId={acting?.id ?? null}
               unread={unread}
+              votes={votes}
               onOpen={setProfileGroup}
               onNew={() => setGroupForm('create')}
             />

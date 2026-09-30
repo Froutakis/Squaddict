@@ -5,7 +5,8 @@ import { colors, radius, textSize, typo } from '../../theme';
 type IconName = keyof typeof Ionicons.glyphMap;
 
 type IconTabsProps<T extends string> = {
-  options: { value: T; label: string; icon: IconName; activeIcon: IconName }[];
+  // `dot` marks a tab that has something waiting for you.
+  options: { value: T; label: string; icon: IconName; activeIcon: IconName; dot?: boolean }[];
   value: T;
   onChange: (value: T) => void;
 };
@@ -23,7 +24,7 @@ export default function IconTabs<T extends string>({ options, value, onChange }:
             onPress={() => onChange(option.value)}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            accessibilityLabel={option.label}
+            accessibilityLabel={option.dot ? option.label + ', something needs you' : option.label}
             style={({ pressed }) => [styles.item, active && styles.itemActive, pressed && !active && styles.pressed]}
           >
             <Ionicons
@@ -32,6 +33,7 @@ export default function IconTabs<T extends string>({ options, value, onChange }:
               color={active ? colors.text : colors.textFaint}
             />
             <Text selectable={false} style={[styles.label, active && styles.labelActive]}>{option.label}</Text>
+            {option.dot ? <View style={styles.dot} /> : null}
           </Pressable>
         );
       })}
@@ -54,4 +56,5 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
   label: { color: colors.textFaint, ...typo.semi, fontSize: textSize.body },
   labelActive: { color: colors.text },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.accent },
 });

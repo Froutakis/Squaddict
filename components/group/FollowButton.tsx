@@ -1,30 +1,56 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Group } from '../../services/serviceGroup';
 import { getActingSquad } from '../../services/serviceUser';
-import { followSquad, isFollowing, unfollowSquad } from '../../services/serviceFollow';
+import {
+  castVote,
+  getOpenVote,
+  isFollowing,
+  proposeFollow,
+  type FollowVote,
+} from '../../services/serviceFollow';
 import { followButtonLabel } from '../../lib/follows';
+import { voteButtonLabel } from '../../lib/followVote';
 import Monogram from '../general/Monogram';
 import { colors, paper, radius, space, textSize, typo } from '../../theme';
 
 type FollowButtonProps = {
   group: Group;
   userId: string;
+  // Called when a vote opens, moves or settles.
+  onChanged?: () => void;
 };
 
-export default function FollowButton({ group, userId }: FollowButtonProps) {
+// Following is the acting squad's call, not one member's: the button puts it
+// to that squad's vote, and shows the vote while it is open.
+export default function FollowButton({ group, userId, onChanged }: FollowButtonProps) {
   const [acting, setActing] = useState<Group | null>(null);
   const [following, setFollowing] = useState<boolean | null>(null);
+  const [vote, setVote] = useState<FollowVote | null>(null);
   const [followsBack, setFollowsBack] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const readState = useCallback(
+    async function readState(mine: Group) {
+      const [out, open] = await Promise.all([
+        isFollowing(mine.id, group.id),
+        getOpenVote(mine.id, group.id, userId).catch(() => null),
+      ]);
+      return { out, open };
+    },
+    [group.id, userId],
+  );
 
   useEffect(() => {
     let cancelled = false;
     setActing(null);
     setFollowing(null);
+    setVote(null);
     setFollowsBack(false);
+    setNote(null);
     setError(null);
 
     async function load() {
@@ -32,14 +58,15 @@ export default function FollowButton({ group, userId }: FollowButtonProps) {
         const mine = await getActingSquad(userId);
         if (cancelled || !mine || mine.id === group.id) return;
 
-        const [out, back] = await Promise.all([
-          isFollowing(mine.id, group.id),
+        const [state, back] = await Promise.all([
+          readState(mine),
           isFollowing(group.id, mine.id).catch(() => false),
         ]);
         if (cancelled) return;
 
         setActing(mine);
-        setFollowing(out);
+        setFollowing(state.out);
+        setVote(state.open);
         setFollowsBack(back);
       } catch {
         // No button when the acting squad or follow state cannot be read.
@@ -51,21 +78,28 @@ export default function FollowButton({ group, userId }: FollowButtonProps) {
     return function cleanup() {
       cancelled = true;
     };
-  }, [group.id, userId]);
+  }, [group.id, userId, readState]);
 
-  async function toggle() {
+  async function press() {
     if (!acting || following === null || saving) return;
+    if (vote && vote.myVote === true) return;
 
-    const next = !following;
-    setFollowing(next);
     setSaving(true);
+    setNote(null);
     setError(null);
 
     try {
-      if (next) await followSquad(acting.id, group.id);
-      else await unfollowSquad(acting.id, group.id);
+      const status = vote
+        ? await castVote(vote.id, true)
+        : await proposeFollow(acting.id, group.id, following ? 'unfollow' : 'follow');
+
+      const state = await readState(acting);
+      setFollowing(state.out);
+      setVote(state.open);
+
+      if (status === 'rejected') setNote(`${acting.name} voted this down.`);
+      onChanged?.();
     } catch {
-      setFollowing(!next);
       setError('Could not update. Try again.');
     } finally {
       setSaving(false);
@@ -74,27 +108,47 @@ export default function FollowButton({ group, userId }: FollowButtonProps) {
 
   if (!acting || following === null) return null;
 
-  const label = followButtonLabel(following, acting.name);
+  const waiting = vote !== null && vote.myVote === true;
+  const label = vote
+    ? voteButtonLabel(vote.action, vote.myVote, vote.yes, acting.memberCount)
+    : followButtonLabel(following, acting.name);
+  const quiet = vote ? waiting : following;
+  const icon = vote ? (waiting ? 'time-outline' : 'thumbs-up-outline') : following ? 'checkmark' : 'add';
 
   return (
     <View style={styles.wrap}>
       <Pressable
-        onPress={toggle}
-        disabled={saving}
+        onPress={press}
+        disabled={saving || waiting}
         accessibilityRole="button"
         accessibilityLabel={label}
-        accessibilityState={{ checked: following, disabled: saving }}
+        accessibilityHint={
+          vote ? undefined : `Puts it to the vote in ${acting.name}`
+        }
+        accessibilityState={{ disabled: saving || waiting }}
         style={({ pressed }) => [
           styles.button,
-          following ? styles.outlined : styles.solid,
+          quiet ? styles.outlined : styles.solid,
           (pressed || saving) && styles.pressed,
         ]}
       >
-        <Ionicons name={following ? 'checkmark' : 'add'} size={15} color={following ? colors.text : '#FFFFFF'} />
-        <Text style={[styles.label, following ? styles.outlinedText : styles.solidText]} numberOfLines={1}>
+        <Ionicons name={icon} size={15} color={quiet ? colors.text : '#FFFFFF'} />
+        <Text style={[styles.label, quiet ? styles.outlinedText : styles.solidText]} numberOfLines={1}>
           {label}
         </Text>
       </Pressable>
+
+      {vote ? (
+        <Text style={styles.note}>
+          {acting.name} {vote.action === 'follow' ? 'follows' : 'unfollows'} once most members say yes.
+        </Text>
+      ) : null}
+
+      {note ? (
+        <Text style={styles.note} accessibilityLiveRegion="polite">
+          {note}
+        </Text>
+      ) : null}
 
       {followsBack ? (
         <View style={styles.back}>
@@ -139,6 +193,7 @@ const styles = StyleSheet.create({
   solidText: { color: '#FFFFFF' },
   outlinedText: { color: colors.text },
   pressed: { opacity: 0.6 },
+  note: { color: colors.textSoft, ...typo.medium, fontSize: textSize.small, textAlign: 'right' },
   back: {
     flexDirection: 'row',
     alignItems: 'center',
