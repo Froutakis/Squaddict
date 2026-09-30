@@ -1,11 +1,14 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Group } from '../../services/serviceGroup';
 import SquadTile from './SquadTile';
 import { colors, radius, space, textSize, typo } from '../../theme';
 
-type SquadGridProps = {
+// Wide enough for a name, narrow enough that the next card peeks in and says "swipe".
+const CARD = 150;
+const GAP = space.sm;
+
+type SquadSliderProps = {
   groups: Group[];
   actingId: string | null;
   unread: Record<string, number>;
@@ -13,65 +16,50 @@ type SquadGridProps = {
   onNew: () => void;
 };
 
-type Cell = { kind: 'squad'; group: Group } | { kind: 'new' };
-
-// Every squad you are in, with a last tile to start or join one. Two to a row
-// on a phone, three once there is room, so the cards never sprawl.
-const WIDE = 520;
-export default function SquadGrid({ groups, actingId, unread, onOpen, onNew }: SquadGridProps) {
-  const [columns, setColumns] = useState(2);
-  const cells: Cell[] = [...groups.map((group) => ({ kind: 'squad' as const, group })), { kind: 'new' }];
-  const rows: Cell[][] = [];
-  for (let i = 0; i < cells.length; i += columns) rows.push(cells.slice(i, i + columns));
+// Every squad you are in as a row of profile cards, the acting one first,
+// with a last card to start or join one.
+export default function SquadSlider({ groups, actingId, unread, onOpen, onNew }: SquadSliderProps) {
+  const sorted = [...groups].sort((a, b) => Number(b.id === actingId) - Number(a.id === actingId));
 
   return (
-    <View
-      style={styles.grid}
-      onLayout={(event) => setColumns(event.nativeEvent.layout.width >= WIDE ? 3 : 2)}
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      snapToInterval={CARD + GAP}
+      decelerationRate="fast"
+      contentContainerStyle={styles.row}
     >
-      {rows.map((pair, index) => (
-        <View key={index} style={styles.row}>
-          {pair.map((cell) =>
-            cell.kind === 'squad' ? (
-              <SquadTile
-                key={cell.group.id}
-                group={cell.group}
-                acting={cell.group.id === actingId}
-                unread={unread[cell.group.id] ?? 0}
-                onPress={() => onOpen(cell.group)}
-              />
-            ) : (
-              <Pressable
-                key="new"
-                onPress={onNew}
-                accessibilityRole="button"
-                accessibilityLabel="New squad: make one or join with a code"
-                style={({ pressed }) => [styles.newTile, pressed && styles.pressed]}
-              >
-                <View style={styles.plus}>
-                  <Ionicons name="add" size={18} color={colors.primary} />
-                </View>
-                <Text style={styles.newTitle}>New squad</Text>
-                <Text style={styles.newHint}>Make one or enter a code</Text>
-              </Pressable>
-            ),
-          )}
-          {Array.from({ length: columns - pair.length }).map((_, i) => (
-            <View key={'pad' + i} style={styles.spacer} />
-          ))}
+      {sorted.map((group) => (
+        <View key={group.id} style={styles.card}>
+          <SquadTile
+            group={group}
+            acting={group.id === actingId}
+            unread={unread[group.id] ?? 0}
+            onPress={() => onOpen(group)}
+          />
         </View>
       ))}
-    </View>
+
+      <Pressable
+        onPress={onNew}
+        accessibilityRole="button"
+        accessibilityLabel="New squad: make one or join with a code"
+        style={({ pressed }) => [styles.card, styles.newTile, pressed && styles.pressed]}
+      >
+        <View style={styles.plus}>
+          <Ionicons name="add" size={20} color={colors.primary} />
+        </View>
+        <Text style={styles.newTitle}>New squad</Text>
+        <Text style={styles.newHint}>Make one or enter a code</Text>
+      </Pressable>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  grid: { gap: space.sm },
-  row: { flexDirection: 'row', gap: space.sm },
-  spacer: { flex: 1 },
+  row: { gap: GAP, paddingHorizontal: space.lg, paddingVertical: 4 },
+  card: { width: CARD },
   newTile: {
-    flex: 1,
-    minHeight: 124,
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.xxs,
@@ -82,8 +70,8 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
   },
   plus: {
-    width: 34,
-    height: 34,
+    width: 38,
+    height: 38,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',

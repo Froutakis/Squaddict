@@ -73,6 +73,7 @@ export default function Map({
   onPressPin,
   onPress,
   insets,
+  fallbackCenter,
   style,
 }: MapProps) {
   const host = useRef<HTMLDivElement | null>(null);
@@ -83,7 +84,7 @@ export default function Map({
   const pressMap = useRef(onPress);
   pressMap.current = onPress;
   const framed = useRef(false);
-  const region = regionFor(pins, spanKm);
+  const region = regionFor(pins, spanKm, fallbackCenter);
   const sized = 'height' in (StyleSheet.flatten(style) ?? {}) ? null : { height };
 
   const pinsKey = pins

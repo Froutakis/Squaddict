@@ -33,6 +33,8 @@ export type MapProps = {
   onPressPin?: (id: string) => void;
   onPress?: () => void;
   insets?: { top?: number; bottom?: number };
+  // Where to look when there are no pins, so the map stays up instead of blanking.
+  fallbackCenter?: MapCoord;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -43,7 +45,8 @@ export type MapRegion = {
   longitudeDelta: number;
 };
 
-export function regionFor(pins: MapPin[], spanKm: number): MapRegion | undefined {
+export function regionFor(pins: MapPin[], spanKm: number, fallback?: MapCoord): MapRegion | undefined {
+  if (pins.length === 0 && fallback) return regionFor([{ id: 'fallback', ...fallback }], spanKm);
   if (pins.length === 0) return undefined;
 
   let minLat = pins[0].lat;

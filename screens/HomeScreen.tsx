@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import type { Group } from '../services/serviceGroup';
 import type { EventCover, MyEvent, RsvpStatus } from '../services/serviceEvents';
-import { getActingGroupId, getUserById } from '../services/serviceUser';
+import { getActingGroupId, getUserById, setActingGroup } from '../services/serviceUser';
 import { pickActing } from '../lib/acting';
 import { getGroupsForUser } from '../services/serviceGroup';
 import { getPareaGoing, type PareaGoing } from '../services/serviceFeed';
@@ -275,6 +275,12 @@ export default function HomeScreen({
       cancelled = true;
     };
   }, [groups, groupId, user.id]);
+
+  // The squad picked in the header is the one you act as, everywhere.
+  function chooseSquad(id: string | null) {
+    setGroupId(id);
+    if (id) setActingGroup(user.id, id).catch(() => {});
+  }
 
   function applyRsvp(list: MyEvent[], eventId: string, status: RsvpStatus | null): MyEvent[] {
     return list.map(function (event) {
@@ -743,7 +749,7 @@ export default function HomeScreen({
           avatarUrl={avatarUrl}
           groups={groups}
           groupId={groupId}
-          onGroupSelect={setGroupId}
+          onGroupSelect={chooseSquad}
           onChat={onOpenChat}
           onPlan={() => openNewEvent(null)}
           chatUnread={groupId ? unread[groupId] ?? 0 : 0}

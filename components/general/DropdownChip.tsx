@@ -16,6 +16,8 @@ type DropdownChipProps<T extends string> = {
   options: Option<T>[];
   placeholder: string;
   icon?: keyof typeof Ionicons.glyphMap;
+  // Off for a setting that always has a value: no "placeholder" row, no highlight.
+  clearable?: boolean;
   onChange: (value: T | null) => void;
 };
 
@@ -24,6 +26,7 @@ export default function DropdownChip<T extends string>({
   options,
   placeholder,
   icon,
+  clearable = true,
   onChange,
 }: DropdownChipProps<T>) {
   const anchor = useRef<View>(null);
@@ -43,7 +46,7 @@ export default function DropdownChip<T extends string>({
     onChange(next);
   }
 
-  const rows: Option<T | ''>[] = [{ key: '', label: placeholder }, ...options];
+  const rows: Option<T | ''>[] = clearable ? [{ key: '', label: placeholder }, ...options] : options;
 
   return (
     <View ref={anchor} collapsable={false}>
@@ -51,7 +54,7 @@ export default function DropdownChip<T extends string>({
         label={selected?.label ?? placeholder}
         icon={icon}
         trailingIcon={menu ? 'chevron-up' : 'chevron-down'}
-        active={selected !== undefined}
+        active={clearable && selected !== undefined}
         onPress={open}
       />
 

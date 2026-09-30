@@ -42,9 +42,10 @@ export default function Map({
   onPressPin,
   onPress,
   insets,
+  fallbackCenter,
   style,
 }: MapProps) {
-  const region = regionFor(pins, spanKm);
+  const region = regionFor(pins, spanKm, fallbackCenter);
 
   if (region === undefined) {
     return (

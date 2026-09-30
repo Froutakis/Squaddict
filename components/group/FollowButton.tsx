@@ -11,9 +11,11 @@ import { colors, paper, radius, space, textSize, typo } from '../../theme';
 type FollowButtonProps = {
   group: Group;
   userId: string;
+  // Full width, for a row of its own under the profile buttons.
+  block?: boolean;
 };
 
-export default function FollowButton({ group, userId }: FollowButtonProps) {
+export default function FollowButton({ group, userId, block = false }: FollowButtonProps) {
   const [acting, setActing] = useState<Group | null>(null);
   const [following, setFollowing] = useState<boolean | null>(null);
   const [followsBack, setFollowsBack] = useState(false);
@@ -77,7 +79,7 @@ export default function FollowButton({ group, userId }: FollowButtonProps) {
   const label = followButtonLabel(following, acting.name);
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, block && styles.wrapBlock]}>
       <Pressable
         onPress={toggle}
         disabled={saving}
@@ -86,7 +88,9 @@ export default function FollowButton({ group, userId }: FollowButtonProps) {
         accessibilityState={{ checked: following, disabled: saving }}
         style={({ pressed }) => [
           styles.button,
+          block && styles.buttonBlock,
           following ? styles.outlined : styles.solid,
+          block && !following && styles.solidBlock,
           (pressed || saving) && styles.pressed,
         ]}
       >
@@ -124,6 +128,9 @@ export default function FollowButton({ group, userId }: FollowButtonProps) {
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'flex-end', gap: space.xxs, maxWidth: '100%' },
+  wrapBlock: { alignItems: 'center' },
+  buttonBlock: { alignSelf: 'stretch', justifyContent: 'center', height: 40 },
+  solidBlock: { backgroundColor: colors.primary },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
