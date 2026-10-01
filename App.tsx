@@ -20,6 +20,7 @@ import {
   registerForPush,
   showNotificationsInForeground,
 } from './services/serviceNotifications';
+import { features } from './lib/features';
 
 showNotificationsInForeground();
 
@@ -191,7 +192,7 @@ export default function App() {
   return (
     <View style={styles.app}>
       <View style={styles.body}>
-        {screen === 'explore' ? (
+        {screen === 'explore' && features.explore ? (
           <ExploreScreen userId={user.id} />
         ) : screen === 'you' ? (
           <YouScreen user={user} onPlan={() => goHome('plan')} />

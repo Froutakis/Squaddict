@@ -29,6 +29,8 @@ type PhotoFeedProps = {
   reloadKey: number;
   onOpenNight: (item: FeedPhoto) => void;
   onOpenGroup: (group: Group) => void;
+  // Whether a parea's page can be opened at all; when not, its name is just a label.
+  canOpenGroup?: (group: Group) => boolean;
   // Shown once the feed has loaded and there is nothing in it.
   empty?: ReactNode;
 };
@@ -45,6 +47,7 @@ export default function PhotoFeed({
   onOpenNight,
   onOpenGroup,
   empty = null,
+  canOpenGroup = () => true,
 }: PhotoFeedProps) {
   const [items, setItems] = useState<FeedPhoto[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -131,7 +134,7 @@ export default function PhotoFeed({
             userId={me.id}
             onReact={(emoji) => react(item.photo.id, emoji)}
             onOpenNight={() => onOpenNight(item)}
-            onOpenGroup={() => onOpenGroup(item.group)}
+            onOpenGroup={canOpenGroup(item.group) ? () => onOpenGroup(item.group) : undefined}
             onShowReactors={() => setReactorsOf(item.photo.id)}
             onImageError={() => onImageError(item.photo.path)}
           />

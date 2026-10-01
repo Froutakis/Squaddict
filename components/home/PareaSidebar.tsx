@@ -6,6 +6,7 @@ import type { Group } from '../../services/serviceGroup';
 import Monogram from '../general/Monogram';
 import Glass from '../general/Glass';
 import { colors, radius, space, sun, textSize, typo } from '../../theme';
+import { features } from '../../lib/features';
 
 const RAIL = 68;
 const RAIL_RADIUS = 28;
@@ -131,7 +132,7 @@ export default function PareaSidebar({
     { key: 'events', label: 'Plans', icon: 'ticket-outline', onPress: onEvents },
     { key: 'chat', label: 'Chat', icon: 'chatbubble-outline', badge: chatUnread, onPress: onChat },
     { key: 'calendar', label: 'Calendar', icon: 'calendar-outline', onPress: onCalendar },
-    { key: 'explore', label: 'Explore', icon: 'map-outline', onPress: onExplore },
+    ...(features.explore ? [{ key: 'explore', label: 'Explore', icon: 'map-outline' as IconName, onPress: onExplore }] : []),
     { key: 'voice', label: 'Voice', icon: 'mic-outline', soon: true },
   ];
 

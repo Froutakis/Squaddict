@@ -61,6 +61,7 @@ import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import { useLiveLocations } from '../components/events/useLiveLocations';
 import EventFormSheet from '../components/events/EventFormSheet';
 import GroupFormSheet from '../components/group/GroupFormSheet';
+import { features } from '../lib/features';
 
 const RENEW_TICK_MS = 5 * 60 * 1000;
 // Coming back to the app refreshes the week, at most once a minute.
@@ -405,7 +406,10 @@ export default function HomeScreen({
   );
   const heroEvent = liveEvent ?? upNextEvent;
   const sharingEvent = liveEvent?.myStatus === 'in' ? liveEvent : undefined;
-  const livePeople = useLiveLocations(sharingEvent?.id, { id: user.id, name: displayName });
+  const livePeople = useLiveLocations(features.liveLocation ? sharingEvent?.id : undefined, {
+    id: user.id,
+    name: displayName,
+  });
   const pool = upcoming.filter((e) => e.id !== heroEvent?.id);
   const waiting = pool.filter((e) => e.myStatus === undefined);
   const clockNow = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -541,15 +545,17 @@ export default function HomeScreen({
 
     return (
       <>
-        <MemoriesBar
-          userId={user.id}
-          nights={nights}
-          groupSizes={groupSizes}
-          signed={signed}
-          signPaths={signPaths}
-          onImageError={dropSigned}
-          onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
-        />
+        {features.extraMemoryViews ? (
+          <MemoriesBar
+            userId={user.id}
+            nights={nights}
+            groupSizes={groupSizes}
+            signed={signed}
+            signPaths={signPaths}
+            onImageError={dropSigned}
+            onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
+          />
+        ) : null}
 
         {wantsPhoto ? (
           <View style={styles.body}>
@@ -577,6 +583,7 @@ export default function HomeScreen({
             reloadKey={photoNonce}
             onOpenNight={openFeedNight}
             onOpenGroup={setProfileGroup}
+            canOpenGroup={(group) => features.publicProfiles || groups.some((mine) => mine.id === group.id)}
             empty={
               <View style={styles.state}>
                 <Text style={styles.stateTitle}>No memories yet</Text>

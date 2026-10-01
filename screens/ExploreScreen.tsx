@@ -50,6 +50,7 @@ import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
 import { FAB_CENTER_Y, FAB_INSET } from '../components/general/MenuFab';
+import { features } from '../lib/features';
 
 const RADII = [5, 10, 25, 50, 100];
 // Where the map looks before we know where you are: Thessaloniki.
@@ -162,7 +163,8 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   // The map is the front page of Explore; the list is one tap away.
   const [mode, setMode] = useState<ViewMode>('map');
   // What the map shows: open plans, or the people and pareas out right now.
-  const [layer, setLayer] = useState<'plans' | 'people'>('plans');
+  const [chosenLayer, setLayer] = useState<'plans' | 'people'>('plans');
+  const layer = features.liveLocation ? chosenLayer : 'plans';
   const [myEvents, setMyEvents] = useState<MyEvent[]>([]);
   const [myName, setMyName] = useState('');
   const [mapSearching, setMapSearching] = useState(false);
@@ -502,7 +504,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const sharingIds = myEvents
     .filter((event) => event.myStatus === 'in' && isHappeningNow(event.date, event.startTime, event.endTime, now))
     .map((event) => event.id);
-  const livePeople = useLivePeopleAround(sharingIds, { id: userId, name: myName });
+  const livePeople = useLivePeopleAround(features.liveLocation ? sharingIds : [], { id: userId, name: myName });
 
   // Pareas: yours and the ones you follow, at the place of their current or next plan.
   const pareaPins = useMemo(() => {
@@ -531,7 +533,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   }, [myEvents, events, following]);
 
   const peoplePins: MapPin[] = [
-    ...pareaPins,
+    ...(features.publicProfiles ? pareaPins : []),
     ...livePeople.map((person) => ({
       id: `person-${person.id}`,
       lat: person.lat,
@@ -730,12 +732,14 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
             onChange={setWhen}
           />
         )}
-        <Chip
-          label="Following"
-          icon={followingOnly ? 'heart' : 'heart-outline'}
-          active={followingOnly}
-          onPress={() => setFollowingOnly(!followingOnly)}
-        />
+        {features.squadFollows ? (
+          <Chip
+            label="Following"
+            icon={followingOnly ? 'heart' : 'heart-outline'}
+            active={followingOnly}
+            onPress={() => setFollowingOnly(!followingOnly)}
+          />
+        ) : null}
         {EVENT_TAGS.map((tag) => (
           <Chip
             key={tag}
@@ -767,7 +771,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
     <View style={styles.header}>
       {controls}
 
-      {search === '' && !liveOnly ? (
+      {features.extraMemoryViews && search === '' && !liveOnly ? (
         <MemoriesBar
           userId={userId}
           scope="explore"
@@ -825,13 +829,13 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
                   following={following[group.id] === true}
                   member={myGroupIds.has(group.id)}
                   onPress={() => openProfile(group)}
-                  onFollow={followHandler(group.id)}
+                  onFollow={features.squadFollows ? followHandler(group.id) : undefined}
                 />
               ))}
             </ScrollView>
           </View>
         ) : null
-      ) : groups.length > 0 ? (
+      ) : groups.length > 0 && features.publicProfiles ? (
         <View>
           <SectionHead title="Pareas you crossed" meta="Where you met" />
           <ScrollView
@@ -846,7 +850,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
                 following={following[group.id] === true}
                 member={myGroupIds.has(group.id)}
                 onPress={() => openProfile(group)}
-                onFollow={followHandler(group.id)}
+                onFollow={features.squadFollows ? followHandler(group.id) : undefined}
               />
             ))}
           </ScrollView>
@@ -952,7 +956,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
               ) : (
                 <>
                   {titleRow(true)}
-                  {layerSwitch()}
+                  {features.liveLocation ? layerSwitch() : null}
                   {layer === 'plans' ? locationInfo(true) : null}
                 </>
               )}
@@ -968,7 +972,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
               ) : null}
             </Glass>
 
-            {mapSearching && foundGroups.length > 0 ? (
+            {mapSearching && foundGroups.length > 0 && features.publicProfiles ? (
               <Glass radius={radius.lg} style={styles.chipIsland}>
                 <ScrollView
                   horizontal

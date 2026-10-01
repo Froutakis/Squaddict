@@ -42,7 +42,8 @@ type PhotoPostProps = {
   userId: string;
   onReact: (emoji: string) => void;
   onOpenNight: () => void;
-  onOpenGroup: () => void;
+  // Absent when the parea's page can't be opened: the header is then just a label.
+  onOpenGroup?: () => void;
   onShowReactors: () => void;
   onImageError: () => void;
 };
@@ -97,9 +98,10 @@ export default function PhotoPost({
     <View style={styles.post}>
       <Pressable
         onPress={onOpenGroup}
-        accessibilityRole="button"
-        accessibilityLabel={`Open ${item.group.name}`}
-        style={({ pressed }) => [styles.head, pressed && styles.pressed]}
+        disabled={!onOpenGroup}
+        accessibilityRole={onOpenGroup ? 'button' : undefined}
+        accessibilityLabel={onOpenGroup ? `Open ${item.group.name}` : undefined}
+        style={({ pressed }) => [styles.head, pressed && onOpenGroup && styles.pressed]}
       >
         <Monogram name={item.group.name} uri={item.group.avatarUrl} size={36} style={styles.avatar} />
         <View style={styles.headText}>

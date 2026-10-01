@@ -39,6 +39,7 @@ import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import PublicProfile from '../components/group/PublicProfile';
 import { FAB_CENTER_Y, FAB_INSET } from '../components/general/MenuFab';
+import { features } from '../lib/features';
 
 type Member = {
   id: string;
@@ -48,11 +49,12 @@ type Member = {
 
 type Tab = 'memories' | 'following' | 'members';
 
-const TABS = [
+const ALL_TABS = [
   { value: 'memories' as const, label: 'Memories', icon: 'grid-outline' as const, activeIcon: 'grid' as const },
   { value: 'following' as const, label: 'Following', icon: 'compass-outline' as const, activeIcon: 'compass' as const },
   { value: 'members' as const, label: 'Members', icon: 'people-outline' as const, activeIcon: 'people' as const },
 ];
+const TABS = ALL_TABS.filter((option) => option.value !== 'following' || features.squadFollows);
 
 type GroupScreenProps = {
   group: Group;
@@ -372,7 +374,7 @@ export default function GroupScreen({
   }
 
   // People outside the squad get its public profile instead.
-  if (!loading && !member) {
+  if (!loading && !member && features.publicProfiles) {
     return (
       <>
         <PublicProfile
@@ -380,7 +382,7 @@ export default function GroupScreen({
           plans={plans}
           savingId={savingId}
           error={error}
-          followAction={<FollowButton group={current} userId={userId} />}
+          followAction={features.squadFollows ? <FollowButton group={current} userId={userId} /> : undefined}
           onBack={onBack}
           onAnswer={answer}
           onOpenPlan={openSheet}
@@ -449,16 +451,18 @@ export default function GroupScreen({
                   </Pressable>
                 )}
 
-                <Pressable
-                  onPress={() => setEditing(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Edit look"
-                  style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-                >
-                  <Text style={styles.buttonText} numberOfLines={1}>
-                    Edit look
-                  </Text>
-                </Pressable>
+                {features.squadLookEditing ? (
+                  <Pressable
+                    onPress={() => setEditing(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit look"
+                    style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.buttonText} numberOfLines={1}>
+                      Edit look
+                    </Text>
+                  </Pressable>
+                ) : null}
 
                 <Pressable
                   onPress={shareInvite}
@@ -472,12 +476,14 @@ export default function GroupScreen({
                 </Pressable>
               </View>
 
-              <FollowButton
-                key={actingId ?? 'none'}
-                group={current}
-                userId={userId}
-                onChanged={() => setFollowsReload((n) => n + 1)}
-              />
+              {features.squadFollows ? (
+                <FollowButton
+                  key={actingId ?? 'none'}
+                  group={current}
+                  userId={userId}
+                  onChanged={() => setFollowsReload((n) => n + 1)}
+                />
+              ) : null}
 
               {actingError ? <Text style={styles.error}>{actingError}</Text> : null}
               {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -504,7 +510,7 @@ export default function GroupScreen({
                 />
               ) : null}
 
-              {tab === 'following' ? (
+              {tab === 'following' && features.squadFollows ? (
                 <>
                   <SquadVotes
                     votes={votes}
@@ -617,7 +623,7 @@ export default function GroupScreen({
       </View>
 
       <SquadLookSheet
-        visible={editing}
+        visible={editing && features.squadLookEditing}
         group={current}
         onClose={function () {
           setEditing(false);
