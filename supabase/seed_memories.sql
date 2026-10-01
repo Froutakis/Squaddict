@@ -155,6 +155,118 @@ begin
   end loop;
 end $$;
 
+-- MVPS at the centre: its feed gets every kind of post. Its own nights with
+-- our photos, 7 demo squads followed (their memories public), and its
+-- members at public nights of the other 5 ("… was there"). Skipped, with a
+-- notice, when there is no squad called MVPS.
+do $$
+declare
+  target text := 'MVPS';
+  mvps uuid;
+  squads uuid[] := array(select md5('squaddict-more-squad-' || n)::uuid from generate_series(1, 12) n);
+  members uuid[];
+  emojis text[] := array['🔥', '😂', '😍', '🍻'];
+  base    text   := (select substring(min(path) from '^(.*/memories-demo/)')
+                       from public.event_photos where path like '%/memories-demo/%');
+  files   text[];
+  widths  int[];
+  heights int[];
+  titles  text[] := array['Τσιπουράκια στην Κυψέλη', 'Σπίτι Φουτάκη', 'Μπύρες στο Μπιτ Παζάρ', 'Ηλιοβασίλεμα στην Παραλία',
+                          'Πλανόδιο σινεμά', 'Βόλτα στην Άνω Πόλη', 'Γενέθλια στο ταράτσα', 'Μπάσκετ και σουβλάκια'];
+  places  text[] := array['Κυψέλη', 'Σπίτι Φουτάκη', 'Μπιτ Παζάρ', 'Νέα Παραλία', 'Αλλατίνη', 'Άνω Πόλη', 'Ταράτσα', 'Καλαμαριά'];
+  tags    text[] := array['food', 'drinks', 'drinks', 'outdoors', 'culture', 'outdoors', 'drinks', 'sports'];
+  days    int[]  := array[2, 5, 9, 13, 17, 22, 27, 33];
+  night_id uuid;
+  photo_id uuid;
+  pick int;
+  night record;
+begin
+  select g.id into mvps from public.groups g where lower(g.name) = lower(target) order by g.created_at limit 1;
+  if mvps is null then
+    raise notice 'No squad called %: skipped the MVPS part.', target;
+    return;
+  end if;
+  if base is null then
+    raise notice 'No demo photos yet: skipped the MVPS part.';
+    return;
+  end if;
+
+  select array_agg(m.user_id order by m.joined_at) into members from public.group_members m where m.group_id = mvps;
+
+  -- The photo list, taken from what the part above already used.
+  select array_agg(f order by f), array_agg(w order by f), array_agg(h order by f)
+    into files, widths, heights
+    from (select distinct substring(path from '/memories-demo/(.*)$') f, width w, height h
+            from public.event_photos where path like '%/memories-demo/%') x;
+
+  -- What an earlier run made for MVPS (photos, RSVPs and reactions go with the nights).
+  delete from public.events where id in (select md5('squaddict-mvps-night-' || n)::uuid from generate_series(1, 8) n);
+  delete from public.squad_follows where follower_group_id = mvps and created_at = '2001-01-01 00:00:00+00';
+
+  -- Its own nights, half of them public, each with photos and reactions.
+  for n in 1..8 loop
+    night_id := md5('squaddict-mvps-night-' || n)::uuid;
+
+    insert into public.events
+      (id, group_id, created_by, title, date, start_time, end_time, location, place_label,
+       lat, lng, tags, is_public, created_at)
+    values
+      (night_id, mvps, members[1 + (n - 1) % array_length(members, 1)], titles[n], current_date - days[n],
+       '21:00', '23:59', places[n], places[n],
+       40.62 + (n % 4) * 0.006, 22.94 + (n % 3) * 0.008, array[tags[n]], n % 2 = 0,
+       now() - (days[n] + 3) * interval '1 day');
+
+    insert into public.event_attendees (event_id, user_id, status)
+    select night_id, u, 'in' from unnest(members) u
+    on conflict do nothing;
+
+    for p in 1..(3 + n % 4) loop
+      photo_id := md5('squaddict-mvps-photo-' || n || '-' || p)::uuid;
+      pick := 1 + ((n * 7 + p * 3) % array_length(files, 1));
+
+      insert into public.event_photos (id, event_id, user_id, path, width, height, created_at)
+      values (photo_id, night_id, members[1 + (p - 1) % array_length(members, 1)],
+              base || files[pick], widths[pick], heights[pick],
+              (current_date - days[n]) + time '21:30' + p * interval '19 minutes');
+
+      insert into public.photo_reactions (photo_id, user_id, group_id, emoji, created_at)
+      select photo_id, u, mvps, emojis[1 + (get_byte(decode(md5(photo_id::text || u::text), 'hex'), 0) % 4)],
+             (current_date - days[n]) + interval '1 day'
+        from unnest(members) u
+       where get_byte(decode(md5(photo_id::text || u::text), 'hex'), 1) % 3 <> 0
+      on conflict do nothing;
+    end loop;
+  end loop;
+
+  -- MVPS follows 7 demo squads, and their memories are open to followers.
+  insert into public.squad_follows (follower_group_id, followed_group_id, created_by, created_at)
+  select mvps, g, members[1], '2001-01-01 00:00:00+00' from unnest(squads[1:7]) g
+   where g <> mvps
+  on conflict do nothing;
+  update public.groups set memories_public = true where id = any(squads);
+
+  -- MVPS people at public nights of the squads it doesn't follow ("… was there").
+  for night in
+    select e.id
+      from public.events e
+     where e.group_id = any(squads[8:12])
+       and e.is_public
+       and e.date between current_date - 40 and current_date - 1
+       and exists (select 1 from public.event_photos p where p.event_id = e.id)
+     order by md5(e.id::text || 'mvps')
+     limit 10
+  loop
+    insert into public.event_attendees (event_id, user_id, status, updated_at)
+    select night.id, u, 'in', '2001-01-01 00:00:00+00'
+      from unnest(members) u
+     order by md5(u::text || night.id::text)
+     limit 2
+    on conflict (event_id, user_id) do nothing;
+  end loop;
+
+  raise notice 'MVPS: 8 nights with photos, follows 7 squads, at 10 public nights of others.';
+end $$;
+
 -- What it made.
 select
   (select count(*) from public.event_photos where path like '%/memories-demo/%')        as photos,
@@ -166,6 +278,9 @@ select
 
 commit;
 
--- Cleanup: removes the photos (with their reactions) and the guest RSVPs this made.
+-- Cleanup: removes the photos (with their reactions), the guest RSVPs, and
+-- the MVPS nights and follows this made.
 -- delete from public.event_photos    where path like '%/storage/v1/object/public/squads/memories-demo/%';
 -- delete from public.event_attendees where updated_at = '2001-01-01 00:00:00+00';
+-- delete from public.events         where id in (select md5('squaddict-mvps-night-' || n)::uuid from generate_series(1, 8) n);
+-- delete from public.squad_follows  where created_at = '2001-01-01 00:00:00+00';

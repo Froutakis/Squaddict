@@ -18,8 +18,8 @@ export type FeedPhoto = {
 
 type Night = { id: string; reason: FeedReason; via: string | null };
 
-const NIGHTS = 40;
-const PHOTOS = 80;
+const NIGHTS = 120;
+const PHOTOS = 600;
 // One post per night: the feed is about the memory, not every photo in it.
 const PER_NIGHT = 1;
 
