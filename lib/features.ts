@@ -15,4 +15,6 @@ export const features = {
   squadLookEditing: false,
   // Memories anywhere but the feed: "Nights filed", "Last nights out".
   extraMemoryViews: false,
+  // Voice rooms in the rail. Not built yet.
+  voice: false,
 };

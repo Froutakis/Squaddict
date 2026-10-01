@@ -33,6 +33,8 @@ type Tool = {
   key: string;
   label: string;
   icon: IconName;
+  // The filled icon, for the screen you are on.
+  iconOn?: IconName;
   badge?: number;
   // The one action worth a colour: making a plan.
   primary?: boolean;
@@ -62,8 +64,9 @@ type PareaSidebarProps = {
 };
 
 // The side rail, the app's only menu: a floating column of icons down the left
-// edge. Your pareas on top, the tools of the current one below, Explore, and
-// you at the bottom. Hold any icon to see what it is.
+// edge. Your pareas on top; then the screens (Memories, Plans, Explore), with
+// the one you are on marked; then the tools of the current parea; you at the
+// bottom. Hold any icon to see what it is.
 export default function PareaSidebar({
   visible,
   squads,
@@ -129,15 +132,51 @@ export default function PareaSidebar({
   // The current parea goes first, so it is always one of the three in view.
   const ordered = active ? [active, ...squads.filter((squad) => squad.id !== active.id)] : squads;
   const chatUnread = activeId ? unread[activeId] ?? 0 : 0;
+  // Where you go: one of these is always the screen you are on.
+  const screens: Tool[] = [
+    { key: 'home', label: 'Memories', icon: 'images-outline', iconOn: 'images', onPress: onHome },
+    { key: 'events', label: 'Plans', icon: 'ticket-outline', iconOn: 'ticket', onPress: onEvents },
+    ...(features.explore
+      ? [{ key: 'explore', label: 'Explore', icon: 'map-outline' as IconName, iconOn: 'map' as IconName, onPress: onExplore }]
+      : []),
+  ];
+  // What you do in the current parea.
   const tools: Tool[] = [
     { key: 'plan', label: 'New plan', icon: 'add', primary: true, onPress: onPlan },
-    { key: 'home', label: 'Memories', icon: 'images-outline', onPress: onHome },
-    { key: 'events', label: 'Plans', icon: 'ticket-outline', onPress: onEvents },
     { key: 'chat', label: 'Chat', icon: 'chatbubble-outline', badge: chatUnread, onPress: onChat },
     { key: 'calendar', label: 'Calendar', icon: 'calendar-outline', onPress: onCalendar },
-    ...(features.explore ? [{ key: 'explore', label: 'Explore', icon: 'map-outline' as IconName, onPress: onExplore }] : []),
-    { key: 'voice', label: 'Voice', icon: 'mic-outline', soon: true },
+    ...(features.voice ? [{ key: 'voice', label: 'Voice', icon: 'mic-outline' as IconName, soon: true }] : []),
   ];
+
+  function renderTool(tool: Tool) {
+    const here = tool.key === current;
+    const held = label?.key === tool.key && !here;
+    const soonLabel = `${tool.label} · coming soon`;
+    return (
+      <RailButton
+        key={tool.key}
+        labelKey={tool.key}
+        label={tool.soon ? soonLabel : active && tool.key === 'chat' ? `${tool.label} · ${active.name}` : tool.label}
+        extra={tool.badge ? `${tool.badge} new` : undefined}
+        onPress={tool.onPress}
+        tapShowsLabel={tool.soon}
+        onHold={showLabel}
+        accessibilityState={here ? { selected: true } : undefined}
+        accessibilityLabel={`${tool.label}${here ? ', you are here' : ''}${tool.soon ? ', coming soon' : ''}${tool.badge ? `, ${tool.badge} unread` : ''}`}
+      >
+        {here ? <View style={styles.current} /> : null}
+        <View style={[styles.tool, tool.primary && styles.toolPrimary, here && styles.toolHere, held && styles.toolHeld]}>
+          <Ionicons
+            name={here && tool.iconOn ? tool.iconOn : tool.icon}
+            size={22}
+            color={tool.primary ? colors.onInk : here ? colors.ink : colors.text}
+          />
+        </View>
+        {tool.badge ? <Badge count={tool.badge} style={styles.toolBadge} /> : null}
+        {tool.soon ? <View style={styles.soonDot} /> : null}
+      </RailButton>
+    );
+  }
 
   const translateX = slide.interpolate({ inputRange: [0, 1], outputRange: [-(RAIL + space.md), 0] });
 
@@ -150,8 +189,6 @@ export default function PareaSidebar({
       <SafeAreaView style={styles.safe} pointerEvents="box-none">
         <Animated.View style={[styles.rail, { transform: [{ translateX }] }]}>
           <Glass radius={RAIL_RADIUS} sheen="rgba(255,255,255,0.82)" style={styles.glass}>
-            <Text style={styles.caption}>PAREAS</Text>
-
             {/* Up to three pareas show; the rest scroll inside this box. */}
             <ScrollView
               style={styles.squadList}
@@ -210,34 +247,10 @@ export default function PareaSidebar({
             </RailButton>
 
             <View style={styles.sep} />
+            {screens.map(renderTool)}
 
-            {tools.map((tool) => {
-              // Memories, Plans and Explore are screens: the one you are on stays marked.
-              const held = label?.key === tool.key || tool.key === current;
-              const soonLabel = `${tool.label} · coming soon`;
-              return (
-                <RailButton
-                  key={tool.key}
-                  labelKey={tool.key}
-                  label={tool.soon ? soonLabel : active && tool.key === 'chat' ? `${tool.label} · ${active.name}` : tool.label}
-                  extra={tool.badge ? `${tool.badge} new` : undefined}
-                  onPress={tool.onPress}
-                  tapShowsLabel={tool.soon}
-                  onHold={showLabel}
-                  accessibilityLabel={tool.soon ? `${tool.label}, coming soon` : tool.badge ? `${tool.label}, ${tool.badge} unread` : tool.label}
-                >
-                  <View style={[styles.tool, tool.primary && styles.toolPrimary, held && !tool.primary && styles.toolHeld]}>
-                    <Ionicons
-                      name={tool.icon}
-                      size={22}
-                      color={tool.primary || held ? colors.onInk : colors.text}
-                    />
-                  </View>
-                  {tool.badge ? <Badge count={tool.badge} style={styles.toolBadge} /> : null}
-                  {tool.soon ? <View style={styles.soonDot} /> : null}
-                </RailButton>
-              );
-            })}
+            <View style={styles.sep} />
+            {tools.map(renderTool)}
 
             <View style={styles.spacer} />
             <View style={styles.sep} />
@@ -351,13 +364,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 40,
   },
-  caption: { color: colors.textSoft, ...typo.mono, fontSize: 9, letterSpacing: 1.2 },
   button: { width: BUTTON, height: BUTTON, alignItems: 'center', justifyContent: 'center' },
-  pressed: { opacity: 0.6 },
+  // A press sinks the button a little, like a real key.
+  pressed: { transform: [{ scale: 0.9 }] },
   // As wide as the rail, so the current-parea bar at its edge is not cut off.
   squadList: { width: RAIL, maxHeight: SQUADS_HEIGHT, flexGrow: 0 },
   squads: { alignItems: 'center', gap: GAP },
-  // The bar that marks the parea you are in, against the rail's edge.
+  // The bar that marks the parea and the screen you are on, against the rail's edge.
   current: {
     position: 'absolute',
     left: -(RAIL - BUTTON) / 2,
@@ -397,8 +410,10 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 6,
   },
-  // The tool whose label is showing.
-  toolHeld: { backgroundColor: colors.ink },
+  // The screen you are on: a soft fill and the filled icon.
+  toolHere: { backgroundColor: colors.surfaceAlt },
+  // The icon whose label is showing.
+  toolHeld: { backgroundColor: 'rgba(12,25,38,0.06)' },
   toolBadge: { right: -3, top: -3 },
   soonDot: {
     position: 'absolute',
