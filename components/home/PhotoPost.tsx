@@ -198,6 +198,7 @@ function whyLabel(reason: FeedReason, via: string | null): string | null {
     case 'following':
       return 'Following';
     case 'member_went':
+      if (via === 'you') return 'You were there';
       return via ? `${firstWord(via)} was there` : 'One of you was there';
     case 'followed_went':
       return via ? `${via} went` : 'A parea you follow went';

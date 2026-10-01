@@ -42,7 +42,8 @@ create policy "read public night photo files" on storage.objects
 --   similar        a public night with the same tags as your recent nights
 --   public         any other public night
 -- Only nights that have photos. Other pareas' nights reach back 60 days.
--- `via` names who links you to it: the member, the parea, or the tag.
+-- `via` names who links you to it: the member ('you' when it was only you),
+-- the parea, or the tag.
 create or replace function public.feed_nights(p_group uuid, p_limit int default 60)
 returns table (event_id uuid, reason text, via text, night date)
 language sql stable security definer set search_path to 'public' as $function$
@@ -82,7 +83,8 @@ language sql stable security definer set search_path to 'public' as $function$
      where e.is_public or g.memories_public
 
     union all
-    select e.id, 'member_went', min(pr.display_name), e.date, 3
+    select e.id, 'member_went',
+           coalesce(min(pr.display_name) filter (where a.user_id <> auth.uid()), 'you'), e.date, 3
       from with_photos e
       join event_attendees a on a.event_id = e.id and a.status = 'in'
       join members m on m.user_id = a.user_id
