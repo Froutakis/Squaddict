@@ -31,6 +31,7 @@ import { pastNights, topBy, weekStreak } from '../lib/stats';
 import { ticketCode } from '../lib/ticket';
 import { pickActing } from '../lib/acting';
 import { colors, layout, radius, space, textSize, typo } from '../theme';
+import { FAB_INSET } from '../components/general/MenuFab';
 
 const AVATAR_SIZE = 76;
 
@@ -336,7 +337,8 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: space.lg },
   loader: { marginTop: space.xl },
 
-  header: { paddingHorizontal: space.lg, paddingTop: space.xs, gap: space.sm },
+  // Starts right of the floating menu button.
+  header: { paddingLeft: FAB_INSET, paddingRight: space.lg, paddingTop: space.xs, gap: space.sm },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   date: {
     color: colors.textFaint,

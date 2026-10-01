@@ -5,6 +5,7 @@ import { Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-na
 import type { MyEvent } from '../services/serviceEvents';
 import { addMonths, keyOf, monthGrid } from '../lib/datetime';
 import { colors, layout, radius, solidFor, space, textSize, typo } from '../theme';
+import { FAB_CENTER_Y, FAB_INSET } from '../components/general/MenuFab';
 
 type CalendarScreenProps = {
   // The squad whose month this is, shown under the month.
@@ -19,7 +20,7 @@ type CalendarScreenProps = {
 const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 // How many plans a day names before it says "+2".
 const MAX_TITLES = 2;
-// Room for the tab bar that floats over the bottom of the page.
+// Room at the bottom so the last item can scroll clear.
 const NAV_CLEARANCE = 96;
 
 function sameMonth(a: Date, b: Date) {
@@ -196,12 +197,15 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
   fill: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
 
+  // Starts right of the floating menu button, level with it.
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: space.xs,
+    paddingLeft: FAB_INSET - space.xs,
+    paddingRight: space.xs,
     height: 48,
+    marginTop: FAB_CENTER_Y - 24,
   },
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingRight: space.sm, minHeight: 44 },
   backText: { color: colors.text, ...typo.semi, fontSize: textSize.lead },

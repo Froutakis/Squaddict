@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Group } from '../../services/serviceGroup';
 import {
@@ -29,6 +29,8 @@ type PhotoFeedProps = {
   reloadKey: number;
   onOpenNight: (item: FeedPhoto) => void;
   onOpenGroup: (group: Group) => void;
+  // Shown once the feed has loaded and there is nothing in it.
+  empty?: ReactNode;
 };
 
 // Memories from your squad and the squads it follows, newest first: one
@@ -42,8 +44,10 @@ export default function PhotoFeed({
   reloadKey,
   onOpenNight,
   onOpenGroup,
+  empty = null,
 }: PhotoFeedProps) {
   const [items, setItems] = useState<FeedPhoto[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [reactions, setReactions] = useState<Record<string, PhotoReaction[]>>({});
   const [shown, setShown] = useState(PAGE);
   const [reactorsOf, setReactorsOf] = useState<string | null>(null);
@@ -58,12 +62,15 @@ export default function PhotoFeed({
       .then(async function (feed) {
         if (cancelled) return;
         setItems(feed);
+        setLoaded(true);
 
         const byPhoto = await getPhotoReactions(feed.map((item) => item.photo.id)).catch(() => ({}));
         if (!cancelled) setReactions(byPhoto);
       })
       .catch(function () {
-        if (!cancelled) setItems([]);
+        if (cancelled) return;
+        setItems([]);
+        setLoaded(true);
       });
 
     return function cleanup() {
@@ -106,13 +113,13 @@ export default function PhotoFeed({
     }
   }
 
-  if (items.length === 0) return null;
+  if (items.length === 0) return loaded ? <>{empty}</> : null;
 
   const reactors = reactorsOf ? reactions[reactorsOf] ?? [] : [];
 
   return (
     <View>
-      <SectionHead title="Memories" />
+      <SectionHead title="Memories" meta="yours and who you follow" />
 
       <View style={styles.list}>
         {visible.map((item) => (
@@ -189,7 +196,7 @@ export default function PhotoFeed({
 }
 
 const styles = StyleSheet.create({
-  list: { gap: space.lg },
+  list: { gap: space.md },
   pressed: { opacity: 0.6 },
   error: {
     paddingHorizontal: space.lg,

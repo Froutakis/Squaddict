@@ -14,7 +14,7 @@ import type { Group } from '../services/serviceGroup';
 import type { EventCover, MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getActingGroupId, getUserById, setActingGroup } from '../services/serviceUser';
 import { pickActing } from '../lib/acting';
-import { getGroupsForUser, leaveGroup } from '../services/serviceGroup';
+import { getGroupsForUser } from '../services/serviceGroup';
 import { getPareaGoing, type PareaGoing } from '../services/serviceFeed';
 import { getUnreadCounts } from '../services/serviceChat';
 import ShowMore, { visibleSlice } from '../components/general/ShowMore';
@@ -36,7 +36,6 @@ import {
   liveLabel,
 } from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
-import PareaSidebar from '../components/home/PareaSidebar';
 import CalendarScreen from './CalendarScreen';
 import { useNow } from '../components/home/useNow';
 import MemoriesBar from '../components/home/MemoriesBar';
@@ -75,8 +74,24 @@ type HomeScreenProps = {
   onOpenChat?: (groupId: string) => void;
   chatClosedNonce?: number;
   onUnreadChange?: (total: number) => void;
-  // Set from elsewhere (You) to open Parea on one squad.
+  // Set from the side rail (or You) to open Parea on one squad.
   selectGroup?: { id: string; nonce: number } | null;
+  // Asks from the side rail, which lives in App: bump to open.
+  calendarNonce?: number;
+  newSquadNonce?: number;
+  onOpenRail?: () => void;
+  // Parea has two faces: the memories feed (Home) and the plans (Events).
+  view?: 'memories' | 'events';
+  onOpenEvents?: () => void;
+  // What the side rail shows: your squads, the current one, their unread.
+  onRailData?: (data: RailData) => void;
+};
+
+export type RailData = {
+  squads: Group[];
+  activeId: string | null;
+  unread: Record<string, number>;
+  me: { name: string; avatarUrl: string | null };
 };
 
 function toCardData(event: MyEvent, coverUrl?: string | null): CardEvent {
@@ -104,9 +119,17 @@ export default function HomeScreen({
   chatClosedNonce = 0,
   onUnreadChange,
   selectGroup = null,
+  calendarNonce = 0,
+  newSquadNonce = 0,
+  onOpenRail,
+  view = 'memories',
+  onOpenEvents,
+  onRailData,
 }: HomeScreenProps) {
   const { signed, signPaths, dropSigned } = useSignedImages();
   const [displayName, setDisplayName] = useState('');
+  // Your own photo, for your posts in the photo feed.
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [events, setEvents] = useState<MyEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,7 +145,6 @@ export default function HomeScreen({
   const [goingSaving, setGoingSaving] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
   const [fullCalendar, setFullCalendar] = useState(false);
   const [formDate, setFormDate] = useState<string | null>(null);
@@ -200,6 +222,7 @@ export default function HomeScreen({
 
         setGoing(friendsPlans);
         setDisplayName(profile?.name ?? '');
+        setAvatarUrl(profile?.avatarUrl ?? null);
         setGroups(myGroups);
         setEvents(myEvents);
       } catch {
@@ -314,8 +337,20 @@ export default function HomeScreen({
   }, [createNonce]);
 
   useEffect(() => {
-    if (selectGroup) setGroupId(selectGroup.id);
+    if (selectGroup) chooseSquad(selectGroup.id);
   }, [selectGroup?.nonce]);
+
+  useEffect(() => {
+    if (calendarNonce > 0) setFullCalendar(true);
+  }, [calendarNonce]);
+
+  useEffect(() => {
+    if (newSquadNonce > 0) setShowGroupForm(true);
+  }, [newSquadNonce]);
+
+  useEffect(() => {
+    onRailData?.({ squads: groups, activeId: groupId, unread, me: { name: displayName, avatarUrl } });
+  }, [groups, groupId, unread, displayName, avatarUrl, onRailData]);
 
   useEffect(() => {
     if (!focusEventId) return;
@@ -500,6 +535,67 @@ export default function HomeScreen({
     return photo ? signed[photo.path]?.url ?? null : null;
   }
 
+  // Home: the memories of this squad and the squads it follows, newest first.
+  function renderMemories() {
+    const activeGroup = groups.find((g) => g.id === groupId);
+
+    return (
+      <>
+        <MemoriesBar
+          userId={user.id}
+          nights={nights}
+          groupSizes={groupSizes}
+          signed={signed}
+          signPaths={signPaths}
+          onImageError={dropSigned}
+          onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
+        />
+
+        {wantsPhoto ? (
+          <View style={styles.body}>
+            <PhotoPrompt
+              title={wantsPhoto.title}
+              groupName={wantsPhoto.groupName}
+              live={isHappeningNow(wantsPhoto.date, wantsPhoto.startTime, wantsPhoto.endTime, now)}
+              hereCount={checkins[wantsPhoto.id]?.length ?? 0}
+              onAdd={() => {
+                setPhotoError(null);
+                setAddingPhoto(wantsPhoto);
+              }}
+            />
+            {photoError ? <Text style={styles.error}>{photoError}</Text> : null}
+          </View>
+        ) : null}
+
+        {activeGroup ? (
+          <PhotoFeed
+            group={activeGroup}
+            me={{ id: user.id, name: displayName, avatarUrl }}
+            signed={signed}
+            signPaths={signPaths}
+            onImageError={dropSigned}
+            reloadKey={photoNonce}
+            onOpenNight={openFeedNight}
+            onOpenGroup={setProfileGroup}
+            empty={
+              <View style={styles.state}>
+                <Text style={styles.stateTitle}>No memories yet</Text>
+                <Text style={styles.stateBody}>
+                  Your first night out is one plan away. The photos from it land here.
+                </Text>
+                {onOpenEvents ? (
+                  <View style={styles.stateButton}>
+                    <Button title="See the plans" onPress={onOpenEvents} />
+                  </View>
+                ) : null}
+              </View>
+            }
+          />
+        ) : null}
+      </>
+    );
+  }
+
   function renderBody() {
     if (loading) {
       return (
@@ -535,6 +631,8 @@ export default function HomeScreen({
       );
     }
 
+    if (view === 'memories') return renderMemories();
+
     if (events.length === 0) {
       return (
         <View style={styles.state}>
@@ -566,16 +664,6 @@ export default function HomeScreen({
 
     return (
       <>
-        <MemoriesBar
-          userId={user.id}
-          nights={nights}
-          groupSizes={groupSizes}
-          signed={signed}
-          signPaths={signPaths}
-          onImageError={dropSigned}
-          onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
-        />
-
         {heroEvent ? (
           <View>
             <SectionHead
@@ -609,19 +697,6 @@ export default function HomeScreen({
           </View>
         ) : null}
 
-        {activeGroup ? (
-          <PhotoFeed
-            group={activeGroup}
-            me={{ id: user.id, name: displayName, avatarUrl }}
-            signed={signed}
-            signPaths={signPaths}
-            onImageError={dropSigned}
-            reloadKey={photoNonce}
-            onOpenNight={openFeedNight}
-            onOpenGroup={setProfileGroup}
-          />
-        ) : null}
-
         {friendsPlans.length > 0 ? (
           <View>
             <SectionHead
@@ -649,22 +724,6 @@ export default function HomeScreen({
                 onToggle={() => setShowAllGoing(!showAllGoing)}
               />
             </View>
-          </View>
-        ) : null}
-
-        {wantsPhoto ? (
-          <View style={styles.body}>
-            <PhotoPrompt
-              title={wantsPhoto.title}
-              groupName={wantsPhoto.groupName}
-              live={isHappeningNow(wantsPhoto.date, wantsPhoto.startTime, wantsPhoto.endTime, now)}
-              hereCount={checkins[wantsPhoto.id]?.length ?? 0}
-              onAdd={() => {
-                setPhotoError(null);
-                setAddingPhoto(wantsPhoto);
-              }}
-            />
-            {photoError && !heroEvent ? <Text style={styles.error}>{photoError}</Text> : null}
           </View>
         ) : null}
 
@@ -726,8 +785,8 @@ export default function HomeScreen({
       >
         <HomeHeader
           squad={groups.find((group) => group.id === groupId)}
-          onMenu={() => setMenuOpen(true)}
-          menuUnread={Object.values(unread).reduce((sum, count) => sum + count, 0)}
+          label={view === 'memories' ? 'Memories' : 'Plans'}
+          onMenu={() => onOpenRail?.()}
         />
         {renderBody()}
       </ScrollView>
@@ -822,42 +881,6 @@ export default function HomeScreen({
         }}
       />
 
-      <PareaSidebar
-        visible={menuOpen}
-        squads={groups}
-        activeId={groupId}
-        unread={unread}
-        onSelectSquad={(id) => {
-          chooseSquad(id);
-          setMenuOpen(false);
-        }}
-        onNewSquad={() => {
-          setMenuOpen(false);
-          afterMenu(() => setShowGroupForm(true));
-        }}
-        onChat={() => {
-          setMenuOpen(false);
-          if (groupId) onOpenChat?.(groupId);
-        }}
-        onPlan={() => {
-          setMenuOpen(false);
-          afterMenu(() => openNewEvent(null));
-        }}
-        onCalendar={() => {
-          setMenuOpen(false);
-          afterMenu(() => setFullCalendar(true));
-        }}
-        onLeaveSquad={async () => {
-          if (!groupId) return;
-          await leaveGroup(groupId);
-          setMenuOpen(false);
-          // Home falls back to another squad (the acting one if you still have one).
-          setGroupId(null);
-          load(true);
-        }}
-        onClose={() => setMenuOpen(false)}
-      />
-
       {/* The calendar is a page of its own, on top of Home, like the chat. */}
       {fullCalendar ? (
         <CalendarScreen
@@ -870,13 +893,6 @@ export default function HomeScreen({
       ) : null}
     </SafeAreaView>
   );
-}
-
-// iOS can't present a sheet while the side menu is still sliding away.
-const MENU_CLOSE_MS = 260;
-
-function afterMenu(open: () => void) {
-  setTimeout(open, MENU_CLOSE_MS);
 }
 
 const styles = StyleSheet.create({

@@ -47,6 +47,7 @@ import MapView from '../components/general/Map';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
+import { FAB_CENTER_Y, FAB_INSET } from '../components/general/MenuFab';
 
 const RADII = [5, 10, 25, 50, 100];
 // Where the map looks before we know where you are: Thessaloniki.
@@ -63,12 +64,16 @@ const WHEN_OPTIONS: { key: FeedWhen; label: string }[] = [
   { key: 'weekend', label: 'Weekend' },
 ];
 
+// Room at the bottom of the map for the event card.
 const NAV_CLEARANCE = 110;
 // The title row sits in the same place in list and map mode: the map's glass
 // island (its margin, padding and 1px border) adds up to the list's spacing.
 const GLASS_BORDER = 1;
 const ISLAND_PAD = space.md;
 const TITLE_TOP = space.sm + space.sm + GLASS_BORDER;
+const TITLE_ROW = 36;
+// How far the floating menu button drops on Explore to sit level with the title.
+export const EXPLORE_FAB_DROP = TITLE_TOP + TITLE_ROW / 2 - FAB_CENTER_Y;
 const SEARCH_DELAY_MS = 300;
 
 function toCardData(event: FeedEvent, friendsGoing?: Person[]): CardEvent {
@@ -964,11 +969,13 @@ const styles = StyleSheet.create({
 
   header: { gap: space.sm, paddingTop: TITLE_TOP, paddingBottom: space.sm },
   column: { width: '100%', maxWidth: layout.column, alignSelf: 'center' },
+  // Starts right of the floating menu button.
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: space.lg,
+    paddingLeft: FAB_INSET,
+    paddingRight: space.lg,
   },
   toggle: {
     flexDirection: 'row',

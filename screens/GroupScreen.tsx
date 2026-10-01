@@ -34,6 +34,7 @@ import { getGroupPublicEvents, type FeedEvent } from '../services/serviceFeed';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import PublicProfile from '../components/group/PublicProfile';
+import { FAB_CENTER_Y, FAB_INSET } from '../components/general/MenuFab';
 
 type Member = {
   id: string;
@@ -585,7 +586,8 @@ const styles = StyleSheet.create({
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
   pressed: { opacity: 0.6 },
 
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xs, height: 48 },
+  // Starts right of the floating menu button, level with it.
+  topBar: { flexDirection: 'row', alignItems: 'center', paddingLeft: FAB_INSET - space.xs, paddingRight: space.xs, height: 48, marginTop: FAB_CENTER_Y - 24 },
   backButton: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 1, paddingRight: space.sm },
   backText: { color: paper.ink, ...typo.semi, fontSize: textSize.lead },
 
