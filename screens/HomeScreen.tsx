@@ -34,6 +34,7 @@ import {
   isHappeningNow,
   keyOf,
   liveLabel,
+  parseDateKey,
 } from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
 import CalendarScreen from './CalendarScreen';
@@ -42,6 +43,7 @@ import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
 import PhotoPrompt from '../components/home/PhotoPrompt';
 import PhotoFeed from '../components/home/PhotoFeed';
+import { AnswerCard } from '../components/home/FeedCards';
 import type { FeedPhoto } from '../services/servicePhotoFeed';
 import GroupScreen from './GroupScreen';
 import { MEMORY_LIMIT, toMemoryNights, type MemoryNight } from '../components/home/memories';
@@ -148,6 +150,8 @@ export default function HomeScreen({
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
   const [fullCalendar, setFullCalendar] = useState(false);
+  // A new plan started from an old night ("Plan it again").
+  const [draftEvent, setDraftEvent] = useState<MyEvent | null>(null);
   const [formDate, setFormDate] = useState<string | null>(null);
   const [openEvent, setOpenEvent] = useState<SheetEvent | null>(null);
   const [editEvent, setEditEvent] = useState<MyEvent | null>(null);
@@ -389,6 +393,7 @@ export default function HomeScreen({
 
   function openNewEvent(date: string | null) {
     setEditEvent(null);
+    setDraftEvent(null);
     setFormDate(date);
     setShowCreate(true);
   }
@@ -584,6 +589,24 @@ export default function HomeScreen({
             onOpenNight={openFeedNight}
             onOpenGroup={setProfileGroup}
             canOpenGroup={(group) => features.publicProfiles || groups.some((mine) => mine.id === group.id)}
+            answerCard={
+              waiting[0] ? (
+                <AnswerCard key="answer">
+                  <View style={styles.body}>
+                    <EventCard
+                      event={toCardData(waiting[0], coverFor(waiting[0]))}
+                      action="rsvp"
+                      onPress={() => setOpenEvent(waiting[0])}
+                      onRsvp={(status) => handleRsvp(waiting[0].id, status)}
+                    />
+                  </View>
+                </AnswerCard>
+              ) : null
+            }
+            onPlanAgain={(item) => {
+              openNewEvent(nextSameWeekday(item.event.date));
+              setDraftEvent(item.event);
+            }}
             empty={
               <View style={styles.state}>
                 <Text style={styles.stateTitle}>No memories yet</Text>
@@ -848,9 +871,11 @@ export default function HomeScreen({
         defaultGroupId={groupId}
         defaultDate={formDate ?? today}
         event={editEvent}
+        draft={draftEvent}
         onClose={() => {
           setShowCreate(false);
           setEditEvent(null);
+          setDraftEvent(null);
         }}
         onSaved={async () => setEvents(await getMyEvents(user.id))}
       />
@@ -900,6 +925,17 @@ export default function HomeScreen({
       ) : null}
     </SafeAreaView>
   );
+}
+
+// The next day after today with the same weekday as this date ("next Friday").
+function nextSameWeekday(dateStr: string): string {
+  const from = parseDateKey(dateStr);
+  const day = new Date();
+  day.setDate(day.getDate() + 1);
+  if (from) {
+    while (day.getDay() !== from.getDay()) day.setDate(day.getDate() + 1);
+  }
+  return keyOf(day);
 }
 
 const styles = StyleSheet.create({

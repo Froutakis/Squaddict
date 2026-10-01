@@ -35,6 +35,9 @@ type EventFormSheetProps = {
   defaultGroupId: string | null;
   defaultDate: string;
   event?: MyEvent | null;
+  // A new plan started from an old one ("Plan it again"): its title, place,
+  // times and tags fill the form, on defaultDate.
+  draft?: MyEvent | null;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 };
@@ -55,6 +58,7 @@ export default function EventFormSheet({
   defaultGroupId,
   defaultDate,
   event,
+  draft = null,
   onClose,
   onSaved,
 }: EventFormSheetProps) {
@@ -79,22 +83,23 @@ export default function EventFormSheet({
     function () {
       if (!visible) return;
 
-      setTitle(event?.title ?? '');
+      const from = event ?? draft;
+      setTitle(from?.title ?? '');
       setEventDate(event?.date ?? defaultDate);
-      setDescription(event?.description ?? '');
-      setStartTime(event?.startTime ?? '');
-      setEndTime(event?.endTime ?? '');
-      setNickname(event?.location ?? '');
-      setPlace(placeOf(event));
-      setIsPublic(event?.isPublic ?? false);
-      setTags(event?.tags ?? []);
+      setDescription(from?.description ?? '');
+      setStartTime(from?.startTime ?? '');
+      setEndTime(from?.endTime ?? '');
+      setNickname(from?.location ?? '');
+      setPlace(placeOf(from));
+      setIsPublic(from?.isPublic ?? false);
+      setTags(from?.tags ?? []);
       setTargetGroup(defaultGroupId ?? groups[0]?.id ?? null);
       setFormError(null);
       setCoverUrl(event?.coverUrl ?? null);
       setPendingCover(null);
       setAskingCover(false);
     },
-    [visible, defaultDate, event?.id],
+    [visible, defaultDate, event?.id, draft?.id],
   );
 
   const editing = !!event;

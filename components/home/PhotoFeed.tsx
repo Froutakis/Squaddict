@@ -13,6 +13,7 @@ import { parseDateKey, startOfWeek } from '../../lib/datetime';
 import type { SignedMap } from '../chat/media';
 import Monogram from '../general/Monogram';
 import PhotoPost from './PhotoPost';
+import { AgainCard, ThrowbackCard } from './FeedCards';
 import { colors, radius, shadow, space, textSize, typo } from '../../theme';
 
 const PAGE = 10;
@@ -33,7 +34,17 @@ type PhotoFeedProps = {
   canOpenGroup?: (group: Group) => boolean;
   // Shown once the feed has loaded and there is nothing in it.
   empty?: ReactNode;
+  // A plan waiting on your answer, shown between the memories.
+  answerCard?: ReactNode;
+  // "Plan it again" on a night that went well.
+  onPlanAgain?: (item: FeedPhoto) => void;
 };
+
+// Between the memories: the first card after the 2nd post, then one every 4.
+const FIRST_CARD_AFTER = 2;
+const CARD_EVERY = 4;
+// A night of yours is worth repeating once it has this many reactions.
+const AGAIN_REACTIONS = 3;
 
 // Memories from your squad and the nights around it, newest first: one photo
 // for each night that was kept, grouped by when it was.
@@ -48,6 +59,8 @@ export default function PhotoFeed({
   onOpenGroup,
   empty = null,
   canOpenGroup = () => true,
+  answerCard = null,
+  onPlanAgain,
 }: PhotoFeedProps) {
   const [items, setItems] = useState<FeedPhoto[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -91,7 +104,51 @@ export default function PhotoFeed({
   }, [group.id]);
 
   const visible = items.slice(0, shown);
-  const paths = visible.map((item) => item.photo.path).join('|');
+
+  // The nudges between the memories.
+  const now = new Date();
+  const again = onPlanAgain
+    ? items
+        .filter((item) => item.reason === 'yours' && between(daysAgo(item.event.date, now), 1, 45))
+        .map((item) => ({ item, count: (reactions[item.photo.id] ?? []).length }))
+        .filter((one) => one.count >= AGAIN_REACTIONS)
+        .sort((a, b) => b.count - a.count)[0]
+    : undefined;
+  const throwback = pickThrowback(items, now, again?.item.photo.id);
+  const cards: ReactNode[] = [
+    answerCard,
+    again ? (
+      <AgainCard
+        key="again"
+        item={again.item}
+        url={signed[again.item.photo.path]?.url}
+        reactions={again.count}
+        onPlanAgain={() => onPlanAgain?.(again.item)}
+      />
+    ) : null,
+    throwback ? (
+      <ThrowbackCard
+        key="throwback"
+        item={throwback.item}
+        url={signed[throwback.item.photo.path]?.url}
+        ago={throwback.ago}
+        onOpen={() => onOpenNight(throwback.item)}
+      />
+    ) : null,
+  ].filter(Boolean);
+  const cardAfter = (index: number) =>
+    index + 1 >= FIRST_CARD_AFTER && (index + 1 - FIRST_CARD_AFTER) % CARD_EVERY === 0
+      ? cards[(index + 1 - FIRST_CARD_AFTER) / CARD_EVERY] ?? null
+      : null;
+  const placed = visible.filter((_, index) => cardAfter(index) !== null).length;
+  // A short feed still gets its cards, at the end.
+  const leftover = items.length > shown ? [] : cards.slice(placed);
+
+  const paths = [
+    ...visible.map((item) => item.photo.path),
+    ...(again ? [again.item.photo.path] : []),
+    ...(throwback ? [throwback.item.photo.path] : []),
+  ].join('|');
 
   useEffect(() => {
     if (paths !== '') signPaths(paths.split('|'));
@@ -170,9 +227,11 @@ export default function PhotoFeed({
                 onShowReactors={() => setReactorsOf(item.photo.id)}
                 onImageError={() => onImageError(item.photo.path)}
               />
+              {cardAfter(index)}
             </View>
           );
         })}
+        {leftover}
       </View>
 
       {error ? (
@@ -232,6 +291,27 @@ export default function PhotoFeed({
       </Modal>
     </View>
   );
+}
+
+function daysAgo(dateStr: string, now: Date): number {
+  const d = parseDateKey(dateStr);
+  if (!d) return -1;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((today.getTime() - d.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function between(value: number, low: number, high: number) {
+  return value >= low && value <= high;
+}
+
+// A night that comes back on its day: a year ago if there is one, else a month.
+function pickThrowback(items: FeedPhoto[], now: Date, skipPhotoId?: string) {
+  const mine = items.filter((item) => item.reason === 'yours' && item.photo.id !== skipPhotoId);
+  const year = mine.find((item) => between(daysAgo(item.event.date, now), 362, 368));
+  if (year) return { item: year, ago: 'One year ago' };
+  const month = mine.find((item) => between(daysAgo(item.event.date, now), 27, 34));
+  if (month) return { item: month, ago: 'One month ago' };
+  return null;
 }
 
 // "This week", "Last week", then the month: "September".
