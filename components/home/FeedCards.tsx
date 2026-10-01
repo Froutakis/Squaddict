@@ -59,7 +59,7 @@ export function AnswerCard({ children }: { children: ReactNode }) {
         <View style={styles.answerDot} />
         <Text style={styles.answerTitle}>Waiting on you</Text>
       </View>
-      {children}
+      <View style={styles.answerTicket}>{children}</View>
     </View>
   );
 }
@@ -142,6 +142,8 @@ const styles = StyleSheet.create({
   answerHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: space.lg },
   answerDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.danger },
   answerTitle: { color: colors.text, ...typo.title, fontSize: textSize.lead, letterSpacing: -0.2 },
+  // Same width as the memory tickets around it.
+  answerTicket: { marginHorizontal: space.md },
 
   throwback: {
     marginHorizontal: space.md,

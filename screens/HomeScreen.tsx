@@ -592,14 +592,12 @@ export default function HomeScreen({
             answerCard={
               waiting[0] ? (
                 <AnswerCard key="answer">
-                  <View style={styles.body}>
-                    <EventCard
-                      event={toCardData(waiting[0], coverFor(waiting[0]))}
-                      action="rsvp"
-                      onPress={() => setOpenEvent(waiting[0])}
-                      onRsvp={(status) => handleRsvp(waiting[0].id, status)}
-                    />
-                  </View>
+                  <EventCard
+                    event={toCardData(waiting[0], coverFor(waiting[0]))}
+                    action="rsvp"
+                    onPress={() => setOpenEvent(waiting[0])}
+                    onRsvp={(status) => handleRsvp(waiting[0].id, status)}
+                  />
                 </AnswerCard>
               ) : null
             }

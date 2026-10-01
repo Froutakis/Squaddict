@@ -1,6 +1,6 @@
 import { useRef, type ComponentProps } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { FeedPhoto } from '../../services/servicePhotoFeed';
 import {
   QUICK_REACTION,
@@ -8,16 +8,19 @@ import {
   postRatio,
   reactorsLine,
   tallyReactions,
+  type FeedReason,
   type PhotoReaction,
   type ReactionEmoji,
 } from '../../lib/photoFeed';
 import Monogram from '../general/Monogram';
+import Ticket from '../general/Ticket';
 import { parseDateKey } from '../../lib/datetime';
 import { tagLabel, type EventTag } from '../../lib/tags';
-import type { FeedReason } from '../../lib/photoFeed';
-import { colors, radius, shadow, space, textSize, tint, typo } from '../../theme';
+import { colors, radius, space, textSize, tint, typo } from '../../theme';
 
 const DOUBLE_TAP_MS = 260;
+// Stands in for the photo until its link is signed, so the ticket keeps its shape.
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -44,15 +47,15 @@ type PhotoPostProps = {
   userId: string;
   onReact: (emoji: string) => void;
   onOpenNight: () => void;
-  // Absent when the parea's page can't be opened: the header is then just a label.
+  // Absent when the parea's page can't be opened: the parea is then just a label.
   onOpenGroup?: () => void;
   onShowReactors: () => void;
   onImageError: () => void;
 };
 
-// One memory in the feed, as a card: the squad and the night it is from on
-// top, the photo with the night's date stamped on it, the reactions as pills
-// and who reacted.
+// One memory in the feed, as a used ticket: the photo is its cover, with the
+// parea, the night and the date on it; the perforation is torn, because the
+// night happened; the stub keeps the reactions.
 export default function PhotoPost({
   item,
   url,
@@ -98,64 +101,8 @@ export default function PhotoPost({
     single.current = setTimeout(onOpenNight, DOUBLE_TAP_MS);
   }
 
-  return (
-    <View style={styles.post}>
-      <Pressable
-        onPress={onOpenGroup}
-        disabled={!onOpenGroup}
-        accessibilityRole={onOpenGroup ? 'button' : undefined}
-        accessibilityLabel={onOpenGroup ? `Open ${item.group.name}` : undefined}
-        style={({ pressed }) => [styles.head, pressed && onOpenGroup && styles.pressed]}
-      >
-        <Monogram name={item.group.name} uri={item.group.avatarUrl} size={36} style={styles.avatar} />
-        <View style={styles.headText}>
-          <Text style={styles.squad} numberOfLines={1}>
-            {item.group.name}
-          </Text>
-          <Text style={styles.place} numberOfLines={1}>
-            {item.event.title}
-            {place ? ` · ${place}` : ''}
-          </Text>
-        </View>
-        {why ? (
-          <View style={styles.why}>
-            <Text style={styles.whyText} numberOfLines={1}>
-              {why}
-            </Text>
-          </View>
-        ) : null}
-      </Pressable>
-
-      <Pressable
-        onPress={tapPhoto}
-        accessibilityRole="imagebutton"
-        accessibilityLabel={`Photo from ${item.event.title} by ${item.group.name}${place ? ` at ${place}` : ''}`}
-        accessibilityHint="Opens the night. Double tap to react."
-        style={[styles.frame, { aspectRatio: postRatio(item.photo.width, item.photo.height) }]}
-      >
-        {/* Shows until the photo is in. */}
-        <Ionicons name="image-outline" size={28} color={colors.borderStrong} />
-        {url ? (
-          <Image source={{ uri: url }} style={styles.photo} resizeMode="cover" onError={onImageError} />
-        ) : null}
-
-        {night ? (
-          <View style={styles.stamp} pointerEvents="none">
-            <Text style={styles.stampText}>{night}</Text>
-          </View>
-        ) : null}
-
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            opacity: burst,
-            transform: [{ scale: burst.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }],
-          }}
-        >
-          <Ionicons name="flame" size={96} color={colors.danger} />
-        </Animated.View>
-      </Pressable>
-
+  const stub = (
+    <View style={styles.stub}>
       <View style={styles.actions}>
         {REACTIONS.map(function (emoji) {
           const count = tally.counts[emoji] ?? 0;
@@ -176,7 +123,7 @@ export default function PhotoPost({
                 pressed && styles.pillPressed,
               ]}
             >
-              <Ionicons name={mine ? filled : outline} size={18} color={mine ? colors.danger : colors.text} />
+              <Ionicons name={mine ? filled : outline} size={17} color={mine ? colors.danger : colors.text} />
               {count > 0 ? <Text style={[styles.count, mine && styles.countMine]}>{count}</Text> : null}
             </Pressable>
           );
@@ -188,16 +135,78 @@ export default function PhotoPost({
           onPress={onShowReactors}
           accessibilityRole="button"
           accessibilityLabel={`Reactions from ${line}. See everyone.`}
-          style={styles.words}
+          hitSlop={6}
         >
-          <Text style={styles.text}>
+          <Text style={styles.text} numberOfLines={1}>
             Reactions from <Text style={styles.strong}>{line}</Text>
           </Text>
         </Pressable>
       ) : (
-        <View style={styles.wordsEmpty} />
+        <Text style={styles.quiet}>Double tap the photo to leave a fire.</Text>
       )}
     </View>
+  );
+
+  return (
+    <Ticket
+      cover={url ?? BLANK}
+      onCoverError={onImageError}
+      stub={stub}
+      torn
+      cutColor={colors.bg}
+      style={styles.ticket}
+    >
+      <Pressable
+        onPress={tapPhoto}
+        accessibilityRole="imagebutton"
+        accessibilityLabel={`Photo from ${item.event.title} by ${item.group.name}${place ? ` at ${place}` : ''}`}
+        accessibilityHint="Opens the night. Double tap to react."
+        style={[styles.cover, { aspectRatio: postRatio(item.photo.width, item.photo.height) }]}
+      >
+        <View style={styles.topRow}>
+          <Pressable
+            onPress={onOpenGroup}
+            disabled={!onOpenGroup}
+            accessibilityRole={onOpenGroup ? 'button' : undefined}
+            accessibilityLabel={onOpenGroup ? `Open ${item.group.name}` : undefined}
+            hitSlop={6}
+            style={({ pressed }) => [styles.groupPill, pressed && onOpenGroup && styles.pressed]}
+          >
+            <Monogram name={item.group.name} uri={item.group.avatarUrl} size={20} style={styles.groupAvatar} />
+            <Text style={styles.groupName} numberOfLines={1}>
+              {item.group.name}
+            </Text>
+          </Pressable>
+          {why ? (
+            <View style={styles.why}>
+              <Text style={styles.whyText} numberOfLines={1}>
+                {why}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.burstWrap} pointerEvents="none">
+          <Animated.View
+            style={{
+              opacity: burst,
+              transform: [{ scale: burst.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }],
+            }}
+          >
+            <Ionicons name="flame" size={96} color={colors.danger} />
+          </Animated.View>
+        </View>
+
+        <View style={styles.bottom}>
+          <Text style={styles.title} numberOfLines={2}>
+            {item.event.title}
+          </Text>
+          <Text style={styles.meta} numberOfLines={1}>
+            {[night, place].filter(Boolean).join(' · ')}
+          </Text>
+        </View>
+      </Pressable>
+    </Ticket>
   );
 }
 
@@ -224,7 +233,7 @@ function firstWord(name: string) {
   return name.trim().split(/\s+/)[0] || name;
 }
 
-// "TUE 29 SEP", the night the photo is from, as it is stamped on the photo.
+// "TUE 29 SEP", the night the photo is from, as it is printed on the ticket.
 function nightLabel(dateStr: string) {
   const d = parseDateKey(dateStr);
   if (!d) return '';
@@ -234,86 +243,68 @@ function nightLabel(dateStr: string) {
 }
 
 const styles = StyleSheet.create({
-  // No outline: the card stands off the page on a soft shadow of the ink.
-  post: {
-    marginHorizontal: space.md,
-    borderRadius: radius.xl,
-    backgroundColor: colors.surface,
-    ...shadow.card,
-  },
-  pressed: { opacity: 0.6 },
+  ticket: { marginHorizontal: space.md },
+  pressed: { opacity: 0.7 },
 
-  head: {
+  // The photo is the ticket's cover; this is what sits on it.
+  cover: { width: '100%', justifyContent: 'space-between' },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  groupPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.sm,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 10,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    gap: 6,
+    flexShrink: 1,
+    paddingLeft: 3,
+    paddingRight: space.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(12,25,38,0.45)',
   },
-  avatar: { borderRadius: 12 },
+  groupAvatar: { borderRadius: 7 },
+  groupName: { flexShrink: 1, color: '#FFFFFF', ...typo.semi, fontSize: textSize.caption },
   why: {
+    marginLeft: 'auto',
     maxWidth: 150,
-    paddingHorizontal: 9,
+    paddingHorizontal: space.sm,
     paddingVertical: 4,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: 'rgba(255,255,255,0.88)',
   },
-  whyText: { color: colors.textSoft, ...typo.bold, fontSize: textSize.caption },
-  headText: { flex: 1, minWidth: 0 },
-  squad: { color: colors.text, ...typo.display, fontSize: textSize.base },
-  place: { color: colors.textSoft, ...typo.semi, fontSize: textSize.small, marginTop: 1 },
-
-  frame: {
-    width: '100%',
-    overflow: 'hidden',
-    backgroundColor: colors.surfaceAlt,
+  whyText: { color: colors.ink, ...typo.bold, fontSize: textSize.caption },
+  burstWrap: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  photo: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
-  // The night's date, stamped on the photo like on a ticket.
-  stamp: {
-    position: 'absolute',
-    left: space.sm,
-    top: space.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: 'rgba(12,25,38,0.55)',
-  },
-  stampText: { color: '#FFFFFF', ...typo.mono, fontSize: textSize.caption, letterSpacing: 1.2 },
+  bottom: { gap: 2 },
+  title: { color: '#FFFFFF', ...typo.title, fontSize: textSize.heading, letterSpacing: -0.3 },
+  meta: { color: 'rgba(255,255,255,0.85)', ...typo.mono, fontSize: textSize.small, letterSpacing: 0.6 },
 
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.xs,
-    paddingHorizontal: 12,
-    paddingTop: space.sm,
-    paddingBottom: space.xxs,
-  },
+  // The stub: the reactions, and who gave them.
+  stub: { gap: space.sm },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    height: 38,
-    paddingHorizontal: 12,
+    gap: 5,
+    height: 36,
+    paddingHorizontal: 11,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  pillRound: { width: 38, paddingHorizontal: 0 },
+  pillRound: { width: 36, paddingHorizontal: 0 },
   pillMine: { borderWidth: 1.5, borderColor: colors.danger, backgroundColor: tint.danger },
   pillPressed: { transform: [{ scale: 0.94 }] },
   count: { color: colors.text, ...typo.bold, fontSize: textSize.body },
   countMine: { color: '#B23624', ...typo.display },
-
-  words: { paddingHorizontal: space.md, paddingTop: space.xs, paddingBottom: space.md + 2 },
-  wordsEmpty: { height: space.sm },
   text: { color: colors.text, ...typo.regular, fontSize: textSize.body, lineHeight: 18 },
   strong: { ...typo.display },
+  quiet: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body },
 });
