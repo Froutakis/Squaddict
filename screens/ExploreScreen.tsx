@@ -25,21 +25,23 @@ import {
 } from '../services/serviceFeed';
 import { isHappeningNow } from '../lib/datetime';
 import { useNow } from '../components/home/useNow';
-import { getGroupsForUser, searchGroups, type Group } from '../services/serviceGroup';
-import { getActingSquad } from '../services/serviceUser';
+import { getGroupById, getGroupsForUser, searchGroups, type Group } from '../services/serviceGroup';
+import { getActingSquad, getUserById } from '../services/serviceUser';
 import { getFollowing, proposeFollow } from '../services/serviceFollow';
-import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
+import { clearRsvp, getMyEvents, setRsvp, type MyEvent, type RsvpStatus } from '../services/serviceEvents';
 import { getCurrentCoords, type Coords, type LocationState } from '../services/serviceLocation';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
 import type { Person } from '../lib/people';
-import { colors, typo, layout, radius, shadow, space, textSize } from '../theme';
+import { colors, typo, layout, radius, shadow, solidFor, space, textSize } from '../theme';
 import Chip from '../components/general/Chip';
 import SectionHead from '../components/general/SectionHead';
 import ListEmpty from '../components/home/ListEmpty';
 import GroupCard, { type CardGroup } from '../components/group/GroupCard';
 import GroupScreen from './GroupScreen';
-import Monogram from '../components/general/Monogram';
+import Monogram, { initialsFor } from '../components/general/Monogram';
+import { useLivePeopleAround } from '../components/events/useLivePeopleAround';
+import type { MapPin } from '../components/general/mapShared';
 import Glass from '../components/general/Glass';
 import PopIn from '../components/general/PopIn';
 import DropdownChip from '../components/general/DropdownChip';
@@ -159,6 +161,10 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
   // The map is the front page of Explore; the list is one tap away.
   const [mode, setMode] = useState<ViewMode>('map');
+  // What the map shows: open plans, or the people and pareas out right now.
+  const [layer, setLayer] = useState<'plans' | 'people'>('plans');
+  const [myEvents, setMyEvents] = useState<MyEvent[]>([]);
+  const [myName, setMyName] = useState('');
   const [mapSearching, setMapSearching] = useState(false);
   const [openEvent, setOpenEvent] = useState<SheetEvent | null>(null);
   const [islandsBottom, setIslandsBottom] = useState(0);
@@ -196,6 +202,24 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   useEffect(() => {
     askLocation();
   }, [askLocation]);
+
+  // Your own plans and name, for the People layer.
+  useEffect(() => {
+    let cancelled = false;
+    getMyEvents(userId)
+      .then((mine) => {
+        if (!cancelled) setMyEvents(mine);
+      })
+      .catch(() => {});
+    getUserById(userId)
+      .then((me) => {
+        if (!cancelled) setMyName(me?.name ?? '');
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   useEffect(() => {
     const settle = setTimeout(() => setSearch(query.trim()), SEARCH_DELAY_MS);
@@ -473,6 +497,92 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   }, [visible.length, error, hasMore, loading, loadingMore, page, load]);
 
   const onMap = (liveOnly ? live : events).filter((event) => event.myStatus !== 'out');
+
+  // People: whoever is sharing their spot on a plan of yours that is on now.
+  const sharingIds = myEvents
+    .filter((event) => event.myStatus === 'in' && isHappeningNow(event.date, event.startTime, event.endTime, now))
+    .map((event) => event.id);
+  const livePeople = useLivePeopleAround(sharingIds, { id: userId, name: myName });
+
+  // Pareas: yours and the ones you follow, at the place of their current or next plan.
+  const pareaPins = useMemo(() => {
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const candidates = [
+      ...myEvents.map((event) => ({ ...event, place: event.placeLabel ?? event.location ?? '' })),
+      ...events.filter((event) => following[event.groupId]).map((event) => ({ ...event, place: event.placeLabel })),
+    ]
+      .filter((event) => event.lat !== undefined && event.lng !== undefined && event.date >= todayKey)
+      .sort((a, b) => `${a.date} ${a.startTime ?? ''}`.localeCompare(`${b.date} ${b.startTime ?? ''}`));
+
+    const byGroup = new Map<string, MapPin>();
+    for (const event of candidates) {
+      if (byGroup.has(event.groupId)) continue;
+      byGroup.set(event.groupId, {
+        id: `parea-${event.groupId}`,
+        lat: event.lat as number,
+        lng: event.lng as number,
+        label: event.place ? `${event.groupName} · ${event.place}` : event.groupName,
+        color: solidFor(event.groupName),
+        badge: initialsFor(event.groupName),
+      });
+    }
+    return [...byGroup.values()];
+  }, [myEvents, events, following]);
+
+  const peoplePins: MapPin[] = [
+    ...pareaPins,
+    ...livePeople.map((person) => ({
+      id: `person-${person.id}`,
+      lat: person.lat,
+      lng: person.lng,
+      label: person.name,
+      color: solidFor(person.name),
+      badge: person.name.trim().charAt(0).toUpperCase() || '?',
+    })),
+  ];
+
+  function pressPeoplePin(id: string) {
+    if (!id.startsWith('parea-')) return;
+    getGroupById(id.slice('parea-'.length))
+      .then((group) => {
+        if (group) setProfileGroup(group);
+      })
+      .catch(() => {});
+  }
+
+  function layerSwitch() {
+    return (
+      <View style={styles.layers} accessibilityRole="tablist">
+        {(['plans', 'people'] as const).map((option) => {
+          const on = layer === option;
+          return (
+            <Pressable
+              key={option}
+              onPress={() => {
+                setLayer(option);
+                setSelectedId(null);
+              }}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: on }}
+              accessibilityLabel={option === 'plans' ? 'Show plans' : `Show people and pareas${livePeople.length ? `, ${livePeople.length} sharing now` : ''}`}
+              style={[styles.layer, on && styles.layerOn]}
+            >
+              <Ionicons
+                name={option === 'plans' ? 'ticket-outline' : 'people-outline'}
+                size={15}
+                color={on ? colors.text : colors.textSoft}
+              />
+              <Text style={[styles.layerText, on && styles.layerTextOn]}>{option === 'plans' ? 'Plans' : 'People'}</Text>
+              {option === 'people' && livePeople.length > 0 ? (
+                <View style={styles.layerDot} />
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  }
 
   const selected = onMap.find((event) => event.id === selectedId);
 
@@ -790,24 +900,29 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   );
 
   if (mode === 'map') {
-    const nothingFound = !loading && !error && onMap.length === 0;
+    const nothingFound = layer === 'plans' && !loading && !error && onMap.length === 0;
+    const nobodyOut = layer === 'people' && livePeople.length === 0;
 
     return (
       <View style={styles.screen}>
         {/* Always up: a filter that finds nothing just leaves the map without pins. */}
         <MapView
-          pins={onMap.map((event) => ({
-            id: event.id,
-            lat: event.lat,
-            lng: event.lng,
-            label: event.title,
-            color: event.myStatus === 'in' ? colors.success : colors.accent,
-            selected: event.id === selectedId,
-          }))}
+          pins={
+            layer === 'people'
+              ? peoplePins
+              : onMap.map((event) => ({
+                  id: event.id,
+                  lat: event.lat,
+                  lng: event.lng,
+                  label: event.title,
+                  color: event.myStatus === 'in' ? colors.success : colors.accent,
+                  selected: event.id === selectedId,
+                }))
+          }
           showsUserLocation={locationState === 'on'}
           interactive
           spanKm={2}
-          onPressPin={setSelectedId}
+          onPressPin={layer === 'people' ? pressPeoplePin : setSelectedId}
           onPress={() => setSelectedId(null)}
           insets={{ top: islandsBottom + space.sm, bottom: NAV_CLEARANCE }}
           fallbackCenter={center ?? DEFAULT_MAP_CENTER}
@@ -837,12 +952,18 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
               ) : (
                 <>
                   {titleRow(true)}
-                  {locationInfo(true)}
+                  {layerSwitch()}
+                  {layer === 'plans' ? locationInfo(true) : null}
                 </>
               )}
               {nothingFound ? (
                 <Text style={styles.nothingFound} accessibilityLiveRegion="polite">
                   Nothing found
+                </Text>
+              ) : null}
+              {nobodyOut ? (
+                <Text style={styles.nothingFound} accessibilityLiveRegion="polite">
+                  Nobody's sharing right now. Spots show up while a plan is on.
                 </Text>
               ) : null}
             </Glass>
@@ -873,9 +994,11 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
               </Glass>
             ) : null}
 
-            <Glass radius={radius.pill} style={styles.chipIsland}>
-              {chipRow(true)}
-            </Glass>
+            {layer === 'plans' ? (
+              <Glass radius={radius.pill} style={styles.chipIsland}>
+                {chipRow(true)}
+              </Glass>
+            ) : null}
 
             {error ? (
               <Glass radius={radius.lg} style={styles.island}>
@@ -1006,6 +1129,20 @@ const styles = StyleSheet.create({
   searchFloating: { marginHorizontal: 0 },
   cancelText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
   nothingFound: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body },
+  layers: { flexDirection: 'row', padding: 3, gap: 2, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt },
+  layer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 34,
+    borderRadius: radius.pill,
+  },
+  layerOn: { backgroundColor: colors.surface, ...shadow.bubble },
+  layerText: { color: colors.textSoft, ...typo.semi, fontSize: textSize.body },
+  layerTextOn: { color: colors.text, ...typo.bold },
+  layerDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
   foundSquad: {
     flexDirection: 'row',
     alignItems: 'center',
