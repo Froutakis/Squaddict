@@ -82,7 +82,14 @@ with checks(file, step, what, ok) as (
   ('parea_profile.sql', 11, 'function parea_profile', to_regprocedure('public.parea_profile(uuid)') is not null),
 
   -- delete_account.sql
-  ('delete_account.sql', 12, 'function delete_account', to_regprocedure('public.delete_account()') is not null)
+  ('delete_account.sql', 12, 'function delete_account', to_regprocedure('public.delete_account()') is not null),
+
+  -- feed_nights.sql
+  ('feed_nights.sql', 13, 'function feed_nights', to_regprocedure('public.feed_nights(uuid,integer)') is not null),
+  ('feed_nights.sql', 13, 'policy read public night photos',
+     exists (select 1 from pg_policies where tablename = 'event_photos' and policyname = 'read public night photos')),
+  ('feed_nights.sql', 13, 'storage policy read public night photo files',
+     exists (select 1 from pg_policies where schemaname = 'storage' and policyname = 'read public night photo files'))
 )
 select step,
        file,

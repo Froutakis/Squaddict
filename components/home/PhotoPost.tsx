@@ -13,6 +13,8 @@ import {
 } from '../../lib/photoFeed';
 import Monogram from '../general/Monogram';
 import { parseDateKey } from '../../lib/datetime';
+import { tagLabel, type EventTag } from '../../lib/tags';
+import type { FeedReason } from '../../lib/photoFeed';
 import { colors, radius, space, textSize, tint, typo } from '../../theme';
 
 const DOUBLE_TAP_MS = 260;
@@ -69,6 +71,7 @@ export default function PhotoPost({
   const line = reactorsLine(reactions, userId);
   const place = item.event.placeLabel ?? item.event.location;
   const night = nightLabel(item.event.date);
+  const why = whyLabel(item.reason, item.via);
 
   function pop() {
     burst.setValue(0);
@@ -113,6 +116,13 @@ export default function PhotoPost({
             {night ? ` · ${night}` : ''}
           </Text>
         </View>
+        {why ? (
+          <View style={styles.why}>
+            <Text style={styles.whyText} numberOfLines={1}>
+              {why}
+            </Text>
+          </View>
+        ) : null}
       </Pressable>
 
       <Pressable
@@ -182,6 +192,28 @@ export default function PhotoPost({
   );
 }
 
+// Why a night from outside your parea is in your feed, in a few words.
+function whyLabel(reason: FeedReason, via: string | null): string | null {
+  switch (reason) {
+    case 'following':
+      return 'Following';
+    case 'member_went':
+      return via ? `${firstWord(via)} was there` : 'One of you was there';
+    case 'followed_went':
+      return via ? `${via} went` : 'A parea you follow went';
+    case 'similar':
+      return via ? `Like your ${tagLabel(via as EventTag).toLowerCase()} nights` : 'Like your nights';
+    case 'public':
+      return 'Public night';
+    default:
+      return null;
+  }
+}
+
+function firstWord(name: string) {
+  return name.trim().split(/\s+/)[0] || name;
+}
+
 // "Tue 29 Sep", the night the photo is from.
 function nightLabel(dateStr: string) {
   const d = parseDateKey(dateStr);
@@ -210,6 +242,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   avatar: { borderRadius: 12 },
+  why: {
+    maxWidth: 150,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+  },
+  whyText: { color: colors.textSoft, ...typo.bold, fontSize: textSize.caption },
   headText: { flex: 1, minWidth: 0 },
   squad: { color: colors.text, ...typo.display, fontSize: textSize.base },
   place: { color: colors.textSoft, ...typo.semi, fontSize: textSize.small, marginTop: 1 },

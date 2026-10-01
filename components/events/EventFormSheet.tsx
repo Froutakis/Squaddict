@@ -358,7 +358,7 @@ export default function EventFormSheet({
               <View style={styles.publicText}>
                 <Text style={styles.publicTitle}>Open to Squaddict</Text>
                 <Text style={styles.publicBody}>
-                  Anyone nearby can find this plan and ask to come. Off means your squad only.
+                  Anyone nearby can find this plan and ask to come, and its photos show up for other pareas after. Off means your squad only.
                 </Text>
               </View>
               <Switch

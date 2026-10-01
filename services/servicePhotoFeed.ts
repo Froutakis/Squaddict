@@ -4,41 +4,50 @@ import { GROUP_FIELDS, toGroup, type Group } from "./serviceGroup";
 import { getFollowing } from "./serviceFollow";
 import type { EventPhoto, MyEvent } from "./serviceEvents";
 import { keyOf } from "../lib/datetime";
-import { capPerNight, type PhotoReaction } from "../lib/photoFeed";
+import { capPerNight, isOwnCircle, mixFeed, type FeedReason, type PhotoReaction } from "../lib/photoFeed";
 
 // One memory in the Home feed: a photo, with the night and the squad it is from.
 export type FeedPhoto = {
   photo: EventPhoto;
   event: MyEvent;
   group: Group;
+  reason: FeedReason;
+  // Who links you to the night: the member who went, the parea, or the tag.
+  via: string | null;
 };
+
+type Night = { id: string; reason: FeedReason; via: string | null };
 
 const NIGHTS = 40;
 const PHOTOS = 80;
 // One post per night: the feed is about the memory, not every photo in it.
 const PER_NIGHT = 1;
 
-// The newest photos of a squad's own nights and of the squads it follows.
-// Other squads only show what they made public: the database decides that.
+// A parea's feed: its own nights and the pareas it follows, with a few public
+// nights of other pareas mixed in (one of yours went, a parea you follow went,
+// the same kind of night, or simply public). The database picks the nights and
+// says why; this keeps one photo per night and mixes them.
 export async function getPhotoFeed(groupId: string): Promise<FeedPhoto[]> {
-  const following = await getFollowing(groupId).catch(() => [] as Group[]);
-  const groupIds = [groupId, ...following.filter((g) => g.memoriesPublic).map((g) => g.id)];
+  const nights = await pickNights(groupId);
+  if (nights.length === 0) return [];
+  const why = new Map(nights.map((night) => [night.id, night]));
 
   const { data: eventRows, error: eventError } = await supabase
     .from("events")
     .select(`*, groups(${GROUP_FIELDS})`)
-    .in("group_id", groupIds)
-    .lte("date", keyOf(new Date()))
-    .order("date", { ascending: false })
-    .limit(NIGHTS);
+    .in("id", nights.map((night) => night.id))
+    .order("date", { ascending: false });
   if (eventError) throw eventError;
 
-  const nights = new Map<string, { event: MyEvent; group: Group }>();
+  const byEvent = new Map<string, Omit<FeedPhoto, "photo">>();
   for (const row of (eventRows ?? []) as any[]) {
     if (!row.groups) continue;
     const group = toGroup(row.groups);
-    nights.set(row.id, {
+    const night = why.get(row.id);
+    byEvent.set(row.id, {
       group,
+      reason: night?.reason ?? "yours",
+      via: night?.via ?? null,
       event: {
         id: row.id,
         groupId: row.group_id,
@@ -59,12 +68,12 @@ export async function getPhotoFeed(groupId: string): Promise<FeedPhoto[]> {
       },
     });
   }
-  if (nights.size === 0) return [];
+  if (byEvent.size === 0) return [];
 
   const { data: photoRows, error: photoError } = await supabase
     .from("event_photos")
     .select("*")
-    .in("event_id", [...nights.keys()])
+    .in("event_id", [...byEvent.keys()])
     .order("created_at", { ascending: false })
     .limit(PHOTOS);
   if (photoError) throw photoError;
@@ -80,7 +89,36 @@ export async function getPhotoFeed(groupId: string): Promise<FeedPhoto[]> {
     inExplore: row.in_explore ?? false,
   }));
 
-  return capPerNight(photos, PER_NIGHT).map((photo) => ({ photo, ...nights.get(photo.eventId)! }));
+  const posts = capPerNight(photos, PER_NIGHT).map((photo) => ({ photo, ...byEvent.get(photo.eventId)! }));
+  return mixFeed(posts, (post) => isOwnCircle(post.reason));
+}
+
+// The nights for the feed, with why each is there. Falls back to the parea's
+// own nights and the ones it follows while feed_nights.sql isn't in yet.
+async function pickNights(groupId: string): Promise<Night[]> {
+  const { data, error } = await supabase.rpc("feed_nights", { p_group: groupId, p_limit: NIGHTS });
+  if (!error && Array.isArray(data)) {
+    return (data as any[]).map((row) => ({ id: row.event_id, reason: row.reason as FeedReason, via: row.via ?? null }));
+  }
+
+  const following = await getFollowing(groupId).catch(() => [] as Group[]);
+  const followed = following.filter((g) => g.memoriesPublic);
+  const names = new Map(followed.map((g) => [g.id, g.name]));
+
+  const { data: rows, error: rowsError } = await supabase
+    .from("events")
+    .select("id, group_id")
+    .in("group_id", [groupId, ...followed.map((g) => g.id)])
+    .lte("date", keyOf(new Date()))
+    .order("date", { ascending: false })
+    .limit(NIGHTS);
+  if (rowsError) throw rowsError;
+
+  return ((rows ?? []) as any[]).map((row) =>
+    row.group_id === groupId
+      ? { id: row.id, reason: "yours" as const, via: null }
+      : { id: row.id, reason: "following" as const, via: names.get(row.group_id) ?? null },
+  );
 }
 
 // Reactions on these photos, oldest first, with who gave them and as which squad.

@@ -122,7 +122,7 @@ export default function PhotoFeed({
 
   return (
     <View>
-      <SectionHead title="Memories" meta="yours and who you follow" />
+      <SectionHead title="Memories" meta="yours and the nights around you" />
 
       <View style={styles.list}>
         {visible.map((item) => (
