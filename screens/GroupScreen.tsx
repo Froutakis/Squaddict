@@ -2,13 +2,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import { inviteMessage } from '../lib/invite';
 import SquadMemories from '../components/group/SquadMemories';
 import SquadLookSheet from '../components/group/SquadLookSheet';
 import FollowButton from '../components/group/FollowButton';
@@ -73,6 +77,7 @@ export default function GroupScreen({
   const [openPlan, setOpenPlan] = useState<SheetEvent | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [code, setCode] = useState<string | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [member, setMember] = useState(false);
   const [restricted, setRestricted] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -272,6 +277,34 @@ export default function GroupScreen({
     }
   }
 
+  // One tap: the phone's share sheet with the invite link. Where there is no
+  // share sheet (most desktop browsers) the invite is copied instead.
+  async function shareInvite() {
+    if (!code) {
+      setTab('members');
+      return;
+    }
+
+    const message = inviteMessage(current.name, code);
+    setInviteNotice(null);
+
+    try {
+      if (Platform.OS === 'web' && !(typeof navigator !== 'undefined' && 'share' in navigator)) {
+        throw new Error('No share sheet');
+      }
+      await Share.share({ message });
+    } catch {
+      // The note sits by the code, on the members tab.
+      setTab('members');
+      try {
+        await Clipboard.setStringAsync(message);
+        setInviteNotice('Invite copied. Paste it to your people.');
+      } catch {
+        setInviteNotice('Could not share the invite. Send them the code below.');
+      }
+    }
+  }
+
   async function handleRotate() {
     setRotating(true);
     setError(null);
@@ -428,7 +461,7 @@ export default function GroupScreen({
                 </Pressable>
 
                 <Pressable
-                  onPress={() => setTab('members')}
+                  onPress={shareInvite}
                   accessibilityRole="button"
                   accessibilityLabel="Invite people"
                   style={({ pressed }) => [styles.button, pressed && styles.pressed]}
@@ -494,6 +527,17 @@ export default function GroupScreen({
                       </Text>
                     </View>
                     <Pressable
+                      onPress={shareInvite}
+                      disabled={!code}
+                      accessibilityRole="button"
+                      accessibilityLabel="Share the invite link"
+                      hitSlop={6}
+                      style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]}
+                    >
+                      <Ionicons name="share-outline" size={16} color={paper.surface} />
+                      <Text style={styles.shareText}>Invite</Text>
+                    </Pressable>
+                    <Pressable
                       onPress={handleRotate}
                       disabled={rotating}
                       accessibilityRole="button"
@@ -508,6 +552,12 @@ export default function GroupScreen({
                       )}
                     </Pressable>
                   </View>
+
+                  {inviteNotice ? (
+                    <Text style={styles.hint} accessibilityLiveRegion="polite">
+                      {inviteNotice}
+                    </Text>
+                  ) : null}
 
                   {restricted ? (
                     <Text style={styles.hint}>Only members see who is in this squad.</Text>
@@ -640,6 +690,16 @@ const styles = StyleSheet.create({
   inviteText: { flex: 1, gap: 2 },
   inviteLabel: { color: paper.inkSoft, ...typo.regular, fontSize: textSize.small },
   code: { color: paper.ink, ...typo.mono, fontSize: textSize.heading, letterSpacing: 3 },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 36,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.pill,
+    backgroundColor: paper.ink,
+  },
+  shareText: { color: paper.surface, ...typo.semi, fontSize: textSize.body },
   roundButton: {
     width: 36,
     height: 36,

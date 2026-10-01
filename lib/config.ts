@@ -7,4 +7,7 @@ export const SUPPORT_EMAIL = 'hello@squaddict.app';
 // The stores ask for this URL.
 export const PRIVACY_URL = 'https://squaddict.netlify.app/privacy.html';
 
+// Where invite links open for people without the app (Netlify serves the web app).
+export const INVITE_URL = 'https://squaddict.netlify.app/join';
+
 export const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';

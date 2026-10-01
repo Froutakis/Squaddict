@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import type { User } from '@supabase/supabase-js';
 import RegisterScreen from './screens/RegisterScreen';
 import { supabase } from './services/supabaseClient';
-import { colors } from './theme';
+import { colors, radius, space, typo, textSize } from './theme';
+import { joinByInviteCode } from './services/serviceGroup';
+import { inviteCodeFrom } from './lib/invite';
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen, { type RailData } from './screens/HomeScreen';
 import GroupChatScreen from './screens/GroupChatScreen';
@@ -26,6 +29,10 @@ type Screen = 'home' | 'events' | 'explore' | 'you';
 // Things the side rail can ask Parea to open once it is showing.
 type HomeAsk = 'plan' | 'calendar' | 'squad';
 
+// An invite opened before signing in waits here until there is someone to join.
+const PENDING_INVITE_KEY = 'squaddict.pendingInvite';
+const NOTICE_MS = 4000;
+
 const NO_RAIL_DATA: RailData = { squads: [], activeId: null, unread: {}, me: { name: '', avatarUrl: null } };
 
 export default function App() {
@@ -44,6 +51,10 @@ export default function App() {
   const [railOpen, setRailOpen] = useState(false);
   // Parea keeps this up to date; the rail shows it on every screen.
   const [railData, setRailData] = useState<RailData>(NO_RAIL_DATA);
+  const [pendingInvite, setPendingInvite] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Bumped to load Parea afresh, e.g. after joining a new squad.
+  const [homeKey, setHomeKey] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -77,6 +88,58 @@ export default function App() {
       }
     });
   }, []);
+
+  // Invite links: squaddict://join/CODE in the app, /join/CODE on the web.
+  useEffect(() => {
+    function take(url: string | null) {
+      const code = inviteCodeFrom(url);
+      if (!code) return;
+
+      setPendingInvite(code);
+      AsyncStorage.setItem(PENDING_INVITE_KEY, code).catch(() => {});
+      // Leave /join/CODE behind, so a reload doesn't join again.
+      if (Platform.OS === 'web' && typeof window !== 'undefined') window.history.replaceState(null, '', '/');
+    }
+
+    Linking.getInitialURL().then(take).catch(() => {});
+    AsyncStorage.getItem(PENDING_INVITE_KEY)
+      .then((code) => {
+        if (code) setPendingInvite((current) => current ?? code);
+      })
+      .catch(() => {});
+
+    const sub = Linking.addEventListener('url', ({ url }) => take(url));
+    return () => sub.remove();
+  }, []);
+
+  // Join as soon as someone is signed in: right away, or after login or sign up.
+  useEffect(() => {
+    if (!user || !pendingInvite) return;
+
+    const code = pendingInvite;
+    setPendingInvite(null);
+    AsyncStorage.removeItem(PENDING_INVITE_KEY).catch(() => {});
+
+    joinByInviteCode(code)
+      .then(function (group) {
+        setCreateNonce(0);
+        setCalendarNonce(0);
+        setNewSquadNonce(0);
+        setSelectGroup({ id: group.id, nonce: Date.now() });
+        setScreen('home');
+        setHomeKey((n) => n + 1);
+        setNotice(`You're in ${group.name}.`);
+      })
+      .catch(function (problem) {
+        setNotice(problem instanceof Error ? problem.message : 'That invite did not work.');
+      });
+  }, [user?.id, pendingInvite]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const hide = setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => clearTimeout(hide);
+  }, [notice]);
 
   if (checkingSession) {
     return (
@@ -134,6 +197,7 @@ export default function App() {
           <YouScreen user={user} onPlan={() => goHome('plan')} />
         ) : (
           <HomeScreen
+            key={`home-${homeKey}`}
             user={user}
             focusEventId={focusEventId}
             onFocusHandled={() => setFocusEventId(null)}
@@ -205,6 +269,17 @@ export default function App() {
         }}
         onClose={() => setRailOpen(false)}
       />
+      {notice ? (
+        <Pressable
+          onPress={() => setNotice(null)}
+          accessibilityRole="button"
+          accessibilityLabel={`${notice} Dismiss`}
+          accessibilityLiveRegion="polite"
+          style={styles.notice}
+        >
+          <Text style={styles.noticeText}>{notice}</Text>
+        </Pressable>
+      ) : null}
       <StatusBar style="dark" />
     </View>
   );
@@ -215,4 +290,15 @@ const styles = StyleSheet.create({
   app: { flex: 1, backgroundColor: colors.bg },
   body: { flex: 1 },
   overlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },
+  notice: {
+    position: 'absolute',
+    left: space.md,
+    right: space.md,
+    bottom: space.xl,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.ink,
+  },
+  noticeText: { color: colors.onInk, ...typo.semi, fontSize: textSize.base, textAlign: 'center' },
 });
