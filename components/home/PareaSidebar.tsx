@@ -54,6 +54,7 @@ type PareaSidebarProps = {
   onChat: () => void;
   onPlan: () => void;
   onEvents: () => void;
+  onHome: () => void;
   onCalendar: () => void;
   onExplore: () => void;
   onYou: () => void;
@@ -75,6 +76,7 @@ export default function PareaSidebar({
   onChat,
   onPlan,
   onEvents,
+  onHome,
   onCalendar,
   onExplore,
   onYou,
@@ -129,6 +131,7 @@ export default function PareaSidebar({
   const chatUnread = activeId ? unread[activeId] ?? 0 : 0;
   const tools: Tool[] = [
     { key: 'plan', label: 'New plan', icon: 'add', primary: true, onPress: onPlan },
+    { key: 'home', label: 'Memories', icon: 'images-outline', onPress: onHome },
     { key: 'events', label: 'Plans', icon: 'ticket-outline', onPress: onEvents },
     { key: 'chat', label: 'Chat', icon: 'chatbubble-outline', badge: chatUnread, onPress: onChat },
     { key: 'calendar', label: 'Calendar', icon: 'calendar-outline', onPress: onCalendar },
@@ -209,7 +212,7 @@ export default function PareaSidebar({
             <View style={styles.sep} />
 
             {tools.map((tool) => {
-              // Explore and Plans are screens: the one you are on stays marked.
+              // Memories, Plans and Explore are screens: the one you are on stays marked.
               const held = label?.key === tool.key || tool.key === current;
               const soonLabel = `${tool.label} · coming soon`;
               return (

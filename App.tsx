@@ -250,6 +250,11 @@ export default function App() {
           if (railData.activeId) setChatTarget({ groupId: railData.activeId, nonce: Date.now() });
         }}
         onPlan={() => afterRail(() => goHome('plan'))}
+        onHome={() => {
+          setRailOpen(false);
+          goHome();
+          setScreen('home');
+        }}
         onEvents={() => {
           setRailOpen(false);
           goHome();
