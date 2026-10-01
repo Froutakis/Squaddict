@@ -90,7 +90,11 @@ export async function getPhotoFeed(groupId: string): Promise<FeedPhoto[]> {
   }));
 
   const posts = capPerNight(photos, PER_NIGHT).map((photo) => ({ photo, ...byEvent.get(photo.eventId)! }));
-  return mixFeed(posts, (post) => isOwnCircle(post.reason));
+  // The mix decides which nights from other pareas get in; the feed itself
+  // stays in time order, so "This week" and "Last week" read straight down.
+  return mixFeed(posts, (post) => isOwnCircle(post.reason)).sort((a, b) =>
+    `${b.event.date} ${b.event.startTime ?? ''}`.localeCompare(`${a.event.date} ${a.event.startTime ?? ''}`),
+  );
 }
 
 // The nights for the feed, with why each is there. Falls back to the parea's

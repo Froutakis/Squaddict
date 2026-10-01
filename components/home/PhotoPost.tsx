@@ -15,7 +15,7 @@ import Monogram from '../general/Monogram';
 import { parseDateKey } from '../../lib/datetime';
 import { tagLabel, type EventTag } from '../../lib/tags';
 import type { FeedReason } from '../../lib/photoFeed';
-import { colors, radius, space, textSize, tint, typo } from '../../theme';
+import { colors, radius, shadow, space, textSize, tint, typo } from '../../theme';
 
 const DOUBLE_TAP_MS = 260;
 
@@ -51,7 +51,8 @@ type PhotoPostProps = {
 };
 
 // One memory in the feed, as a card: the squad and the night it is from on
-// top, the photo, the reactions as pills and who reacted.
+// top, the photo with the night's date stamped on it, the reactions as pills
+// and who reacted.
 export default function PhotoPost({
   item,
   url,
@@ -113,7 +114,7 @@ export default function PhotoPost({
           </Text>
           <Text style={styles.place} numberOfLines={1}>
             {item.event.title}
-            {night ? ` · ${night}` : ''}
+            {place ? ` · ${place}` : ''}
           </Text>
         </View>
         {why ? (
@@ -132,8 +133,16 @@ export default function PhotoPost({
         accessibilityHint="Opens the night. Double tap to react."
         style={[styles.frame, { aspectRatio: postRatio(item.photo.width, item.photo.height) }]}
       >
+        {/* Shows until the photo is in. */}
+        <Ionicons name="image-outline" size={28} color={colors.borderStrong} />
         {url ? (
           <Image source={{ uri: url }} style={styles.photo} resizeMode="cover" onError={onImageError} />
+        ) : null}
+
+        {night ? (
+          <View style={styles.stamp} pointerEvents="none">
+            <Text style={styles.stampText}>{night}</Text>
+          </View>
         ) : null}
 
         <Animated.View
@@ -164,7 +173,7 @@ export default function PhotoPost({
                 styles.pill,
                 count === 0 && styles.pillRound,
                 mine && styles.pillMine,
-                pressed && styles.pressed,
+                pressed && styles.pillPressed,
               ]}
             >
               <Ionicons name={mine ? filled : outline} size={18} color={mine ? colors.danger : colors.text} />
@@ -215,23 +224,22 @@ function firstWord(name: string) {
   return name.trim().split(/\s+/)[0] || name;
 }
 
-// "Tue 29 Sep", the night the photo is from.
+// "TUE 29 SEP", the night the photo is from, as it is stamped on the photo.
 function nightLabel(dateStr: string) {
   const d = parseDateKey(dateStr);
   if (!d) return '';
   const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
   const month = d.toLocaleDateString('en-US', { month: 'short' });
-  return `${weekday} ${d.getDate()} ${month}`;
+  return `${weekday} ${d.getDate()} ${month}`.toUpperCase();
 }
 
 const styles = StyleSheet.create({
+  // No outline: the card stands off the page on a soft shadow of the ink.
   post: {
     marginHorizontal: space.md,
     borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.surface,
-    overflow: 'hidden',
+    ...shadow.card,
   },
   pressed: { opacity: 0.6 },
 
@@ -240,7 +248,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.sm,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 10,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
   },
   avatar: { borderRadius: 12 },
   why: {
@@ -255,8 +266,25 @@ const styles = StyleSheet.create({
   squad: { color: colors.text, ...typo.display, fontSize: textSize.base },
   place: { color: colors.textSoft, ...typo.semi, fontSize: textSize.small, marginTop: 1 },
 
-  frame: { width: '100%', backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  frame: {
+    width: '100%',
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   photo: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+  // The night's date, stamped on the photo like on a ticket.
+  stamp: {
+    position: 'absolute',
+    left: space.sm,
+    top: space.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(12,25,38,0.55)',
+  },
+  stampText: { color: '#FFFFFF', ...typo.mono, fontSize: textSize.caption, letterSpacing: 1.2 },
 
   actions: {
     flexDirection: 'row',
@@ -280,10 +308,11 @@ const styles = StyleSheet.create({
   },
   pillRound: { width: 38, paddingHorizontal: 0 },
   pillMine: { borderWidth: 1.5, borderColor: colors.danger, backgroundColor: tint.danger },
+  pillPressed: { transform: [{ scale: 0.94 }] },
   count: { color: colors.text, ...typo.bold, fontSize: textSize.body },
   countMine: { color: '#B23624', ...typo.display },
 
-  words: { paddingHorizontal: space.md, paddingTop: space.xs, paddingBottom: space.md },
+  words: { paddingHorizontal: space.md, paddingTop: space.xs, paddingBottom: space.md + 2 },
   wordsEmpty: { height: space.sm },
   text: { color: colors.text, ...typo.regular, fontSize: textSize.body, lineHeight: 18 },
   strong: { ...typo.display },
