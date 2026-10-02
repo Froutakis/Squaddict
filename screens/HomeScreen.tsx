@@ -43,7 +43,9 @@ import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
 import PhotoPrompt from '../components/home/PhotoPrompt';
 import PhotoFeed from '../components/home/PhotoFeed';
-import { AnswerCard } from '../components/home/FeedCards';
+import TodayWallet from '../components/home/TodayWallet';
+import UpcomingLine from '../components/home/UpcomingLine';
+import { TimelineRow, TodayNode } from '../components/home/Timeline';
 import type { FeedPhoto } from '../services/servicePhotoFeed';
 import GroupScreen from './GroupScreen';
 import { MEMORY_LIMIT, toMemoryNights, type MemoryNight } from '../components/home/memories';
@@ -68,6 +70,10 @@ import { features } from '../lib/features';
 const RENEW_TICK_MS = 5 * 60 * 1000;
 // Coming back to the app refreshes the week, at most once a minute.
 const RESUME_REFRESH_MS = 60 * 1000;
+// Above TODAY on the memories line: this many coming plans at most.
+const COMING_LIMIT = 6;
+// Plans that all start from here on are "tonight".
+const EVENING = '17:00';
 
 type HomeScreenProps = {
   user: AuthUser;
@@ -417,6 +423,21 @@ export default function HomeScreen({
   });
   const pool = upcoming.filter((e) => e.id !== heroEvent?.id);
   const waiting = pool.filter((e) => e.myStatus === undefined);
+  const isLive = (e: MyEvent) => isHappeningNow(e.date, e.startTime, e.endTime, now);
+  // TODAY's wallet: on now first, then what needs your answer, then the soonest.
+  const todays = visible
+    .filter((e) => e.date === today && e.myStatus !== 'out')
+    .sort(
+      (a, b) =>
+        Number(isLive(b)) - Number(isLive(a)) ||
+        Number(b.myStatus === undefined) - Number(a.myStatus === undefined) ||
+        (a.startTime ?? '').localeCompare(b.startTime ?? ''),
+    );
+  const coming = visible
+    .filter((e) => e.date > today && e.myStatus !== 'out')
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? '').localeCompare(b.startTime ?? ''))
+    .slice(0, COMING_LIMIT);
+  const tonight = todays.length > 1 && todays.every((e) => (e.startTime ?? '') >= EVENING);
   const clockNow = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const recent = visible.filter((e) => inPhotoWindow(e.date, e.startTime, e.endTime, now));
   const recentIds = recent.map((e) => e.id).sort().join(',');
@@ -578,6 +599,33 @@ export default function HomeScreen({
           </View>
         ) : null}
 
+        <View style={styles.line}>
+          <UpcomingLine plans={coming} onOpen={setOpenEvent} />
+          <TimelineRow
+            first={coming.length === 0}
+            node={<TodayNode note={todays.length > 1 ? `${todays.length} ${tonight ? 'tonight' : 'plans'}` : undefined} />}
+          >
+            <TodayWallet
+              plans={todays}
+              onThrowPlan={() => openNewEvent(today)}
+              renderFront={(plan) => (
+                <UpNext
+                  event={plan}
+                  cover={coverFor(plan)}
+                  live={isLive(plan)}
+                  liveText={isLive(plan) ? liveLabel(plan.date, plan.startTime, plan.endTime, now) : undefined}
+                  checkedIn={isCheckedIn(plan.id)}
+                  hereCount={checkins[plan.id]?.length ?? 0}
+                  onCheckIn={() => checkIn(plan.id)}
+                  onAddPhoto={isCheckedIn(plan.id) ? () => setAddingPhoto(plan) : undefined}
+                  onPress={() => setOpenEvent(plan)}
+                  onRsvp={(status) => handleRsvp(plan.id, status)}
+                />
+              )}
+            />
+          </TimelineRow>
+        </View>
+
         {activeGroup ? (
           <PhotoFeed
             group={activeGroup}
@@ -589,18 +637,6 @@ export default function HomeScreen({
             onOpenNight={openFeedNight}
             onOpenGroup={setProfileGroup}
             canOpenGroup={(group) => features.publicProfiles || groups.some((mine) => mine.id === group.id)}
-            answerCard={
-              waiting[0] ? (
-                <AnswerCard key="answer">
-                  <EventCard
-                    event={toCardData(waiting[0], coverFor(waiting[0]))}
-                    action="rsvp"
-                    onPress={() => setOpenEvent(waiting[0])}
-                    onRsvp={(status) => handleRsvp(waiting[0].id, status)}
-                  />
-                </AnswerCard>
-              ) : null
-            }
             onPlanAgain={(item) => {
               openNewEvent(nextSameWeekday(item.event.date));
               setDraftEvent(item.event);
@@ -947,6 +983,7 @@ const styles = StyleSheet.create({
     gap: space.md,
   },
   body: { paddingHorizontal: space.lg, gap: space.sm },
+  line: { paddingTop: space.xs },
   error: { color: colors.danger, ...typo.medium, fontSize: 13 },
   state: { alignItems: 'center', paddingHorizontal: space.lg, paddingVertical: space.xl, gap: space.xs },
   stateTitle: {

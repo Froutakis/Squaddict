@@ -14,6 +14,8 @@ import type { SignedMap } from '../chat/media';
 import Monogram from '../general/Monogram';
 import PhotoPost from './PhotoPost';
 import { AgainCard, ThrowbackCard } from './FeedCards';
+import { DateNode, GroupNode, GroupTitle, TimelineRow } from './Timeline';
+import { readJson, writeJson } from '../../lib/store';
 import { colors, radius, shadow, space, textSize, typo } from '../../theme';
 
 const PAGE = 10;
@@ -34,8 +36,6 @@ type PhotoFeedProps = {
   canOpenGroup?: (group: Group) => boolean;
   // Shown once the feed has loaded and there is nothing in it.
   empty?: ReactNode;
-  // A plan waiting on your answer, shown between the memories.
-  answerCard?: ReactNode;
   // "Plan it again" on a night that went well.
   onPlanAgain?: (item: FeedPhoto) => void;
 };
@@ -45,6 +45,10 @@ const FIRST_CARD_AFTER = 2;
 const CARD_EVERY = 4;
 // A night of yours is worth repeating once it has this many reactions.
 const AGAIN_REACTIONS = 3;
+// Before the first visit, the last week counts as new.
+const FIRST_VISIT_DAYS = 7;
+const seenKey = (groupId: string) => `squaddict.memoriesSeen.${groupId}`;
+const FLUSH = { marginHorizontal: 0 };
 
 // Memories from your squad and the nights around it, newest first: one photo
 // for each night that was kept, grouped by when it was.
@@ -59,7 +63,6 @@ export default function PhotoFeed({
   onOpenGroup,
   empty = null,
   canOpenGroup = () => true,
-  answerCard = null,
   onPlanAgain,
 }: PhotoFeedProps) {
   const [items, setItems] = useState<FeedPhoto[]>([]);
@@ -70,6 +73,8 @@ export default function PhotoFeed({
   const [shown, setShown] = useState(PAGE);
   const [reactorsOf, setReactorsOf] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Photos added after this were not on screen the last time you looked.
+  const [seenUntil, setSeenUntil] = useState<string | null>(null);
   const reactionsRef = useRef(reactions);
   reactionsRef.current = reactions;
 
@@ -77,11 +82,15 @@ export default function PhotoFeed({
     let cancelled = false;
     setFailed(false);
 
-    getPhotoFeed(group.id)
-      .then(async function (feed) {
+    Promise.all([getPhotoFeed(group.id), readJson<string>(seenKey(group.id))])
+      .then(async function ([feed, seen]) {
         if (cancelled) return;
+        const firstVisit = new Date(Date.now() - FIRST_VISIT_DAYS * 24 * 60 * 60 * 1000).toISOString();
+        setSeenUntil(seen ?? firstVisit);
         setItems(feed);
         setLoaded(true);
+        const newest = feed.reduce((max, item) => (item.photo.createdAt > max ? item.photo.createdAt : max), seen ?? '');
+        if (newest !== '') writeJson(seenKey(group.id), newest);
 
         const byPhoto = await getPhotoReactions(feed.map((item) => item.photo.id)).catch(() => ({}));
         if (!cancelled) setReactions(byPhoto);
@@ -116,7 +125,6 @@ export default function PhotoFeed({
     : undefined;
   const throwback = pickThrowback(items, now, again?.item.photo.id);
   const cards: ReactNode[] = [
-    answerCard,
     again ? (
       <AgainCard
         key="again"
@@ -124,6 +132,7 @@ export default function PhotoFeed({
         url={signed[again.item.photo.path]?.url}
         reactions={again.count}
         onPlanAgain={() => onPlanAgain?.(again.item)}
+        style={FLUSH}
       />
     ) : null,
     throwback ? (
@@ -133,6 +142,7 @@ export default function PhotoFeed({
         url={signed[throwback.item.photo.path]?.url}
         ago={throwback.ago}
         onOpen={() => onOpenNight(throwback.item)}
+        style={FLUSH}
       />
     ) : null,
   ].filter(Boolean);
@@ -143,6 +153,11 @@ export default function PhotoFeed({
   const placed = visible.filter((_, index) => cardAfter(index) !== null).length;
   // A short feed still gets its cards, at the end.
   const leftover = items.length > shown ? [] : cards.slice(placed);
+  const cardRow = (card: ReactNode, key: string, enterIndex?: number) => (
+    <TimelineRow key={key} enterIndex={enterIndex}>
+      {card}
+    </TimelineRow>
+  );
 
   const paths = [
     ...visible.map((item) => item.photo.path),
@@ -202,20 +217,47 @@ export default function PhotoFeed({
   const reactors = reactorsOf ? reactions[reactorsOf] ?? [] : [];
   const today = new Date();
 
+  // How many nights, and how many fires, in each stretch of time.
+  const groups = new Map<string, { nights: number; fires: number }>();
+  for (const item of visible) {
+    const when = whenLabel(item.event.date, today);
+    const one = groups.get(when) ?? { nights: 0, fires: 0 };
+    one.nights += 1;
+    one.fires += (reactions[item.photo.id] ?? []).length;
+    groups.set(when, one);
+  }
+
   return (
     <View>
-      <View style={styles.list}>
-        {visible.map((item, index) => {
-          const when = whenLabel(item.event.date, today);
-          const startsGroup = index === 0 || whenLabel(visible[index - 1].event.date, today) !== when;
-          return (
-            <View key={item.photo.id} style={styles.entry}>
-              {startsGroup ? (
-                <View style={styles.when} accessibilityRole="header">
-                  <Text style={styles.whenText}>{when}</Text>
-                  <View style={styles.whenRule} />
-                </View>
-              ) : null}
+      {visible.map((item, index) => {
+        const when = whenLabel(item.event.date, today);
+        const startsGroup = index === 0 || whenLabel(visible[index - 1].event.date, today) !== when;
+        const counts = groups.get(when);
+        const enterIndex = index % PAGE;
+        const card = cardAfter(index);
+        const other = item.group.id !== group.id;
+        const fresh = seenUntil !== null && item.photo.createdAt > seenUntil;
+        return (
+          <View key={item.photo.id}>
+            {startsGroup ? (
+              <TimelineRow node={<GroupNode />} enterIndex={enterIndex}>
+                <GroupTitle
+                  kicker={when}
+                  title={counts && counts.nights === 1 ? 'One night out' : `${counts?.nights ?? 0} nights out`}
+                  meta={counts && counts.fires > 0 ? `${counts.fires} ${counts.fires === 1 ? 'fire' : 'fires'}` : undefined}
+                />
+              </TimelineRow>
+            ) : null}
+            <TimelineRow
+              enterIndex={enterIndex}
+              node={
+                <DateNode
+                  date={item.event.date}
+                  kind={other ? 'parea' : fresh ? 'new' : 'seen'}
+                  parea={other ? { name: item.group.name, avatarUrl: item.group.avatarUrl } : undefined}
+                />
+              }
+            >
               <PhotoPost
                 item={item}
                 url={signed[item.photo.path]?.url}
@@ -226,13 +268,14 @@ export default function PhotoFeed({
                 onOpenGroup={canOpenGroup(item.group) ? () => onOpenGroup(item.group) : undefined}
                 onShowReactors={() => setReactorsOf(item.photo.id)}
                 onImageError={() => onImageError(item.photo.path)}
+                style={FLUSH}
               />
-              {cardAfter(index)}
-            </View>
-          );
-        })}
-        {leftover}
-      </View>
+            </TimelineRow>
+            {card ? cardRow(card, 'card', enterIndex) : null}
+          </View>
+        );
+      })}
+      {leftover.map((card, i) => cardRow(card, `leftover-${i}`))}
 
       {error ? (
         <Text style={styles.error} accessibilityLiveRegion="polite">
@@ -250,7 +293,9 @@ export default function PhotoFeed({
           <Text style={styles.moreText}>Show earlier nights</Text>
         </Pressable>
       ) : (
-        <Text style={styles.end}>That's every night from the last two months.</Text>
+        <TimelineRow node={<View style={styles.endDot} />}>
+          <Text style={styles.end}>That's every night from the last two months. Keep the line going.</Text>
+        </TimelineRow>
       )}
 
       <Modal
@@ -369,13 +414,9 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
   pressedDown: { transform: [{ scale: 0.97 }] },
 
-  when: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingHorizontal: space.lg, marginTop: space.xs },
-  whenText: { color: colors.text, ...typo.title, fontSize: textSize.lead, letterSpacing: -0.2 },
-  whenRule: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.borderStrong },
-
+  endDot: { width: 10, height: 10, marginTop: 4, borderRadius: 5, backgroundColor: colors.borderStrong },
   end: {
-    alignSelf: 'center',
-    marginTop: space.lg,
+    paddingTop: 1,
     color: colors.textSoft,
     ...typo.medium,
     fontSize: textSize.body,
@@ -412,7 +453,7 @@ const styles = StyleSheet.create({
   },
   more: {
     marginHorizontal: space.md,
-    marginTop: space.lg,
+    marginTop: space.xs,
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',

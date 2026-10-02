@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { FeedPhoto } from '../../services/servicePhotoFeed';
 import { parseDateKey } from '../../lib/datetime';
 import { colors, radius, shadow, space, textSize, typo } from '../../theme';
@@ -14,16 +14,18 @@ export function AgainCard({
   url,
   reactions,
   onPlanAgain,
+  style,
 }: {
   item: FeedPhoto;
   url?: string;
   reactions: number;
   onPlanAgain: () => void;
+  style?: StyleProp<ViewStyle>;
 }) {
   const weekday = weekdayOf(item.event.date);
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, style]}>
       <View style={styles.againRow}>
         <View style={styles.thumb}>
           {url ? <Image source={{ uri: url }} style={styles.fill} resizeMode="cover" /> : null}
@@ -70,18 +72,20 @@ export function ThrowbackCard({
   url,
   ago,
   onOpen,
+  style,
 }: {
   item: FeedPhoto;
   url?: string;
   ago: string;
   onOpen: () => void;
+  style?: StyleProp<ViewStyle>;
 }) {
   return (
     <Pressable
       onPress={onOpen}
       accessibilityRole="button"
       accessibilityLabel={`${ago}: ${item.event.title}. Open the night`}
-      style={({ pressed }) => [styles.throwback, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.throwback, style, pressed && styles.pressed]}
     >
       {url ? <Image source={{ uri: url }} style={styles.fill} resizeMode="cover" /> : null}
       <View style={styles.shade} />

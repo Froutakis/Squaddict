@@ -1,6 +1,6 @@
 import { useRef, type ComponentProps } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { FeedPhoto } from '../../services/servicePhotoFeed';
 import {
   QUICK_REACTION,
@@ -51,6 +51,7 @@ type PhotoPostProps = {
   onOpenGroup?: () => void;
   onShowReactors: () => void;
   onImageError: () => void;
+  style?: StyleProp<ViewStyle>;
 };
 
 // One memory in the feed, as a used ticket: the photo is its cover, with the
@@ -66,6 +67,7 @@ export default function PhotoPost({
   onOpenGroup,
   onShowReactors,
   onImageError,
+  style,
 }: PhotoPostProps) {
   const lastTap = useRef(0);
   const single = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -154,7 +156,7 @@ export default function PhotoPost({
       stub={stub}
       torn
       cutColor={colors.bg}
-      style={styles.ticket}
+      style={[styles.ticket, style]}
     >
       <Pressable
         onPress={tapPhoto}
