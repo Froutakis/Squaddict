@@ -11,3 +11,6 @@ dist/
 
 # Our own photos (originals and the web copies for the demo memories)
 photo/
+
+# Local dev and test tools (fake Supabase client, PGlite tests, promo scripts)
+dev/
