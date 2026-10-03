@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import type { Group } from '../../services/serviceGroup';
 import {
   clearPhotoReaction,
@@ -13,6 +13,7 @@ import { parseDateKey, startOfWeek } from '../../lib/datetime';
 import type { SignedMap } from '../chat/media';
 import Monogram from '../general/Monogram';
 import PhotoPost from './PhotoPost';
+import PostViewer from './PostViewer';
 import { AgainCard, ThrowbackCard } from './FeedCards';
 import { DateNode, GroupNode, GroupTitle, TimelineRow } from './Timeline';
 import { readJson, writeJson } from '../../lib/store';
@@ -30,7 +31,6 @@ type PhotoFeedProps = {
   onImageError: (path: string) => void;
   // Bump to reload, e.g. after a photo was added.
   reloadKey: number;
-  onOpenNight: (item: FeedPhoto) => void;
   onOpenGroup: (group: Group) => void;
   // Whether a parea's page can be opened at all; when not, its name is just a label.
   canOpenGroup?: (group: Group) => boolean;
@@ -59,7 +59,6 @@ export default function PhotoFeed({
   signPaths,
   onImageError,
   reloadKey,
-  onOpenNight,
   onOpenGroup,
   empty = null,
   canOpenGroup = () => true,
@@ -73,6 +72,8 @@ export default function PhotoFeed({
   const [shown, setShown] = useState(PAGE);
   const [reactorsOf, setReactorsOf] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The post opened full screen.
+  const [openPost, setOpenPost] = useState<FeedPhoto | null>(null);
   // Photos added after this were not on screen the last time you looked.
   const [seenUntil, setSeenUntil] = useState<string | null>(null);
   const reactionsRef = useRef(reactions);
@@ -124,28 +125,38 @@ export default function PhotoFeed({
         .sort((a, b) => b.count - a.count)[0]
     : undefined;
   const throwback = pickThrowback(items, now, again?.item.photo.id);
-  const cards: ReactNode[] = [
-    again ? (
+  // Each card, with what it puts on the line (a throwback sits on its date).
+  const cards: { key: string; node?: ReactNode; card: ReactNode }[] = [];
+  if (again) {
+    cards.push({
+      key: 'again',
+      card: (
       <AgainCard
-        key="again"
         item={again.item}
         url={signed[again.item.photo.path]?.url}
         reactions={again.count}
         onPlanAgain={() => onPlanAgain?.(again.item)}
         style={FLUSH}
       />
-    ) : null,
-    throwback ? (
-      <ThrowbackCard
-        key="throwback"
-        item={throwback.item}
-        url={signed[throwback.item.photo.path]?.url}
-        ago={throwback.ago}
-        onOpen={() => onOpenNight(throwback.item)}
-        style={FLUSH}
-      />
-    ) : null,
-  ].filter(Boolean);
+      ),
+    });
+  }
+  if (throwback) {
+    cards.push({
+      key: 'throwback',
+      node: <DateNode date={throwback.item.event.date} kind="seen" />,
+      card: (
+        <ThrowbackCard
+          item={throwback.item}
+          url={signed[throwback.item.photo.path]?.url}
+          ago={throwback.ago}
+          fires={(reactions[throwback.item.photo.id] ?? []).length}
+          onOpen={() => setOpenPost(throwback.item)}
+          style={FLUSH}
+        />
+      ),
+    });
+  }
   const cardAfter = (index: number) =>
     index + 1 >= FIRST_CARD_AFTER && (index + 1 - FIRST_CARD_AFTER) % CARD_EVERY === 0
       ? cards[(index + 1 - FIRST_CARD_AFTER) / CARD_EVERY] ?? null
@@ -153,14 +164,14 @@ export default function PhotoFeed({
   const placed = visible.filter((_, index) => cardAfter(index) !== null).length;
   // A short feed still gets its cards, at the end.
   const leftover = items.length > shown ? [] : cards.slice(placed);
-  const cardRow = (card: ReactNode, key: string, enterIndex?: number) => (
-    <TimelineRow key={key} enterIndex={enterIndex}>
-      {card}
+  const cardRow = (one: (typeof cards)[number], enterIndex?: number) => (
+    <TimelineRow solid key={one.key} node={one.node} enterIndex={enterIndex}>
+      {one.card}
     </TimelineRow>
   );
 
   const paths = [
-    ...visible.map((item) => item.photo.path),
+    ...visible.flatMap((item) => [item.photo.path, ...item.more.map((photo) => photo.path)]),
     ...(again ? [again.item.photo.path] : []),
     ...(throwback ? [throwback.item.photo.path] : []),
   ].join('|');
@@ -240,7 +251,7 @@ export default function PhotoFeed({
         return (
           <View key={item.photo.id}>
             {startsGroup ? (
-              <TimelineRow node={<GroupNode />} enterIndex={enterIndex}>
+              <TimelineRow solid node={<GroupNode />} enterIndex={enterIndex}>
                 <GroupTitle
                   kicker={when}
                   title={counts && counts.nights === 1 ? 'One night out' : `${counts?.nights ?? 0} nights out`}
@@ -264,18 +275,21 @@ export default function PhotoFeed({
                 reactions={reactions[item.photo.id] ?? []}
                 userId={me.id}
                 onReact={(emoji) => react(item.photo.id, emoji)}
-                onOpenNight={() => onOpenNight(item)}
+                onOpenNight={() => setOpenPost(item)}
                 onOpenGroup={canOpenGroup(item.group) ? () => onOpenGroup(item.group) : undefined}
                 onShowReactors={() => setReactorsOf(item.photo.id)}
                 onImageError={() => onImageError(item.photo.path)}
+                moreUrls={item.more.map((photo) => signed[photo.path]?.url)}
+                fresh={fresh}
+                onShare={() => shareNight(item)}
                 style={FLUSH}
               />
             </TimelineRow>
-            {card ? cardRow(card, 'card', enterIndex) : null}
+            {card ? cardRow(card, enterIndex) : null}
           </View>
         );
       })}
-      {leftover.map((card, i) => cardRow(card, `leftover-${i}`))}
+      {leftover.map((card) => cardRow(card))}
 
       {error ? (
         <Text style={styles.error} accessibilityLiveRegion="polite">
@@ -293,10 +307,32 @@ export default function PhotoFeed({
           <Text style={styles.moreText}>Show earlier nights</Text>
         </Pressable>
       ) : (
-        <TimelineRow node={<View style={styles.endDot} />}>
+        <TimelineRow solid node={<View style={styles.endDot} />}>
           <Text style={styles.end}>That's every night from the last two months. Keep the line going.</Text>
         </TimelineRow>
       )}
+
+      <PostViewer
+        item={openPost}
+        reactions={openPost ? reactions[openPost.photo.id] ?? [] : []}
+        userId={me.id}
+        signed={signed}
+        signPaths={signPaths}
+        onImageError={onImageError}
+        onReact={(emoji) => openPost && react(openPost.photo.id, emoji)}
+        onShowReactors={() => openPost && setReactorsOf(openPost.photo.id)}
+        onShare={() => openPost && shareNight(openPost)}
+        onOpenGroup={
+          openPost && canOpenGroup(openPost.group)
+            ? () => {
+                const target = openPost.group;
+                setOpenPost(null);
+                onOpenGroup(target);
+              }
+            : undefined
+        }
+        onClose={() => setOpenPost(null)}
+      />
 
       <Modal
         visible={reactorsOf !== null}
@@ -338,6 +374,18 @@ export default function PhotoFeed({
   );
 }
 
+// The night as a ticket in words, for the share sheet.
+function shareNight(item: FeedPhoto) {
+  const d = parseDateKey(item.event.date);
+  const when = d ? d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+  const place = item.event.placeLabel ?? item.event.location;
+  Share.share({
+    message: `${item.event.title}
+${[item.group.name, place, when].filter(Boolean).join(' · ')}
+One of our nights on Squaddict.`,
+  }).catch(() => {});
+}
+
 function daysAgo(dateStr: string, now: Date): number {
   const d = parseDateKey(dateStr);
   if (!d) return -1;
@@ -353,10 +401,14 @@ function between(value: number, low: number, high: number) {
 function pickThrowback(items: FeedPhoto[], now: Date, skipPhotoId?: string) {
   const mine = items.filter((item) => item.reason === 'yours' && item.photo.id !== skipPhotoId);
   const year = mine.find((item) => between(daysAgo(item.event.date, now), 362, 368));
-  if (year) return { item: year, ago: 'One year ago' };
+  if (year) return { item: year, ago: onTheDay(year, now) ? 'One year ago today' : 'One year ago' };
   const month = mine.find((item) => between(daysAgo(item.event.date, now), 27, 34));
-  if (month) return { item: month, ago: 'One month ago' };
+  if (month) return { item: month, ago: onTheDay(month, now) ? 'One month ago today' : 'One month ago' };
   return null;
+}
+
+function onTheDay(item: FeedPhoto, now: Date) {
+  return parseDateKey(item.event.date)?.getDate() === now.getDate();
 }
 
 // "This week", "Last week", then the month: "September".

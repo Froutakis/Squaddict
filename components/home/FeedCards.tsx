@@ -66,17 +66,20 @@ export function AnswerCard({ children }: { children: ReactNode }) {
   );
 }
 
-// "One year ago" (or a month): a night that comes back on its day.
+// "One month ago today": a night that comes back on its day, as a small
+// dashed memo on the line.
 export function ThrowbackCard({
   item,
   url,
   ago,
+  fires,
   onOpen,
   style,
 }: {
   item: FeedPhoto;
   url?: string;
   ago: string;
+  fires: number;
   onOpen: () => void;
   style?: StyleProp<ViewStyle>;
 }) {
@@ -85,17 +88,18 @@ export function ThrowbackCard({
       onPress={onOpen}
       accessibilityRole="button"
       accessibilityLabel={`${ago}: ${item.event.title}. Open the night`}
-      style={({ pressed }) => [styles.throwback, style, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.memo, style, pressed && styles.pressed]}
     >
-      {url ? <Image source={{ uri: url }} style={styles.fill} resizeMode="cover" /> : null}
-      <View style={styles.shade} />
-      <View style={styles.throwbackText}>
-        <Text style={styles.throwbackKicker}>{ago.toUpperCase()}</Text>
-        <Text style={styles.throwbackTitle} numberOfLines={2}>
+      <View style={styles.memoPhoto}>
+        {url ? <Image source={{ uri: url }} style={styles.fill} resizeMode="cover" /> : null}
+      </View>
+      <View style={styles.memoText}>
+        <Text style={styles.kicker}>{ago.toUpperCase()}</Text>
+        <Text style={styles.memoTitle} numberOfLines={2}>
           {item.event.title}
         </Text>
-        <Text style={styles.throwbackBody} numberOfLines={1}>
-          {item.group.name} · tap to see the night again
+        <Text style={styles.body} numberOfLines={1}>
+          {fires > 0 ? `${fires} ${fires === 1 ? 'fire' : 'fires'} · ` : ''}see it again
         </Text>
       </View>
     </Pressable>
@@ -149,17 +153,19 @@ const styles = StyleSheet.create({
   // Same width as the memory tickets around it.
   answerTicket: { marginHorizontal: space.md },
 
-  throwback: {
+  memo: {
     marginHorizontal: space.md,
-    height: 190,
-    borderRadius: radius.xl,
-    overflow: 'hidden',
-    justifyContent: 'flex-end',
-    backgroundColor: colors.inkStrong,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    padding: 12,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#B9C6F3',
+    backgroundColor: 'rgba(232,237,253,0.6)',
   },
-  shade: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(12,25,38,0.45)' },
-  throwbackText: { padding: space.md, gap: 2 },
-  throwbackKicker: { color: '#FFFFFF', ...typo.mono, fontSize: textSize.caption, letterSpacing: 1.4 },
-  throwbackTitle: { color: '#FFFFFF', ...typo.display, fontSize: textSize.heading, letterSpacing: -0.4 },
-  throwbackBody: { color: 'rgba(255,255,255,0.85)', ...typo.medium, fontSize: textSize.body },
+  memoPhoto: { width: 56, height: 70, borderRadius: radius.sm, overflow: 'hidden', backgroundColor: colors.surfaceAlt },
+  memoText: { flex: 1, minWidth: 0, gap: 2 },
+  memoTitle: { color: colors.text, ...typo.display, fontSize: textSize.base },
 });

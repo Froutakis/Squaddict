@@ -14,6 +14,11 @@ export type FeedPhoto = {
   reason: FeedReason;
   // Who links you to the night: the member who went, the parea, or the tag.
   via: string | null;
+  // More photos of the same night (up to two), and how many it has in all.
+  more: EventPhoto[];
+  photoCount: number;
+  // How many said they're in; 0 when that can't be read.
+  wentCount: number;
 };
 
 type Night = { id: string; reason: FeedReason; via: string | null };
@@ -21,7 +26,9 @@ type Night = { id: string; reason: FeedReason; via: string | null };
 const NIGHTS = 120;
 const PHOTOS = 600;
 // One post per night: the feed is about the memory, not every photo in it.
+// The post shows the newest photo big and two more beside it.
 const PER_NIGHT = 1;
+const SHOTS = 3;
 
 // A parea's feed: its own nights and the pareas it follows, with a few public
 // nights of other pareas mixed in (one of yours went, a parea you follow went,
@@ -39,7 +46,7 @@ export async function getPhotoFeed(groupId: string): Promise<FeedPhoto[]> {
     .order("date", { ascending: false });
   if (eventError) throw eventError;
 
-  const byEvent = new Map<string, Omit<FeedPhoto, "photo">>();
+  const byEvent = new Map<string, Omit<FeedPhoto, "photo" | "more" | "photoCount" | "wentCount">>();
   for (const row of (eventRows ?? []) as any[]) {
     if (!row.groups) continue;
     const group = toGroup(row.groups);
@@ -89,12 +96,46 @@ export async function getPhotoFeed(groupId: string): Promise<FeedPhoto[]> {
     inExplore: row.in_explore ?? false,
   }));
 
-  const posts = capPerNight(photos, PER_NIGHT).map((photo) => ({ photo, ...byEvent.get(photo.eventId)! }));
+  const ofNight = new Map<string, EventPhoto[]>();
+  for (const photo of photos) {
+    const list = ofNight.get(photo.eventId) ?? [];
+    list.push(photo);
+    ofNight.set(photo.eventId, list);
+  }
+  const went = await countWent([...ofNight.keys()]);
+
+  const posts = capPerNight(photos, PER_NIGHT).map((photo) => {
+    const all = ofNight.get(photo.eventId) ?? [photo];
+    return {
+      photo,
+      ...byEvent.get(photo.eventId)!,
+      more: all.filter((one) => one.id !== photo.id).slice(0, SHOTS - 1),
+      photoCount: all.length,
+      wentCount: went.get(photo.eventId) ?? 0,
+    };
+  });
   // The mix decides which nights from other pareas get in; the feed itself
   // stays in time order, so "This week" and "Last week" read straight down.
   return mixFeed(posts, (post) => isOwnCircle(post.reason)).sort((a, b) =>
     `${b.event.date} ${b.event.startTime ?? ''}`.localeCompare(`${a.event.date} ${a.event.startTime ?? ''}`),
   );
+}
+
+// How many said they're in, per night. Another parea's RSVPs may be closed to
+// you; then the count is simply left out.
+async function countWent(eventIds: string[]): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (eventIds.length === 0) return counts;
+
+  const { data, error } = await supabase
+    .from("event_attendees")
+    .select("event_id")
+    .in("event_id", eventIds)
+    .eq("status", "in");
+  if (error) return counts;
+
+  for (const row of (data ?? []) as any[]) counts.set(row.event_id, (counts.get(row.event_id) ?? 0) + 1);
+  return counts;
 }
 
 // The nights for the feed, with why each is there. Falls back to the parea's

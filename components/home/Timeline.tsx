@@ -20,9 +20,11 @@ type RowProps = {
   first?: boolean;
   // Rows come in one after another on the first load.
   enterIndex?: number;
+  // Below NOW the line is solid: that part happened. Above it, still dashed.
+  solid?: boolean;
 };
 
-export function TimelineRow({ node, children, first = false, enterIndex }: RowProps) {
+export function TimelineRow({ node, children, first = false, enterIndex, solid = false }: RowProps) {
   const enter = useRef(new Animated.Value(enterIndex === undefined ? 1 : 0)).current;
 
   useEffect(() => {
@@ -47,11 +49,15 @@ export function TimelineRow({ node, children, first = false, enterIndex }: RowPr
       ]}
     >
       <View style={styles.rail}>
-        <View style={[styles.line, first && styles.lineFromNode]} pointerEvents="none">
-          {Array.from({ length: DASHES }, (_, i) => (
-            <View key={i} style={styles.dash} />
-          ))}
-        </View>
+        {solid ? (
+          <View style={[styles.line, styles.lineSolid, first && styles.lineFromNode]} pointerEvents="none" />
+        ) : (
+          <View style={[styles.line, first && styles.lineFromNode]} pointerEvents="none">
+            {Array.from({ length: DASHES }, (_, i) => (
+              <View key={i} style={styles.dash} />
+            ))}
+          </View>
+        )}
         {node}
       </View>
       <View style={styles.content}>{children}</View>
@@ -68,7 +74,7 @@ export function DateNode({
   parea,
 }: {
   date: string;
-  kind: 'new' | 'seen' | 'future' | 'parea';
+  kind: 'new' | 'seen' | 'future' | 'ask' | 'parea';
   parea?: { name: string; avatarUrl: string | null };
 }) {
   const d = parseDateKey(date);
@@ -80,6 +86,7 @@ export function DateNode({
       {kind === 'new' ? <NewHole /> : null}
       {kind === 'seen' ? <View style={[styles.hole, styles.holeSeen]} /> : null}
       {kind === 'future' ? <View style={[styles.hole, styles.holeFuture]} /> : null}
+      {kind === 'ask' ? <View style={[styles.hole, styles.holeAsk]} /> : null}
       {kind === 'parea' && parea ? (
         <Monogram name={parea.name} uri={parea.avatarUrl} size={24} style={styles.face} />
       ) : null}
@@ -130,11 +137,31 @@ export function TodayNode({ note }: { note?: string }) {
   );
 }
 
-// A diamond on the line where a stretch of time starts: "This week".
-export function GroupNode() {
+// Inside today the rail gives the hour instead of the day: "17:00".
+export function TimeNode({ time, kind }: { time?: string; kind: 'later' | 'ask' | 'live' | 'over' }) {
+  return (
+    <View style={styles.node}>
+      <View
+        style={[
+          styles.hole,
+          styles.holeSmall,
+          kind === 'later' && styles.holeFuture,
+          kind === 'ask' && styles.holeAsk,
+          kind === 'live' && styles.holeLive,
+          kind === 'over' && styles.holeOver,
+        ]}
+      />
+      <Text style={[styles.time, kind === 'over' && styles.timeOver]}>{time ?? 'DAY'}</Text>
+    </View>
+  );
+}
+
+// A diamond on the line where a stretch of time starts: "This week". Hollow
+// above NOW (coming), filled below (happened).
+export function GroupNode({ hollow = false }: { hollow?: boolean }) {
   return (
     <View style={styles.groupNode}>
-      <View style={styles.diamond} />
+      <View style={[styles.diamond, hollow && styles.diamondHollow]} />
     </View>
   );
 }
@@ -162,6 +189,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   lineFromNode: { top: 14 },
+  lineSolid: { gap: 0, backgroundColor: colors.primary, opacity: 0.3 },
   dash: { width: 2, height: 5, borderRadius: 1, backgroundColor: LINE },
   content: { flex: 1, minWidth: 0, paddingBottom: space.md },
 
@@ -170,6 +198,12 @@ const styles = StyleSheet.create({
   holeSeen: { borderWidth: 2.5, borderColor: colors.primary },
   holeFuture: { borderWidth: 2, borderStyle: 'dashed', borderColor: colors.primary },
   holeNew: { backgroundColor: colors.primary },
+  holeAsk: { borderWidth: 2, borderColor: '#E8A400', backgroundColor: '#FFC53D' },
+  holeLive: { backgroundColor: colors.danger },
+  holeOver: { backgroundColor: LINE },
+  holeSmall: { width: 14, height: 14, borderRadius: 7, marginBottom: 4 },
+  time: { color: colors.text, ...typo.display, fontSize: 13 },
+  timeOver: { color: colors.textSoft },
   newWrap: { width: 16, height: 16, marginBottom: 6, alignItems: 'center', justifyContent: 'center' },
   halo: { position: 'absolute', width: 16, height: 16, borderRadius: 8, backgroundColor: colors.primary },
   face: { borderRadius: 8, marginBottom: 4, borderWidth: 2, borderColor: colors.bg },
@@ -191,6 +225,7 @@ const styles = StyleSheet.create({
 
   groupNode: { paddingTop: 8, backgroundColor: colors.bg, paddingBottom: 4 },
   diamond: { width: 13, height: 13, borderRadius: 3, backgroundColor: colors.primary, transform: [{ rotate: '45deg' }] },
+  diamondHollow: { backgroundColor: colors.bg, borderWidth: 2, borderColor: colors.primary },
   group: { gap: 1, paddingTop: 2 },
   kicker: { color: colors.primary, ...typo.mono, fontSize: textSize.micro, letterSpacing: 1.4 },
   groupTitle: { color: colors.text, ...typo.display, fontSize: 18, letterSpacing: -0.3 },

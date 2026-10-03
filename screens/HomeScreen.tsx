@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { User as AuthUser } from '@supabase/supabase-js';
 import {
   ActivityIndicator,
+  Animated,
   AppState,
+  Pressable,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -26,8 +28,11 @@ import {
   getMyEvents,
   setRsvp,
 } from '../services/serviceEvents';
-import { colors, typo, layout, space } from '../theme';
+import { colors, typo, layout, space, textSize } from '../theme';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
+  addDays,
   countdownLabel,
   dayFilterLabel,
   inPhotoWindow,
@@ -43,9 +48,8 @@ import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
 import PhotoPrompt from '../components/home/PhotoPrompt';
 import PhotoFeed from '../components/home/PhotoFeed';
-import TodayWallet from '../components/home/TodayWallet';
-import UpcomingLine from '../components/home/UpcomingLine';
-import { TimelineRow, TodayNode } from '../components/home/Timeline';
+import PlanLine from '../components/home/PlanLine';
+import { TimelineRow } from '../components/home/Timeline';
 import type { FeedPhoto } from '../services/servicePhotoFeed';
 import GroupScreen from './GroupScreen';
 import { MEMORY_LIMIT, toMemoryNights, type MemoryNight } from '../components/home/memories';
@@ -70,10 +74,13 @@ import { features } from '../lib/features';
 const RENEW_TICK_MS = 5 * 60 * 1000;
 // Coming back to the app refreshes the week, at most once a minute.
 const RESUME_REFRESH_MS = 60 * 1000;
-// Above TODAY on the memories line: this many coming plans at most.
-const COMING_LIMIT = 6;
-// Plans that all start from here on are "tonight".
-const EVENING = '17:00';
+// The line above NOW reaches this far ahead, with at most this many plans.
+const AHEAD_DAYS = 45;
+const AHEAD_PLANS = 20;
+// How tall the soft top and bottom edges of the memories page are.
+const EDGE = 110;
+const BG_CLEAR = 'rgba(237,240,245,0)';
+const BG_HALF = 'rgba(237,240,245,0.7)';
 
 type HomeScreenProps = {
   user: AuthUser;
@@ -214,6 +221,30 @@ export default function HomeScreen({
   }
 
   const [refreshing, setRefreshing] = useState(false);
+
+  // The memories page opens on NOW: the coming days above, memories below.
+  const scrollRef = useRef<ScrollView>(null);
+  const [viewHeight, setViewHeight] = useState(0);
+  const [lineY, setLineY] = useState<number | null>(null);
+  const [nowY, setNowY] = useState<number | null>(null);
+  const [awayFromNow, setAwayFromNow] = useState<'up' | 'down' | null>(null);
+  const anchoredFor = useRef<string | null>(null);
+  const topEdge = useRef(new Animated.Value(0)).current;
+  const nowAt = lineY !== null && nowY !== null ? lineY + nowY : null;
+
+  // Once per parea (and each time you come back to the memories), open on NOW.
+  useEffect(() => {
+    if (view !== 'memories') {
+      anchoredFor.current = null;
+      setAwayFromNow(null);
+      return;
+    }
+    if (loading || nowAt === null || viewHeight === 0) return;
+    const key = groupId ?? 'all';
+    if (anchoredFor.current === key) return;
+    anchoredFor.current = key;
+    scrollRef.current?.scrollTo({ y: Math.max(0, nowAt - viewHeight * 0.45), animated: false });
+  }, [view, loading, nowAt, viewHeight, groupId]);
   const lastLoad = useRef(0);
 
   // `quiet` keeps what is on screen while it reloads (pull to refresh, coming back).
@@ -423,21 +454,18 @@ export default function HomeScreen({
   });
   const pool = upcoming.filter((e) => e.id !== heroEvent?.id);
   const waiting = pool.filter((e) => e.myStatus === undefined);
-  const isLive = (e: MyEvent) => isHappeningNow(e.date, e.startTime, e.endTime, now);
-  // TODAY's wallet: on now first, then what needs your answer, then the soonest.
-  const todays = visible
-    .filter((e) => e.date === today && e.myStatus !== 'out')
-    .sort(
-      (a, b) =>
-        Number(isLive(b)) - Number(isLive(a)) ||
-        Number(b.myStatus === undefined) - Number(a.myStatus === undefined) ||
-        (a.startTime ?? '').localeCompare(b.startTime ?? ''),
-    );
-  const coming = visible
-    .filter((e) => e.date > today && e.myStatus !== 'out')
-    .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? '').localeCompare(b.startTime ?? ''))
-    .slice(0, COMING_LIMIT);
-  const tonight = todays.length > 1 && todays.every((e) => (e.startTime ?? '') >= EVENING);
+  // TODAY holds every plan of yours today, from all your pareas.
+  // Your plans from today on, from all your pareas, plus one from yesterday
+  // still going past midnight.
+  const horizon = keyOf(addDays(new Date(), AHEAD_DAYS));
+  const linePlans = [
+    ...events.filter((e) => e.date < today && isHappeningNow(e.date, e.startTime, e.endTime, now)),
+    ...events.filter((e) => e.date === today),
+    ...events
+      .filter((e) => e.date > today && e.date <= horizon)
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? '').localeCompare(b.startTime ?? ''))
+      .slice(0, AHEAD_PLANS),
+  ];
   const clockNow = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const recent = visible.filter((e) => inPhotoWindow(e.date, e.startTime, e.endTime, now));
   const recentIds = recent.map((e) => e.id).sort().join(',');
@@ -554,11 +582,6 @@ export default function HomeScreen({
   }
 
   // A photo from the feed opens its night in the story viewer.
-  function openFeedNight(item: FeedPhoto) {
-    const mine = events.find((event) => event.id === item.event.id);
-    setDayStory([{ event: mine ?? item.event, cover: item.photo, latestAt: item.photo.createdAt }]);
-  }
-
   function coverFor(event: MyEvent): string | null {
     if (event.coverUrl) return event.coverUrl;
     const photo = coverPhotos[event.id];
@@ -583,79 +606,71 @@ export default function HomeScreen({
           />
         ) : null}
 
-        {wantsPhoto ? (
-          <View style={styles.body}>
-            <PhotoPrompt
-              title={wantsPhoto.title}
-              groupName={wantsPhoto.groupName}
-              live={isHappeningNow(wantsPhoto.date, wantsPhoto.startTime, wantsPhoto.endTime, now)}
-              hereCount={checkins[wantsPhoto.id]?.length ?? 0}
-              onAdd={() => {
-                setPhotoError(null);
-                setAddingPhoto(wantsPhoto);
-              }}
-            />
-            {photoError ? <Text style={styles.error}>{photoError}</Text> : null}
-          </View>
-        ) : null}
-
-        <View style={styles.line}>
-          <UpcomingLine plans={coming} onOpen={setOpenEvent} />
-          <TimelineRow
-            first={coming.length === 0}
-            node={<TodayNode note={todays.length > 1 ? `${todays.length} ${tonight ? 'tonight' : 'plans'}` : undefined} />}
-          >
-            <TodayWallet
-              plans={todays}
-              onThrowPlan={() => openNewEvent(today)}
-              renderFront={(plan) => (
-                <UpNext
-                  event={plan}
-                  cover={coverFor(plan)}
-                  live={isLive(plan)}
-                  liveText={isLive(plan) ? liveLabel(plan.date, plan.startTime, plan.endTime, now) : undefined}
-                  checkedIn={isCheckedIn(plan.id)}
-                  hereCount={checkins[plan.id]?.length ?? 0}
-                  onCheckIn={() => checkIn(plan.id)}
-                  onAddPhoto={isCheckedIn(plan.id) ? () => setAddingPhoto(plan) : undefined}
-                  onPress={() => setOpenEvent(plan)}
-                  onRsvp={(status) => handleRsvp(plan.id, status)}
-                />
-              )}
-            />
-          </TimelineRow>
-        </View>
-
-        {activeGroup ? (
-          <PhotoFeed
-            group={activeGroup}
-            me={{ id: user.id, name: displayName, avatarUrl }}
-            signed={signed}
-            signPaths={signPaths}
-            onImageError={dropSigned}
-            reloadKey={photoNonce}
-            onOpenNight={openFeedNight}
-            onOpenGroup={setProfileGroup}
-            canOpenGroup={(group) => features.publicProfiles || groups.some((mine) => mine.id === group.id)}
-            onPlanAgain={(item) => {
-              openNewEvent(nextSameWeekday(item.event.date));
-              setDraftEvent(item.event);
+        <View onLayout={(event) => setLineY(event.nativeEvent.layout.y)}>
+          <PlanLine
+            plans={linePlans}
+            now={now}
+            userId={user.id}
+            isCheckedIn={isCheckedIn}
+            hereCount={(id) => checkins[id]?.length ?? 0}
+            onOpen={setOpenEvent}
+            onRsvp={(plan, status) => handleRsvp(plan.id, status)}
+            onCheckIn={(plan) => checkIn(plan.id)}
+            onAddPhoto={(plan) => {
+              setPhotoError(null);
+              setAddingPhoto(plan);
             }}
-            empty={
-              <View style={styles.state}>
-                <Text style={styles.stateTitle}>No memories yet</Text>
-                <Text style={styles.stateBody}>
-                  Your first night out is one plan away. The photos from it land here.
-                </Text>
-                {onOpenEvents ? (
-                  <View style={styles.stateButton}>
-                    <Button title="See the plans" onPress={onOpenEvents} />
-                  </View>
-                ) : null}
-              </View>
-            }
+            onThrowPlan={() => openNewEvent(today)}
+            onNowLayout={setNowY}
+            error={rsvpError ?? (wantsPhoto ? null : photoError)}
           />
-        ) : null}
+
+          {wantsPhoto ? (
+            <TimelineRow solid>
+              <PhotoPrompt
+                title={wantsPhoto.title}
+                groupName={wantsPhoto.groupName}
+                live={isHappeningNow(wantsPhoto.date, wantsPhoto.startTime, wantsPhoto.endTime, now)}
+                hereCount={checkins[wantsPhoto.id]?.length ?? 0}
+                onAdd={() => {
+                  setPhotoError(null);
+                  setAddingPhoto(wantsPhoto);
+                }}
+              />
+              {photoError ? <Text style={styles.error}>{photoError}</Text> : null}
+            </TimelineRow>
+          ) : null}
+
+          {activeGroup ? (
+            <PhotoFeed
+              group={activeGroup}
+              me={{ id: user.id, name: displayName, avatarUrl }}
+              signed={signed}
+              signPaths={signPaths}
+              onImageError={dropSigned}
+              reloadKey={photoNonce}
+              onOpenGroup={setProfileGroup}
+              canOpenGroup={(group) => features.publicProfiles || groups.some((mine) => mine.id === group.id)}
+              onPlanAgain={(item) => {
+                openNewEvent(nextSameWeekday(item.event.date));
+                setDraftEvent(item.event);
+              }}
+              empty={
+                <View style={styles.state}>
+                  <Text style={styles.stateTitle}>No memories yet</Text>
+                  <Text style={styles.stateBody}>
+                    Your first night out is one plan away. The photos from it land here.
+                  </Text>
+                  {onOpenEvents ? (
+                    <View style={styles.stateButton}>
+                      <Button title="See the plans" onPress={onOpenEvents} />
+                    </View>
+                  ) : null}
+                </View>
+              }
+            />
+          ) : null}
+        </View>
       </>
     );
   }
@@ -839,10 +854,30 @@ export default function HomeScreen({
     );
   }
 
+  function scrollToNow(animated: boolean) {
+    if (nowAt === null || viewHeight === 0) return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, nowAt - viewHeight * 0.45), animated });
+  }
+
+  // Edges and the "Back to today" pill follow the scroll; state only changes
+  // when the pill has to show, hide or flip.
+  function onPageScroll(event: { nativeEvent: { contentOffset: { y: number } } }) {
+    const y = event.nativeEvent.contentOffset.y;
+    topEdge.setValue(Math.min(1, Math.max(0, y / 60)));
+    if (nowAt === null) return;
+    const away = nowAt < y ? 'up' : nowAt > y + viewHeight ? 'down' : null;
+    if (away !== awayFromNow) setAwayFromNow(away);
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
+      <View style={styles.page}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.content}
+        onLayout={(event) => setViewHeight(event.nativeEvent.layout.height)}
+        onScroll={view === 'memories' ? onPageScroll : undefined}
+        scrollEventThrottle={32}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />
         }
@@ -854,6 +889,34 @@ export default function HomeScreen({
         />
         {renderBody()}
       </ScrollView>
+
+      {view === 'memories' ? (
+        <>
+          <Animated.View pointerEvents="none" style={[styles.edgeTop, { opacity: topEdge }]}>
+            <BlurView intensity={10} tint="light" style={styles.edgeBlurTop} />
+            <LinearGradient colors={[colors.bg, BG_HALF, BG_CLEAR]} locations={[0, 0.35, 1]} style={StyleSheet.absoluteFill} />
+          </Animated.View>
+          <View pointerEvents="none" style={styles.edgeBottom}>
+            <BlurView intensity={10} tint="light" style={styles.edgeBlurBottom} />
+            <LinearGradient colors={[BG_CLEAR, BG_HALF, colors.bg]} locations={[0, 0.65, 1]} style={StyleSheet.absoluteFill} />
+          </View>
+          {awayFromNow ? (
+            <Pressable
+              onPress={() => scrollToNow(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Back to today"
+              style={({ pressed }) => [
+                styles.backToday,
+                awayFromNow === 'up' ? styles.backTodayTop : styles.backTodayBottom,
+                pressed && styles.backTodayPressed,
+              ]}
+            >
+              <Text style={styles.backTodayText}>Back to today {awayFromNow === 'up' ? '↑' : '↓'}</Text>
+            </Pressable>
+          ) : null}
+        </>
+      ) : null}
+      </View>
 
       <StoryViewer
         key={dayStory ? dayStory[0].event.id : 'day-closed'}
@@ -974,6 +1037,29 @@ function nextSameWeekday(dateStr: string): string {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  page: { flex: 1 },
+  edgeTop: { position: 'absolute', top: 0, left: 0, right: 0, height: EDGE },
+  edgeBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: EDGE },
+  edgeBlurTop: { position: 'absolute', top: 0, left: 0, right: 0, height: EDGE * 0.35 },
+  edgeBlurBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: EDGE * 0.35 },
+  backToday: {
+    position: 'absolute',
+    alignSelf: 'center',
+    minHeight: 40,
+    paddingHorizontal: space.md,
+    justifyContent: 'center',
+    borderRadius: 999,
+    backgroundColor: colors.ink,
+    shadowColor: colors.ink,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  backTodayTop: { top: space.md },
+  backTodayBottom: { bottom: space.lg },
+  backTodayPressed: { transform: [{ scale: 0.96 }] },
+  backTodayText: { color: colors.onInk, ...typo.bold, fontSize: textSize.body },
   content: {
     width: '100%',
     maxWidth: layout.column,
