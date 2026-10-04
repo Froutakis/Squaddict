@@ -1,73 +1,154 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { Group } from '../services/serviceGroup';
+import {
+  ActivityIndicator,
+  BackHandler,
+  Pressable,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { getMemberProfiles, type Group } from '../services/serviceGroup';
 import {
   cancelVote,
   castOption,
   castVote,
+  countDecidedSince,
   getVotes,
+  propose,
+  waitsOnMe,
   type SquadVote,
   type VoteEvent,
   type VoteKind,
   type VoteStatus,
 } from '../services/serviceVotes';
-import VoteCard from '../components/votes/VoteCard';
-import NewVoteSheet from '../components/votes/NewVoteSheet';
-import { errorText } from '../lib/postgres';
-import { FAB_CENTER_Y, FAB_INSET } from '../components/general/MenuFab';
-import { colors, layout, radius, space, textSize, typo } from '../theme';
+import { getVoteIdeas, type VoteIdea } from '../services/serviceVoteIdeas';
+import HomeHeader from '../components/home/HomeHeader';
+import { GroupNode, GroupTitle, MarkerNode, TallyNode, TimelineRow } from '../components/home/Timeline';
+import { Reveal } from '../components/home/PlanLine';
+import {
+  decidedLine,
+  inviteDaysLeft,
+  InviteTicket,
+  UsedVoteTicket,
+  VoteRow,
+  VoteTicket,
+  voteTally,
+} from '../components/votes/VoteTicket';
+import { DecideStrip, IdeaTicket, QuickStarts, type QuickStep } from '../components/votes/VoteIdeas';
+import NewVoteSheet, { type Step } from '../components/votes/NewVoteSheet';
+import { errorText, UNIQUE_VIOLATION } from '../lib/postgres';
+import { keyOf, weekdayShort } from '../lib/datetime';
+import { membersWhoVote, votesNeeded } from '../lib/squadVote';
+import { readJson, writeJson } from '../lib/store';
+import type { Person } from '../lib/people';
+import { colors, layout, radius, space, textSize, tint, typo } from '../theme';
 
 type VotesScreenProps = {
   group: Group;
   userId: string;
   // Bumped from outside (a vote changed elsewhere): load again.
   reloadKey?: number;
+  // Android's back button. Everywhere else the side rail is the way out.
   onBack: () => void;
+  onOpenRail: () => void;
   onOpenSquad: (group: Group) => void;
   onOpenEvent: (event: VoteEvent) => void;
   // A vote was cast, cancelled or decided: badges and plans may have moved.
   onChanged: () => void;
 };
 
-// Room for the tab bar that floats over the bottom of the page.
-const NAV_CLEARANCE = 96;
+// Room under the last row, as on Home.
+const BOTTOM_CLEARANCE = 96;
+// getVotes() brings this many decided votes.
+const DECIDED_SHOWN = 5;
+
+// "Not now" on an idea is kept on this phone, per squad.
+function notNowKey(groupId: string): string {
+  return `squaddict.votes.notNow.${groupId}`;
+}
 
 // What the page says right after a vote went in.
-function startedNotice(kind: VoteKind, status: VoteStatus): string {
+function startedNotice(kind: VoteKind, status: VoteStatus, needed: number, members: number): string {
   if (status === 'passed') {
     return kind === 'invite' ? 'Passed on the spot. Share the invite below.' : 'Passed on the spot.';
   }
   if (status === 'rejected') return 'That vote was decided already.';
-  return kind === 'poll'
-    ? 'Question sent. Pick your answer too.'
-    : 'Vote started. It passes with more than half of the parea.';
+  return kind === 'poll' ? 'Question sent. Pick your answer too.' : `Vote started. It passes with ${needed} of ${members}.`;
 }
 
-// The squad's votes as a page of their own, like the chat and the calendar:
-// open ones to answer, invites waiting to be sent, then the last few that
-// were decided. Every vote starts here, with New vote.
-export default function VotesScreen({ group, userId, reloadKey = 0, onBack, onOpenSquad, onOpenEvent, onChanged }: VotesScreenProps) {
+// "FRI" over "02" on the rail, for a timestamp or a date key.
+function railDay(value: string | null): { label: string; value: string } {
+  if (!value) return { label: '', value: '–' };
+  const key = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : keyOf(new Date(value));
+  return { label: weekdayShort(key), value: key.slice(8, 10) };
+}
+
+// The squad's votes, read like Home's line. What is open sits on top: the
+// vote that waits on you is a ticket you answer in place, the others are rows
+// you tap to bring forward. When nothing is open the line still has things on
+// it: ideas worth a vote and one-tap ways to start one. Under the black
+// DECIDED marker the line goes solid, like under NOW: those are over.
+export default function VotesScreen({
+  group,
+  userId,
+  reloadKey = 0,
+  onBack,
+  onOpenRail,
+  onOpenSquad,
+  onOpenEvent,
+  onChanged,
+}: VotesScreenProps) {
   const [open, setOpen] = useState<SquadVote[]>([]);
   const [invites, setInvites] = useState<SquadVote[]>([]);
   const [decided, setDecided] = useState<SquadVote[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [ideas, setIdeas] = useState<VoteIdea[]>([]);
+  const [hidden, setHidden] = useState<string[]>([]);
+  const [monthCount, setMonthCount] = useState<number | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // The open vote shown as the ticket, when you tapped one; else the natural one.
+  const [chosen, setChosen] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
+  const [composeStep, setComposeStep] = useState<Step>('menu');
 
+  const members = group.memberCount;
+  const needed = votesNeeded(membersWhoVote('poll', members));
+
+  // Brings back the open votes, so a caller can pick out the one just made.
   const load = useCallback(
-    async function load() {
+    async function load(): Promise<SquadVote[] | null> {
       setError(null);
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       try {
-        const votes = await getVotes(group.id, userId);
+        const [votes, profiles, found, notNow, count] = await Promise.all([
+          getVotes(group.id, userId),
+          getMemberProfiles(group.id).catch((): Person[] => []),
+          getVoteIdeas(group.id).catch((): VoteIdea[] => []),
+          readJson<string[]>(notNowKey(group.id)),
+          countDecidedSince(group.id, monthStart),
+        ]);
         setOpen(votes.open);
         setInvites(votes.invites);
         setDecided(votes.decided);
+        setPeople(profiles);
+        setIdeas(found);
+        setHidden(Array.isArray(notNow) ? notNow : []);
+        setMonthCount(count);
+        setLoaded(true);
+        return votes.open;
       } catch {
         setError('Could not load the votes. Try again.');
+        return null;
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -78,20 +159,41 @@ export default function VotesScreen({ group, userId, reloadKey = 0, onBack, onOp
 
   useEffect(() => {
     setLoading(true);
+    setChosen(null);
     load();
   }, [load, reloadKey]);
 
-  async function run(voteId: string, action: () => Promise<unknown>) {
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [onBack]);
+
+  // Puts the vote you just started in front.
+  function showMine(list: SquadVote[] | null) {
+    const mine = list?.find((vote) => vote.proposedBy === userId);
+    if (mine) setChosen(mine.id);
+  }
+
+  async function run(key: string, action: () => Promise<unknown>, after?: (list: SquadVote[] | null) => void) {
     if (busy) return;
-    setBusy(voteId);
+    setBusy(key);
     setError(null);
     setNotice(null);
     try {
       await action();
-      await load();
+      const list = await load();
+      after?.(list);
       onChanged();
     } catch (problem) {
-      setError(errorText(problem, 'Could not save that. Try again.'));
+      // Two members opening the same vote at once hit the one-open-vote
+      // indexes instead of the friendly check in propose().
+      const code = (problem as { code?: unknown } | null)?.code;
+      setError(
+        code === UNIQUE_VIOLATION ? 'There is already an open vote on that.' : errorText(problem, 'Could not save that. Try again.'),
+      );
     } finally {
       setBusy(null);
     }
@@ -102,125 +204,290 @@ export default function VotesScreen({ group, userId, reloadKey = 0, onBack, onOp
     else if (vote.target.type === 'event') onOpenEvent(vote.target.event);
   }
 
-  function card(vote: SquadVote, live: boolean) {
-    return (
-      <VoteCard
-        key={vote.id}
-        vote={vote}
-        members={group.memberCount}
-        userId={userId}
-        busy={busy === vote.id}
-        onYes={live ? () => run(vote.id, () => castVote(vote.id, true)) : undefined}
-        onNo={live ? () => run(vote.id, () => castVote(vote.id, false)) : undefined}
-        onPick={live ? (optionId) => run(vote.id, () => castOption(vote.id, optionId)) : undefined}
-        onCancel={live ? () => run(vote.id, () => cancelVote(vote.id)) : undefined}
-        onOpen={() => openTarget(vote)}
-        onStale={load}
-      />
+  function compose(step: Step) {
+    setNotice(null);
+    setComposeStep(step);
+    setComposing(true);
+  }
+
+  function putToVote(idea: VoteIdea) {
+    run(
+      idea.id,
+      async () => {
+        const status = await propose(group.id, idea.kind, idea.targetId);
+        setNotice(startedNotice(idea.kind, status, needed, members));
+      },
+      showMine,
     );
+  }
+
+  function notNow(idea: VoteIdea) {
+    const next = [...hidden.filter((id) => id !== idea.id), idea.id];
+    setHidden(next);
+    writeJson(notNowKey(group.id), next);
+  }
+
+  // Ideas already on the table (an open vote on the same plan or parea) or
+  // put away with Not now are left out.
+  const onTable = new Set(
+    open.map((vote) =>
+      vote.target.type === 'event' ? vote.target.event.id : vote.target.type === 'squad' ? vote.target.group.id : vote.id,
+    ),
+  );
+  const shownIdeas = ideas.filter((idea) => !hidden.includes(idea.id) && !onTable.has(idea.targetId));
+
+  const waiting = open.filter((vote) => waitsOnMe(vote, userId));
+  const front = open.find((vote) => vote.id === chosen) ?? waiting[0] ?? open[0] ?? null;
+  const quiet = open.length === 0;
+
+  // "This month · 3". Without the count, what the last five say ("5+" when
+  // all five are from this month).
+  const monthStartIso = (() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  })();
+  const inMonth = decided.filter((vote) => (vote.closedAt ?? '') >= monthStartIso).length;
+  const month = monthCount ?? inMonth;
+  const monthText =
+    month > 0
+      ? `This month · ${monthCount === null && inMonth >= DECIDED_SHOWN ? `${DECIDED_SHOWN}+` : month}`
+      : decided.length > 0
+        ? `Last ${decided.length}`
+        : 'Nothing decided yet';
+
+  // "Last: followed Kathisterimenou, Fri".
+  const lastDecided = decided[0];
+  const lastDay = lastDecided ? railDay(lastDecided.closedAt).label : '';
+  const last = lastDecided
+    ? `${decidedLine(lastDecided)}${lastDay ? `, ${lastDay.charAt(0)}${lastDay.slice(1).toLowerCase()}` : ''}`
+    : 'Nothing decided yet';
+
+  function renderLine() {
+    const rows: ReactNode[] = [];
+
+    rows.push(
+      <TimelineRow key="open" first node={<GroupNode hollow />}>
+        <GroupTitle
+          kicker="Open"
+          title={quiet ? 'Nothing open' : `${open.length} ${open.length === 1 ? 'vote' : 'votes'}`}
+          meta={
+            quiet
+              ? shownIdeas.length > 0
+                ? 'Suspicious. Take a hint, or start one.'
+                : 'Suspicious. Start one below.'
+              : waiting.length > 0
+                ? `${waiting.length} ${waiting.length === 1 ? 'needs' : 'need'} you`
+                : 'All answered. The others are slow.'
+          }
+        />
+      </TimelineRow>,
+    );
+
+    for (const vote of open) {
+      const tally = voteTally(vote, members);
+      const mine = waitsOnMe(vote, userId);
+      rows.push(
+        <TimelineRow
+          key={vote.id}
+          node={
+            <TallyNode
+              label={tally.label}
+              value={tally.value}
+              kind={mine ? 'ask' : 'wait'}
+              accessibilityLabel={`${tally.label} ${tally.value.replace('/', ' of ')}`}
+            />
+          }
+        >
+          {vote.id === front?.id ? (
+            <Reveal key={`${vote.id}-ticket`}>
+              <VoteTicket
+                vote={vote}
+                members={members}
+                people={people}
+                userId={userId}
+                busy={busy === vote.id}
+                onYes={() => run(vote.id, () => castVote(vote.id, true))}
+                onNo={() => run(vote.id, () => castVote(vote.id, false))}
+                onPick={(optionId) => run(vote.id, () => castOption(vote.id, optionId))}
+                onCancel={() => run(vote.id, () => cancelVote(vote.id))}
+                onOpen={() => openTarget(vote)}
+              />
+            </Reveal>
+          ) : (
+            <Reveal key={`${vote.id}-row`}>
+              <VoteRow vote={vote} userId={userId} waiting={mine} onPress={() => setChosen(vote.id)} />
+            </Reveal>
+          )}
+        </TimelineRow>,
+      );
+    }
+
+    if (shownIdeas.length > 0) {
+      const plans = shownIdeas.some((idea) => idea.kind === 'attend');
+      const crossed = shownIdeas.some((idea) => idea.kind === 'follow');
+      rows.push(
+        <TimelineRow key="ideas" node={<GroupNode hollow />}>
+          <GroupTitle
+            kicker="Worth a vote"
+            title={shownIdeas.length === 1 ? '1 idea' : `${shownIdeas.length} ideas`}
+            meta={
+              plans && crossed
+                ? 'From the pareas you follow and cross'
+                : plans
+                  ? 'From the pareas you follow'
+                  : 'From the pareas you crossed'
+            }
+          />
+        </TimelineRow>,
+      );
+      for (const idea of shownIdeas) {
+        const day = railDay(idea.date);
+        rows.push(
+          <TimelineRow key={idea.id} node={<TallyNode label={day.label} value={day.value} kind="wait" />}>
+            <IdeaTicket idea={idea} busy={busy === idea.id} onPropose={() => putToVote(idea)} onLater={() => notNow(idea)} />
+          </TimelineRow>,
+        );
+      }
+    }
+
+    if (quiet) {
+      rows.push(
+        <TimelineRow key="start" node={<GroupNode hollow />}>
+          <GroupTitle kicker="Start one" title="One tap, then it goes out" />
+          <QuickStarts onStart={(step: QuickStep) => compose(step)} onAll={() => compose('menu')} />
+        </TimelineRow>,
+      );
+    }
+
+    if (invites.length > 0) {
+      rows.push(
+        <TimelineRow key="invites" node={<GroupNode hollow />}>
+          <GroupTitle
+            kicker="To hand out"
+            title={invites.length === 1 ? '1 invite' : `${invites.length} invites`}
+            meta="Passed. Send it before it runs out."
+          />
+        </TimelineRow>,
+      );
+      for (const vote of invites) {
+        const link = vote.target.type === 'invite' ? vote.target.link : null;
+        const days = link ? inviteDaysLeft(link.createdAt) : 0;
+        rows.push(
+          <TimelineRow
+            key={vote.id}
+            node={<TallyNode label="Left" value={`${days}d`} kind="ask" accessibilityLabel={`${days} ${days === 1 ? 'day' : 'days'} left`} />}
+          >
+            <InviteTicket vote={vote} members={members} userId={userId} onStale={load} />
+          </TimelineRow>,
+        );
+      }
+    }
+
+    rows.push(
+      <TimelineRow key="decided" solid node={<MarkerNode label="Decided" />}>
+        <View style={styles.decidedHead} accessibilityRole="header" accessible accessibilityLabel={`Decided. ${monthText}`}>
+          <Text style={styles.decidedText}>{monthText.toUpperCase()}</Text>
+          <View style={styles.decidedRule} />
+        </View>
+      </TimelineRow>,
+    );
+
+    for (const vote of decided) {
+      const day = railDay(vote.closedAt);
+      rows.push(
+        <TimelineRow key={vote.id} solid node={<TallyNode label={day.label} value={day.value} kind="over" />}>
+          <UsedVoteTicket vote={vote} userId={userId} />
+        </TimelineRow>,
+      );
+    }
+
+    return rows;
   }
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.column}>
-        <View style={styles.topBar}>
-          <Pressable
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel="Back to Home"
-            hitSlop={8}
-            style={({ pressed }) => [styles.back, pressed && styles.pressed]}
-          >
-            <Ionicons name="chevron-back" size={24} color={colors.text} />
-            <Text style={styles.backText}>Home</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              setNotice(null);
-              setComposing(true);
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load();
             }}
-            accessibilityRole="button"
-            accessibilityLabel="New vote"
-            accessibilityHint={`Put something to the vote in ${group.name}`}
-            style={({ pressed }) => [styles.newVote, pressed && styles.pressed]}
-          >
-            <Ionicons name="add" size={18} color={colors.onInk} />
-            <Text style={styles.newVoteText}>New vote</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.head}>
-          <Text style={styles.title}>Votes</Text>
-          <Text style={styles.squad} numberOfLines={1}>
-            {group.name}
-          </Text>
-        </View>
-
-        <ScrollView
-          contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                load();
-              }}
-              tintColor={colors.primary}
-            />
+            tintColor={colors.primary}
+          />
+        }
+      >
+        <HomeHeader
+          squad={group}
+          label="Votes"
+          onMenu={onOpenRail}
+          right={
+            <Pressable
+              onPress={() => compose('menu')}
+              accessibilityRole="button"
+              accessibilityLabel="New vote"
+              accessibilityHint={`Put something to the vote in ${group.name}`}
+              style={({ pressed }) => [styles.newVote, pressed && styles.pressed]}
+            >
+              <Ionicons name="add" size={18} color={colors.onInk} />
+              <Text style={styles.newVoteText}>New vote</Text>
+            </Pressable>
           }
-        >
-          {notice ? (
-            <Text style={styles.notice} accessibilityLiveRegion="polite">
-              {notice}
-            </Text>
-          ) : null}
+        />
 
-          {loading ? (
-            <ActivityIndicator color={colors.primary} style={styles.spinner} />
-          ) : (
-            <>
-              <Text style={styles.section}>OPEN {open.length}</Text>
-              {open.length === 0 ? (
-                <Text style={styles.empty}>
-                  No open votes. Tap New vote to ask the parea something, invite a friend or pick a plan.
-                </Text>
-              ) : (
-                open.map((vote) => card(vote, true))
-              )}
-            </>
-          )}
+        {loaded ? (
+          <View style={styles.strip}>
+            <DecideStrip people={people} needed={needed} members={members} last={last} />
+          </View>
+        ) : null}
 
-          {error ? (
+        {notice ? (
+          <View style={styles.notice} accessibilityLiveRegion="polite">
+            <Ionicons name="checkmark" size={16} color={colors.success} />
+            <Text style={styles.noticeText}>{notice}</Text>
+          </View>
+        ) : null}
+
+        {error ? (
+          <View style={styles.errorBox}>
             <Text style={styles.error} accessibilityLiveRegion="polite">
               {error}
             </Text>
-          ) : null}
+            {!loaded && !loading ? (
+              <Pressable
+                onPress={() => {
+                  setLoading(true);
+                  load();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Try again"
+                style={({ pressed }) => [styles.retry, pressed && styles.pressed]}
+              >
+                <Text style={styles.retryText}>Try again</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
-          {!loading && invites.length > 0 ? (
-            <>
-              <Text style={[styles.section, styles.sectionGap]}>INVITES TO SEND {invites.length}</Text>
-              {invites.map((vote) => card(vote, false))}
-            </>
-          ) : null}
-
-          {!loading && decided.length > 0 ? (
-            <>
-              <Text style={[styles.section, styles.sectionGap]}>DECIDED</Text>
-              {decided.map((vote) => card(vote, false))}
-            </>
-          ) : null}
-        </ScrollView>
-      </View>
+        {loading && !loaded ? (
+          <ActivityIndicator color={colors.primary} style={styles.spinner} />
+        ) : loaded ? (
+          <View style={styles.line}>{renderLine()}</View>
+        ) : null}
+      </ScrollView>
 
       <NewVoteSheet
         visible={composing}
         group={group}
         userId={userId}
+        initialStep={composeStep}
         onClose={() => setComposing(false)}
         onStarted={async (kind, status) => {
           setComposing(false);
-          setNotice(startedNotice(kind, status));
-          await load();
+          setNotice(startedNotice(kind, status, needed, members));
+          showMine(await load());
           onChanged();
         }}
       />
@@ -230,46 +497,49 @@ export default function VotesScreen({ group, userId, reloadKey = 0, onBack, onOp
 
 const styles = StyleSheet.create({
   screen: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },
-  column: {
-    flex: 1,
+  // Home's page: one column, the header level with the menu button.
+  content: {
     width: '100%',
     maxWidth: layout.column,
     alignSelf: 'center',
+    paddingTop: space.md,
+    paddingBottom: BOTTOM_CLEARANCE + space.md,
+    gap: space.sm,
   },
   pressed: { opacity: 0.6 },
 
-  // Starts right of the floating menu button, level with it.
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingLeft: FAB_INSET - space.xs,
-    paddingRight: space.lg,
-    height: 48,
-    marginTop: FAB_CENTER_Y - 24,
-  },
-  back: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingRight: space.sm, minHeight: 44 },
-  backText: { color: colors.text, ...typo.semi, fontSize: textSize.lead },
   newVote: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xxs,
     minHeight: 44,
-    paddingHorizontal: space.md,
+    paddingLeft: 11,
+    paddingRight: 14,
     borderRadius: radius.pill,
     backgroundColor: colors.ink,
   },
-  newVoteText: { color: colors.onInk, ...typo.semi, fontSize: textSize.base },
+  newVoteText: { color: colors.onInk, ...typo.bold, fontSize: textSize.base },
 
-  head: { paddingHorizontal: space.lg },
-  title: { color: colors.text, ...typo.display, fontSize: textSize.hero, letterSpacing: -0.6 },
-  squad: { color: colors.textSoft, ...typo.medium, fontSize: textSize.base },
-
-  list: { gap: space.sm, paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: NAV_CLEARANCE + space.md },
-  spinner: { marginVertical: space.xl },
-  section: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption, letterSpacing: 1.2 },
-  sectionGap: { marginTop: space.md },
-  empty: { color: colors.textSoft, ...typo.medium, fontSize: textSize.base, textAlign: 'center', paddingVertical: space.xl },
-  notice: { color: colors.success, ...typo.semi, fontSize: textSize.body },
+  strip: { paddingHorizontal: space.md, marginTop: space.xxs },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    marginHorizontal: space.md,
+    paddingVertical: space.sm,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: tint.success,
+  },
+  noticeText: { flex: 1, color: colors.success, ...typo.bold, fontSize: textSize.body },
+  errorBox: { marginHorizontal: space.md, gap: space.xxs },
   error: { color: colors.danger, ...typo.medium, fontSize: textSize.body },
+  retry: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
+  retryText: { color: colors.primary, ...typo.bold, fontSize: textSize.body },
+  spinner: { marginVertical: space.xl },
+  line: { paddingTop: space.xs },
+
+  decidedHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs, height: 28 },
+  decidedText: { color: colors.text, ...typo.mono, fontSize: 10.5, letterSpacing: 1.2 },
+  decidedRule: { flex: 1, height: 1.5, backgroundColor: colors.ink, opacity: 0.25 },
 });

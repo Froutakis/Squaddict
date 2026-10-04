@@ -156,6 +156,47 @@ export function TimeNode({ time, kind }: { time?: string; kind: 'later' | 'ask' 
   );
 }
 
+// Two short lines on the line where Home would put a date: "YES" over "2/3"
+// on Votes, "LEFT" over "3d" on an invite, or a weekday over its day when the
+// date isn't a plan's. The hole says whose move it is: yours (ask), the
+// others' (wait), or nobody's any more (over, with the value greyed).
+export function TallyNode({
+  label,
+  value,
+  kind,
+  accessibilityLabel,
+}: {
+  label: string;
+  value: string;
+  kind: 'ask' | 'wait' | 'over';
+  accessibilityLabel?: string;
+}) {
+  return (
+    <View style={styles.node} accessible={accessibilityLabel !== undefined} accessibilityLabel={accessibilityLabel}>
+      <View
+        style={[
+          styles.hole,
+          kind === 'ask' && styles.holeAsk,
+          kind === 'wait' && styles.holeFuture,
+          kind === 'over' && [styles.holeOver, styles.holeTally],
+        ]}
+      />
+      <Text style={styles.tallyLabel}>{label.toUpperCase()}</Text>
+      <Text style={[styles.tallyValue, kind === 'over' && styles.timeOver]}>{value}</Text>
+    </View>
+  );
+}
+
+// A black pill across the line, like TODAY: on Votes, "DECIDED" above the
+// votes that are over.
+export function MarkerNode({ label }: { label: string }) {
+  return (
+    <View style={styles.node}>
+      <Text style={[styles.today, styles.marker]}>{label.toUpperCase()}</Text>
+    </View>
+  );
+}
+
 // A diamond on the line where a stretch of time starts: "This week". Hollow
 // above NOW (coming), filled below (happened).
 export function GroupNode({ hollow = false }: { hollow?: boolean }) {
@@ -222,6 +263,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   todayCount: { marginTop: 6, color: colors.textSoft, ...typo.semi, fontSize: textSize.caption },
+  marker: { fontSize: 10.5, letterSpacing: 0.8, paddingHorizontal: 6 },
+
+  holeTally: { width: 12, height: 12, borderRadius: 6, marginTop: 2 },
+  tallyLabel: { color: colors.textSoft, ...typo.mono, fontSize: 10.5, letterSpacing: 1.2 },
+  tallyValue: { color: colors.text, ...typo.display, fontSize: 19, lineHeight: 22, letterSpacing: -0.3 },
 
   groupNode: { paddingTop: 8, backgroundColor: colors.bg, paddingBottom: 4 },
   diamond: { width: 13, height: 13, borderRadius: 3, backgroundColor: colors.primary, transform: [{ rotate: '45deg' }] },

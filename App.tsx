@@ -49,6 +49,7 @@ export default function App() {
   const [createNonce, setCreateNonce] = useState(0);
   const [votesNonce, setVotesNonce] = useState(0);
   const [calendarNonce, setCalendarNonce] = useState(0);
+  const [railHomeNonce, setRailHomeNonce] = useState(0);
   const [newSquadNonce, setNewSquadNonce] = useState(0);
   const [railOpen, setRailOpen] = useState(false);
   // Parea keeps this up to date; the rail shows it on every screen.
@@ -225,6 +226,7 @@ export default function App() {
             createNonce={createNonce}
             openVotesNonce={votesNonce}
             calendarNonce={calendarNonce}
+            railHomeNonce={railHomeNonce}
             newSquadNonce={newSquadNonce}
             onOpenRail={() => setRailOpen(true)}
             view={screen === 'events' ? 'events' : 'memories'}
@@ -272,11 +274,13 @@ export default function App() {
           setRailOpen(false);
           goHome();
           setScreen('home');
+          setRailHomeNonce((n) => n + 1);
         }}
         onEvents={() => {
           setRailOpen(false);
           goHome();
           setScreen('events');
+          setRailHomeNonce((n) => n + 1);
         }}
         votes={railData.votes}
         onVotes={() =>
@@ -289,6 +293,7 @@ export default function App() {
           setRailOpen(false);
           // A page, not a sheet, so it can open while the rail slides away.
           goHome('calendar');
+          setRailHomeNonce((n) => n + 1);
         }}
         onExplore={() => {
           setRailOpen(false);

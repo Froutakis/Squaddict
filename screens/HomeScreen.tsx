@@ -104,6 +104,9 @@ type HomeScreenProps = {
   // Asks from the side rail, which lives in App: bump to open.
   calendarNonce?: number;
   newSquadNonce?: number;
+  // Bumped when the rail asks for Parea itself (Memories, Plans, the
+  // calendar): a page on top of it, like Votes, steps aside.
+  railHomeNonce?: number;
   onOpenRail?: () => void;
   // Parea has two faces: the memories feed (Home) and the plans (Events).
   view?: 'memories' | 'events';
@@ -148,6 +151,7 @@ export default function HomeScreen({
   selectGroup = null,
   calendarNonce = 0,
   newSquadNonce = 0,
+  railHomeNonce = 0,
   onOpenRail,
   view = 'memories',
   onOpenEvents,
@@ -418,6 +422,15 @@ export default function HomeScreen({
   useEffect(() => {
     if (calendarNonce > 0) setFullCalendar(true);
   }, [calendarNonce]);
+
+  // Votes has no Back of its own: the rail is the way out, like everywhere
+  // else. Only a bump while Parea is up counts, not the value it mounts with.
+  const railHomeSeen = useRef(railHomeNonce);
+  useEffect(() => {
+    if (railHomeNonce === railHomeSeen.current) return;
+    railHomeSeen.current = railHomeNonce;
+    setVotesOpen(false);
+  }, [railHomeNonce]);
 
   useEffect(() => {
     if (newSquadNonce > 0) setShowGroupForm(true);
@@ -1104,6 +1117,7 @@ export default function HomeScreen({
           userId={user.id}
           reloadKey={votesNonce}
           onBack={() => setVotesOpen(false)}
+          onOpenRail={() => onOpenRail?.()}
           onOpenSquad={setProfileGroup}
           onOpenEvent={(event) => setOpenEvent(voteEventToSheet(event))}
           onChanged={() => {

@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Image, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
-import { getVoteLink, type SquadVote, type VoteEvent } from '../../services/serviceVotes';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { SquadVote, VoteEvent } from '../../services/serviceVotes';
 import type { SheetEvent } from '../events/EventSheet';
 import {
   inviteExpiry,
@@ -13,9 +12,9 @@ import {
   voteQuestion,
 } from '../../lib/squadVote';
 import { formatDateTime } from '../../lib/datetime';
-import { inviteMessage } from '../../lib/invite';
 import { placeLines } from '../../lib/place';
 import Monogram from '../general/Monogram';
+import { useInviteShare } from './VoteTicket';
 import { colors, radius, shadow, space, textSize, tint, typo } from '../../theme';
 
 const THUMB = 40;
@@ -78,8 +77,8 @@ export default function VoteCard({
   onStale,
 }: VoteCardProps) {
   const [coverFailed, setCoverFailed] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [sharing, setSharing] = useState(false);
+  // One tap: the phone's share sheet with the link (copied where there is none).
+  const { share: shareLink, sharing, notice } = useInviteShare(vote, onStale);
   const open = vote.status === 'open';
   const mine = vote.proposedBy === userId;
   const by = mine ? 'You' : vote.proposerName ?? 'Someone';
@@ -110,40 +109,6 @@ export default function VoteCard({
             ? 'Invite expired'
             : outcomeLabel(vote.status);
   const meta = open ? `${by} asked · ${progress}` : `${outcome} · ${by} asked`;
-
-  // One tap: the phone's share sheet with the link. Where there is no share
-  // sheet (most desktop browsers) it is copied instead, like the old invite.
-  async function shareLink() {
-    if (sharing || !link) return;
-    setSharing(true);
-    setNotice(null);
-
-    try {
-      const fresh = await getVoteLink(vote.id).catch(() => link);
-      if (!fresh || fresh.usedAt || inviteExpiry(fresh.createdAt).expired) {
-        setNotice(fresh && !fresh.usedAt ? 'This invite has expired. Start a new invite vote.' : 'This invite was used already.');
-        onStale?.();
-        return;
-      }
-
-      const message = inviteMessage(vote.squadName, fresh.code);
-      try {
-        if (Platform.OS === 'web' && !(typeof navigator !== 'undefined' && 'share' in navigator)) {
-          throw new Error('No share sheet');
-        }
-        await Share.share({ message });
-      } catch {
-        try {
-          await Clipboard.setStringAsync(message);
-          setNotice(`Invite copied. Paste it to ${vote.targetName}.`);
-        } catch {
-          setNotice('Could not share the invite. Try again.');
-        }
-      }
-    } finally {
-      setSharing(false);
-    }
-  }
 
   const thumb = cover ? (
     <Image source={{ uri: cover }} style={styles.cover} onError={() => setCoverFailed(true)} />

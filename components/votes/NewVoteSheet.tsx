@@ -21,13 +21,15 @@ import { getSquadGoingPlans, propose, type VoteKind, type VoteStatus } from '../
 import { errorText, UNIQUE_VIOLATION } from '../../lib/postgres';
 import { formatDateTime } from '../../lib/datetime';
 import { features } from '../../lib/features';
+import { membersWhoVote, votesNeeded } from '../../lib/squadVote';
 import type { Person } from '../../lib/people';
 import Monogram from '../general/Monogram';
 import SheetHeader from '../general/SheetHeader';
+import { PollPreview } from './VoteTicket';
 import { fieldStyles } from '../../fieldStyles';
-import { colors, radius, space, textSize, typo } from '../../theme';
+import { brand, colors, radius, space, textSize, typo } from '../../theme';
 
-type Step = 'menu' | VoteKind;
+export type Step = 'menu' | VoteKind;
 
 // A row to pick in the list steps: a squad, a plan or a member.
 type Choice = { id: string; title: string; detail?: string; avatarUrl?: string | null; square?: boolean };
@@ -46,11 +48,14 @@ type NewVoteSheetProps = {
   onClose: () => void;
   // The vote went in: open, or already decided in a small squad.
   onStarted: (kind: VoteKind, status: VoteStatus) => void;
+  // Opens straight on one kind (a quick start on Votes); Back still leads to
+  // every kind.
+  initialStep?: Step;
 };
 
 // "What do we decide?": every vote starts here, and only here. One small step
 // per kind of decision, then it goes to the parea.
-export default function NewVoteSheet({ visible, group, userId, onClose, onStarted }: NewVoteSheetProps) {
+export default function NewVoteSheet({ visible, group, userId, onClose, onStarted, initialStep = 'menu' }: NewVoteSheetProps) {
   const [step, setStep] = useState<Step>('menu');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +78,9 @@ export default function NewVoteSheet({ visible, group, userId, onClose, onStarte
 
   useEffect(() => {
     if (!visible) return;
-    setStep('menu');
+    // Following a parea is the only kind a switch can hide.
+    const hidden = (initialStep === 'follow' || initialStep === 'unfollow') && !features.squadFollows;
+    setStep(hidden ? 'menu' : initialStep);
     resetStep();
   }, [visible]);
 
@@ -270,27 +277,57 @@ export default function NewVoteSheet({ visible, group, userId, onClose, onStarte
     }
   }
 
-  const menu: { step: Step; icon: keyof typeof Ionicons.glyphMap; title: string; detail: string }[] = [
-    { step: 'poll', icon: 'help-circle-outline', title: 'Ask the parea', detail: 'A question with 2 to 4 choices' },
-    { step: 'invite', icon: 'person-add-outline', title: 'Invite someone', detail: 'If it passes, you get a link that works once' },
-    { step: 'attend', icon: 'calendar-outline', title: 'Go to a plan', detail: "Another parea's public plan" },
-    { step: 'unattend', icon: 'calendar-clear-outline', title: 'Skip a plan', detail: 'One your parea said yes to' },
+  // Grouped by what the vote is about; Ask the parea sits on top on its own.
+  const whoIn = "Who's in";
+  const plans = 'Plans';
+  const pareas = 'Other pareas';
+  const itself = `${group.name} itself`;
+  const menu: {
+    step: Step;
+    icon: keyof typeof Ionicons.glyphMap;
+    title: string;
+    detail: string;
+    section: string;
+    red?: boolean;
+  }[] = [
+    { step: 'poll', icon: 'help-circle-outline', title: 'Ask the parea', detail: 'A question with 2 to 4 choices', section: '' },
+    { step: 'invite', icon: 'person-add-outline', title: 'Invite someone', detail: 'If it passes, you get a link that works once', section: whoIn },
+    { step: 'remove', icon: 'person-remove-outline', title: 'Remove a member', detail: "They see it, they don't vote", section: whoIn, red: true },
+    { step: 'attend', icon: 'calendar-outline', title: 'Go to a plan', detail: "Another parea's public plan", section: plans },
+    { step: 'unattend', icon: 'calendar-clear-outline', title: 'Skip a plan', detail: 'One your parea said yes to', section: plans },
     ...(features.squadFollows
       ? [
-          { step: 'follow' as const, icon: 'compass-outline' as const, title: 'Follow a parea', detail: 'See their nights and plans' },
-          { step: 'unfollow' as const, icon: 'remove-circle-outline' as const, title: 'Unfollow a parea', detail: 'Stop following them' },
+          { step: 'follow' as const, icon: 'compass-outline' as const, title: 'Follow a parea', detail: 'See their nights and plans', section: pareas },
+          { step: 'unfollow' as const, icon: 'remove-circle-outline' as const, title: 'Unfollow a parea', detail: 'Stop following them', section: pareas },
         ]
       : []),
-    { step: 'rename', icon: 'text-outline', title: 'Rename', detail: `Now "${group.name}"` },
-    { step: 'photo', icon: 'image-outline', title: 'New photo', detail: 'The round photo by the name' },
+    { step: 'rename', icon: 'text-outline', title: 'Rename', detail: `Now "${group.name}"`, section: itself },
+    { step: 'photo', icon: 'image-outline', title: 'New photo', detail: 'The round photo by the name', section: itself },
     {
       step: 'memories',
       icon: group.memoriesPublic ? 'lock-closed-outline' : 'lock-open-outline',
       title: group.memoriesPublic ? 'Make memories private' : 'Make memories public',
       detail: group.memoriesPublic ? 'Only members would see your nights' : 'Anyone who opens the profile would see them',
+      section: itself,
     },
-    { step: 'remove', icon: 'person-remove-outline', title: 'Remove a member', detail: 'They do not vote on it' },
   ];
+  const sections = [whoIn, plans, pareas, itself]
+    .map((name) => ({ name, items: menu.filter((item) => item.section === name) }))
+    .filter((section) => section.items.length > 0);
+
+  // How many yes a vote needs here: "3 of 5".
+  const deciding = membersWhoVote('poll', group.memberCount);
+  const needed = votesNeeded(deciding);
+  const filledOptions = options.map((option) => option.trim()).filter(Boolean);
+  const pollReady = question.trim() !== '' && filledOptions.length >= MIN_OPTIONS;
+  const startLabel =
+    step !== 'poll'
+      ? 'Start vote'
+      : question.trim() === ''
+        ? 'Write the question'
+        : filledOptions.length < MIN_OPTIONS
+          ? 'Give at least two choices'
+          : `Send to ${group.name}`;
 
   const title =
     step === 'menu' ? 'What do we decide?' : menu.find((item) => item.step === step)?.title ?? 'New vote';
@@ -386,39 +423,84 @@ export default function NewVoteSheet({ visible, group, userId, onClose, onStarte
     switch (step) {
       case 'menu':
         return (
-          <View style={styles.choices}>
-            {menu.map((item) => (
-              <Pressable
-                key={item.step}
-                onPress={() => open(item.step)}
-                accessibilityRole="button"
-                accessibilityLabel={item.title}
-                accessibilityHint={item.detail}
-                style={({ pressed }) => [styles.menuRow, pressed && styles.pressed]}
-              >
-                <View style={styles.menuIcon}>
-                  <Ionicons name={item.icon} size={20} color={colors.text} />
+          <>
+            {/* The one most used, as a blue ticket. */}
+            <Pressable
+              onPress={() => open('poll')}
+              accessibilityRole="button"
+              accessibilityLabel="Ask the parea"
+              accessibilityHint="A question with 2 to 4 choices"
+              style={({ pressed }) => [styles.feature, pressed && styles.featurePressed]}
+            >
+              <View style={styles.featureMain}>
+                <Text style={styles.featureKick}>MOST USED · MOST PICKS WIN</Text>
+                <Text style={styles.featureTitle}>Ask the parea</Text>
+                <Text style={styles.featureLine}>A question with 2 to 4 choices</Text>
+              </View>
+              <View style={styles.featurePerf} pointerEvents="none">
+                <View style={styles.featureDashes}>
+                  {Array.from({ length: 16 }, (_, i) => (
+                    <View key={i} style={styles.featureDash} />
+                  ))}
                 </View>
-                <View style={styles.choiceText}>
-                  <Text style={styles.choiceTitle}>{item.title}</Text>
-                  <Text style={styles.choiceDetail} numberOfLines={1}>
-                    {item.detail}
-                  </Text>
+              </View>
+              <View style={styles.featureStub}>
+                <View style={styles.featureIcon}>
+                  <Ionicons name="help-circle-outline" size={22} color={brand[0]} />
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
-              </Pressable>
+              </View>
+            </Pressable>
+
+            {sections.map((section) => (
+              <View key={section.name} style={styles.section}>
+                <Text style={styles.sectionTitle} accessibilityRole="header">
+                  {section.name.toUpperCase()}
+                </Text>
+                <View style={styles.group}>
+                  {section.items.map((item, index) => (
+                    <Pressable
+                      key={item.step}
+                      onPress={() => open(item.step)}
+                      accessibilityRole="button"
+                      accessibilityLabel={item.title}
+                      accessibilityHint={item.detail}
+                      style={({ pressed }) => [styles.menuRow, index > 0 && styles.menuRowRule, pressed && styles.menuRowPressed]}
+                    >
+                      <View style={styles.menuIcon}>
+                        <Ionicons name={item.icon} size={20} color={item.red ? colors.danger : colors.text} />
+                      </View>
+                      <View style={styles.choiceText}>
+                        <Text style={styles.choiceTitle}>{item.title}</Text>
+                        <Text style={styles.choiceDetail} numberOfLines={2}>
+                          {item.detail}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={colors.textSoft} />
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
             ))}
-          </View>
+
+            <Text style={styles.fine}>
+              A vote passes with more than half of {group.name}: {needed} of {deciding}.
+            </Text>
+          </>
         );
 
       case 'poll':
         return (
           <>
+            <View style={styles.previewWrap}>
+              <Text style={styles.previewCap}>HOW IT LANDS ON THE LINE</Text>
+              <PollPreview question={question} options={options} members={deciding} notch={colors.surface} />
+            </View>
             {field('Question', question, setQuestion, 'Where do we go on Friday?', QUESTION_MAX)}
             <View style={fieldStyles.field}>
-              <Text style={fieldStyles.label}>Choices</Text>
+              <Text style={fieldStyles.label}>Choices · 2 to 4</Text>
               {options.map((option, index) => (
                 <View key={index} style={fieldStyles.box}>
+                  <Text style={styles.optionNumber}>{index + 1}</Text>
                   <TextInput
                     style={fieldStyles.input}
                     value={option}
@@ -457,7 +539,7 @@ export default function NewVoteSheet({ visible, group, userId, onClose, onStarte
               ) : null}
             </View>
             <Text style={styles.hint}>
-              A choice wins with more than half of the parea. If everyone answers without that, the most votes win.
+              Wins with {needed} of {deciding} picks, or with the most picks once everyone answers. A tie decides nothing.
             </Text>
           </>
         );
@@ -543,9 +625,7 @@ export default function NewVoteSheet({ visible, group, userId, onClose, onStarte
                 <Ionicons name="chevron-back" size={18} color={colors.primary} />
                 <Text style={styles.backText}>All decisions</Text>
               </Pressable>
-            ) : (
-              <Text style={styles.hint}>Every vote passes with more than half of {group.name}.</Text>
-            )}
+            ) : null}
 
             <ScrollView
               style={styles.scroll}
@@ -564,12 +644,21 @@ export default function NewVoteSheet({ visible, group, userId, onClose, onStarte
             {step !== 'menu' ? (
               <Pressable
                 onPress={start}
-                disabled={busy}
+                disabled={busy || (step === 'poll' && !pollReady)}
                 accessibilityRole="button"
-                accessibilityLabel="Start the vote"
-                style={({ pressed }) => [styles.start, (pressed || busy) && styles.startPressed]}
+                accessibilityLabel={step === 'poll' ? startLabel : 'Start the vote'}
+                accessibilityState={{ disabled: busy || (step === 'poll' && !pollReady) }}
+                style={({ pressed }) => [
+                  styles.start,
+                  step === 'poll' && !pollReady && styles.startWaiting,
+                  (pressed || busy) && styles.startPressed,
+                ]}
               >
-                {saving ? <ActivityIndicator color={colors.onInk} /> : <Text style={styles.startText}>Start vote</Text>}
+                {saving ? (
+                  <ActivityIndicator color={colors.onInk} />
+                ) : (
+                  <Text style={[styles.startText, step === 'poll' && !pollReady && styles.startWaitingText]}>{startLabel}</Text>
+                )}
               </Pressable>
             ) : null}
           </Pressable>
@@ -604,15 +693,54 @@ const styles = StyleSheet.create({
   back: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 2, minHeight: 44, paddingRight: space.sm },
   backText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
 
-  menuRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 56, paddingVertical: space.xxs },
-  menuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
+  feature: {
+    flexDirection: 'row',
+    borderRadius: radius.lg,
+    backgroundColor: brand[0],
+    shadowColor: brand[0],
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  featurePressed: { transform: [{ scale: 0.98 }] },
+  featureMain: { flex: 1, minWidth: 0, gap: 3, padding: 14 },
+  featureKick: { color: '#C3CEF7', ...typo.mono, fontSize: 10.5, letterSpacing: 1.4 },
+  featureTitle: { color: colors.onInk, ...typo.display, fontSize: 18, letterSpacing: -0.3 },
+  featureLine: { color: '#DCE3FA', ...typo.semi, fontSize: textSize.small },
+  // The dashes are as tall as the ticket, as in LineTicket.
+  featurePerf: { width: 2, marginVertical: 10 },
+  featureDashes: { position: 'absolute', top: 0, bottom: 0, left: 0, width: 2, gap: 4, overflow: 'hidden' },
+  featureDash: { width: 2, height: 5, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.3)' },
+  featureStub: { width: 76, alignItems: 'center', justifyContent: 'center' },
+  featureIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
+    backgroundColor: colors.surface,
   },
+
+  section: { gap: space.xs },
+  sectionTitle: { color: colors.textSoft, ...typo.mono, fontSize: textSize.caption, letterSpacing: 1.4, marginLeft: space.xxs },
+  group: { borderRadius: 16, backgroundColor: colors.bg, overflow: 'hidden' },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 58, paddingVertical: 8, paddingHorizontal: 12 },
+  menuRowRule: { borderTopWidth: 1, borderTopColor: colors.border },
+  menuRowPressed: { backgroundColor: colors.surfaceAlt },
+  menuIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  fine: { color: colors.textSoft, ...typo.medium, fontSize: textSize.small, textAlign: 'center', lineHeight: 17 },
+
+  previewWrap: { gap: space.xs },
+  previewCap: { color: colors.textSoft, ...typo.mono, fontSize: 10.5, letterSpacing: 1.4 },
+  optionNumber: { width: 14, color: colors.textSoft, ...typo.mono, fontSize: textSize.small },
 
   choices: { gap: space.xxs },
   choice: {
@@ -652,8 +780,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.md,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.ink,
   },
   startPressed: { opacity: 0.85 },
   startText: { color: colors.onInk, ...typo.semi, fontSize: 16 },
+  // A question not ready yet: the button says what is missing.
+  startWaiting: { backgroundColor: colors.surfaceAlt },
+  startWaitingText: { color: colors.textSoft },
 });

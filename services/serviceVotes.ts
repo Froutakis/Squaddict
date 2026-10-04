@@ -48,6 +48,9 @@ export type VotePayload = {
   winnerId?: string;
 };
 
+// One member's ballot: approve on a yes / no vote, optionId on a question.
+export type VoteBallot = { userId: string; approve: boolean | null; optionId: string | null };
+
 export type SquadVote = {
   id: string;
   groupId: string;
@@ -66,6 +69,10 @@ export type SquadVote = {
   voted: number;
   // What the signed-in member voted; null when they have not voted yet.
   myVote: boolean | null;
+  // Who answered what, current members only (like the counts above): the
+  // faces on a vote ticket.
+  ballots: VoteBallot[];
+  createdAt: string;
   closedAt: string | null;
 };
 
@@ -207,6 +214,8 @@ function toVote(row: any, userId: string, today: string, members: Set<string> | 
     no: ballots.filter((ballot) => ballot.approve === false).length,
     voted: ballots.length,
     myVote: mine && mine.approve !== null ? mine.approve : null,
+    ballots: ballots.map((ballot) => ({ userId: ballot.user_id, approve: ballot.approve, optionId: ballot.option_id })),
+    createdAt: row.created_at ?? "",
     closedAt: row.closed_at ?? null,
   };
 }
@@ -304,6 +313,20 @@ export async function getVotes(
     .slice(0, DECIDED_SHOWN);
 
   return { open: stillOpen.filter((vote) => vote.status === "open"), invites, decided };
+}
+
+// How many votes the squad decided since a moment (e.g. the 1st of the
+// month). getVotes() only brings the last few, so this counts them on the
+// server. Null when it can't be read; the screen then counts what it has.
+export async function countDecidedSince(groupId: string, since: Date): Promise<number | null> {
+  const { count, error } = await supabase
+    .from("squad_proposals")
+    .select("id", { count: "exact", head: true })
+    .eq("group_id", groupId)
+    .neq("status", "open")
+    .gte("closed_at", since.toISOString());
+  if (error) return null;
+  return count ?? 0;
 }
 
 export async function getOpenSquadVote(
