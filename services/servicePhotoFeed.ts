@@ -43,7 +43,7 @@ export async function getPhotoFeed(groupId: string): Promise<FeedPhoto[]> {
 
   const { data: eventRows, error: eventError } = await supabase
     .from("events")
-    .select(`*, groups(${GROUP_FIELDS})`)
+    .select(`*, groups!events_group_id_fkey(${GROUP_FIELDS})`)
     .in("id", nights.map((night) => night.id))
     .order("date", { ascending: false });
   if (eventError) throw eventError;
@@ -137,7 +137,7 @@ export async function getCityNights(center: { lat: number; lng: number } | null,
 
   let query = supabase
     .from("events")
-    .select(`*, groups(${GROUP_FIELDS})`)
+    .select(`*, groups!events_group_id_fkey(${GROUP_FIELDS})`)
     .eq("is_public", true)
     .gte("date", from)
     .lt("date", today);

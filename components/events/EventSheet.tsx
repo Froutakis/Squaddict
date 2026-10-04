@@ -12,6 +12,9 @@ import AttendeeSheet from './AttendeeSheet';
 import EventPhotos from './EventPhotos';
 import Map from '../general/Map';
 import type { LivePerson } from '../../services/serviceLiveLocation';
+import { getGoingSquads, type GoingSquad } from '../../services/serviceVotes';
+import { useSquadPlans } from './useSquadPlans';
+import Monogram from '../general/Monogram';
 
 export type SheetEvent = {
   id: string;
@@ -38,6 +41,8 @@ type EventSheetProps = {
   onChanged: () => void | Promise<void>;
   onEdit?: (event: SheetEvent) => void;
   onPhotosChanged?: () => void;
+  // Votes start only on the Votes page: the sheet closes and that opens.
+  onOpenVotes: (groupId?: string) => void;
 };
 
 export default function EventSheet({
@@ -48,12 +53,26 @@ export default function EventSheet({
   onChanged,
   onEdit,
   onPhotosChanged,
+  onOpenVotes,
 }: EventSheetProps) {
   const [roster, setRoster] = useState(false);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [goingSquads, setGoingSquads] = useState<GoingSquad[]>([]);
+  const squad = useSquadPlans(
+    currentUserId,
+    event?.groupId ? [{ id: event.id, groupId: event.groupId }] : [],
+    (groupId) => {
+      onClose();
+      onOpenVotes(groupId);
+    },
+  );
+  const stance = event?.groupId
+    ? squad.stanceFor({ id: event.id, groupId: event.groupId })
+    : { kind: 'rsvp' as const, via: null, skipLabel: null, skipWaiting: false };
+  const canAnswer = stance !== null && stance.kind === 'rsvp';
 
   const place = placeLines(event?.location, event?.placeLabel);
 
@@ -63,13 +82,18 @@ export default function EventSheet({
 
     let cancelled = false;
     setConfirming(false);
+    setGoingSquads([]);
 
     async function load() {
       setError(null);
       try {
-        const rows = await getAttendees(open!.id);
+        const [rows, squads] = await Promise.all([
+          getAttendees(open!.id),
+          getGoingSquads(open!.id).catch(() => [] as GoingSquad[]),
+        ]);
         if (cancelled) return;
         setAttendees(rows);
+        setGoingSquads(squads);
       }
       catch {
         if (!cancelled) setError('Could not load who is coming.');
@@ -98,6 +122,17 @@ export default function EventSheet({
     finally {
       setSaving(false);
     }
+  }
+
+  // Says yes to the acting squad's vote to go, or to skip; with none open to
+  // answer, the Votes page.
+  async function handleSquad(which: 'go' | 'skip') {
+    if (!event?.groupId) return;
+    const plan = { id: event.id, groupId: event.groupId };
+    const ok = which === 'go' ? await squad.act(plan) : await squad.skip(plan);
+    if (!ok) return;
+    setGoingSquads(await getGoingSquads(event.id).catch(() => goingSquads));
+    await onChanged();
   }
 
   async function handleDelete() {
@@ -207,8 +242,14 @@ export default function EventSheet({
                 {place.secondary ? (
                   <Text style={styles.whereSub} numberOfLines={2}>{place.secondary}</Text>
                 ) : null}
+                {stance && stance.kind === 'rsvp' && stance.via ? (
+                  <View style={styles.via}>
+                    <Text style={styles.viaText} numberOfLines={1}>{stance.via} is going</Text>
+                  </View>
+                ) : null}
 
                 <View style={styles.actions}>
+                  {canAnswer ? (<>
                   <Pressable
                     onPress={() => handleRsvp(myStatus === 'in' ? null : 'in')}
                     disabled={saving}
@@ -248,6 +289,28 @@ export default function EventSheet({
                       color="#FFFFFF"
                     />
                   </Pressable>
+                  </>) : null}
+                  {stance && stance.kind !== 'rsvp' ? (
+                    stance.kind === 'no-squad' ? (
+                      <Text style={styles.squadNote}>{stance.text}</Text>
+                    ) : (
+                      <Pressable
+                        onPress={() => handleSquad('go')}
+                        disabled={squad.busyId !== null}
+                        accessibilityRole="button"
+                        accessibilityLabel={stance.label}
+                        accessibilityHint={stance.kind === 'propose' || stance.waiting ? 'Opens Votes' : undefined}
+                        style={({ pressed }) => [styles.squadButton, pressed && styles.pressed]}
+                      >
+                        <Ionicons
+                          name={stance.kind === 'propose' ? 'people-outline' : stance.waiting ? 'time-outline' : 'thumbs-up-outline'}
+                          size={17}
+                          color="#FFFFFF"
+                        />
+                        <Text style={styles.squadButtonText} numberOfLines={1}>{stance.label}</Text>
+                      </Pressable>
+                    )
+                  ) : null}
 
                   <Pressable
                     onPress={() => setRoster(true)}
@@ -273,6 +336,34 @@ export default function EventSheet({
                 ) : null}
 
                 {error ? <Text style={styles.error}>{error}</Text> : null}
+                {squad.error ? <Text style={styles.error}>{squad.error}</Text> : null}
+
+                {goingSquads.length > 0 ? (
+                  <View style={styles.squads}>
+                    <Text style={styles.squadsTitle}>SQUADS GOING</Text>
+                    <View style={styles.squadsRow}>
+                      {goingSquads.map((one) => (
+                        <View key={one.id} style={styles.squadChip}>
+                          <Monogram name={one.name} uri={one.avatarUrl} size={22} />
+                          <Text style={styles.squadName} numberOfLines={1}>{one.name}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+
+                {stance && stance.kind === 'rsvp' && stance.skipLabel ? (
+                  <Pressable
+                    onPress={() => handleSquad('skip')}
+                    disabled={squad.busyId !== null}
+                    accessibilityRole="button"
+                    accessibilityLabel={stance.skipLabel}
+                    accessibilityHint={stance.skipWaiting || stance.skipLabel === 'Vote to skip' ? 'Opens Votes' : undefined}
+                    style={({ pressed }) => [styles.skip, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.skipText}>{stance.skipLabel}</Text>
+                  </Pressable>
+                ) : null}
 
                 {started && event.groupId ? (
                   <View style={styles.photos}>
@@ -473,4 +564,40 @@ const styles = StyleSheet.create({
   cancelText: { color: colors.textSoft, ...typo.semi, fontSize: textSize.base },
   dangerBtn: { borderColor: colors.danger, backgroundColor: colors.danger },
   dangerText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.base },
+  via: {
+    alignSelf: 'flex-start',
+    marginTop: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  viaText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.caption },
+  squadButton: {
+    flexShrink: 1,
+    height: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+  },
+  squadButtonText: { flexShrink: 1, color: '#FFFFFF', ...typo.semi, fontSize: textSize.base },
+  squadNote: { alignSelf: 'center', color: 'rgba(255,255,255,0.78)', ...typo.medium, fontSize: textSize.small },
+  squads: { gap: space.xs, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.surface },
+  squadsTitle: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption, letterSpacing: 1.2 },
+  squadsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+  squadChip: { flexDirection: 'row', alignItems: 'center', gap: space.xxs, maxWidth: '100%' },
+  squadName: { color: colors.text, ...typo.semi, fontSize: textSize.small },
+  skip: {
+    alignSelf: 'center',
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  skipText: { color: colors.textSoft, ...typo.semi, fontSize: textSize.small },
 });

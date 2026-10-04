@@ -58,6 +58,9 @@ type PareaSidebarProps = {
   onEvents: () => void;
   onHome: () => void;
   onCalendar: () => void;
+  // Open votes in the current squad you have not answered.
+  votes?: number;
+  onVotes: () => void;
   onExplore: () => void;
   onYou: () => void;
   onClose: () => void;
@@ -81,6 +84,8 @@ export default function PareaSidebar({
   onEvents,
   onHome,
   onCalendar,
+  votes = 0,
+  onVotes,
   onExplore,
   onYou,
   onClose,
@@ -145,6 +150,7 @@ export default function PareaSidebar({
     { key: 'plan', label: 'New plan', icon: 'add', primary: true, onPress: onPlan },
     { key: 'chat', label: 'Chat', icon: 'chatbubble-outline', badge: chatUnread, onPress: onChat },
     { key: 'calendar', label: 'Calendar', icon: 'calendar-outline', onPress: onCalendar },
+    { key: 'votes', label: 'Votes', icon: 'checkbox-outline', badge: votes, onPress: onVotes },
     ...(features.voice ? [{ key: 'voice', label: 'Voice', icon: 'mic-outline' as IconName, soon: true }] : []),
   ];
 

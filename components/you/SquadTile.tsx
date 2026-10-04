@@ -7,10 +7,8 @@ import Monogram from '../general/Monogram';
 import { colors, radius, shadow, space, sun, textSize, typo } from '../../theme';
 
 const AVATAR = 24;
-// Cards take the banner's own shape so the whole photo shows, within reason.
-const DEFAULT_RATIO = 16 / 10;
-const MIN_RATIO = 1;
-const MAX_RATIO = 2.2;
+// Every card is the same shape; the banner fills it and is cropped to fit.
+const RATIO = 5 / 4;
 
 type SquadTileProps = {
   group: Group;
@@ -23,27 +21,11 @@ type SquadTileProps = {
 
 export default function SquadTile({ group, acting = false, unread = 0, votes = 0, onPress }: SquadTileProps) {
   const [bannerBroken, setBannerBroken] = useState(false);
-  const [ratio, setRatio] = useState(DEFAULT_RATIO);
 
   const banner = group.bannerUrl && !bannerBroken ? group.bannerUrl : null;
 
   useEffect(() => {
     setBannerBroken(false);
-    setRatio(DEFAULT_RATIO);
-    if (!group.bannerUrl) return;
-
-    let cancelled = false;
-    Image.getSize(
-      group.bannerUrl,
-      function (width, height) {
-        if (cancelled || !width || !height) return;
-        setRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, width / height)));
-      },
-      function () {},
-    );
-    return function cleanup() {
-      cancelled = true;
-    };
   }, [group.bannerUrl]);
   const badge = unreadLabel(unread);
   const members = `${group.memberCount} ${group.memberCount === 1 ? 'member' : 'members'}`;
@@ -59,7 +41,7 @@ export default function SquadTile({ group, acting = false, unread = 0, votes = 0
       accessibilityLabel={label}
       style={({ pressed }) => [styles.tile, acting && styles.tileActing, pressed && styles.pressed]}
     >
-      <View style={[styles.banner, { aspectRatio: ratio }]}>
+      <View style={styles.banner}>
         {banner ? (
           <Image
             source={{ uri: banner }}
@@ -73,6 +55,8 @@ export default function SquadTile({ group, acting = false, unread = 0, votes = 0
           <LinearGradient colors={['#1B2A44', '#3A2E3F']} style={StyleSheet.absoluteFill} />
         )}
 
+        <LinearGradient colors={['rgba(6,14,22,0)', 'rgba(6,14,22,0.8)']} style={styles.scrim} />
+
         {acting ? (
           <View style={styles.acting}>
             <View style={styles.actingDot} />
@@ -85,22 +69,28 @@ export default function SquadTile({ group, acting = false, unread = 0, votes = 0
             <Text style={styles.badgeText}>{badge}</Text>
           </View>
         ) : null}
-      </View>
 
-      <View style={styles.body}>
-        <Monogram name={group.name} size={AVATAR} uri={group.avatarUrl} />
-        <View style={styles.text}>
-          <Text style={styles.name} numberOfLines={1}>
-            {group.name}
-          </Text>
-          <Text style={[styles.meta, waiting !== null && styles.metaWaiting]} numberOfLines={1}>
-            {waiting ?? members}
-          </Text>
+        <View style={styles.body}>
+          <Monogram name={group.name} size={AVATAR} uri={group.avatarUrl} ring={1.5} />
+          <View style={styles.text}>
+            <Text style={styles.name} numberOfLines={1}>
+              {group.name}
+            </Text>
+            <Text style={[styles.meta, waiting !== null && styles.metaWaiting]} numberOfLines={1}>
+              {waiting ?? members}
+            </Text>
+          </View>
         </View>
       </View>
     </Pressable>
   );
 }
+
+const textShadow = {
+  textShadowColor: 'rgba(0,0,0,0.45)',
+  textShadowOffset: { width: 0, height: 1 },
+  textShadowRadius: 3,
+};
 
 const styles = StyleSheet.create({
   tile: {
@@ -112,7 +102,9 @@ const styles = StyleSheet.create({
   },
   tileActing: { borderWidth: 2, borderColor: sun },
   pressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },
-  banner: { width: '100%', backgroundColor: '#1B2A44' },
+  banner: { width: '100%', aspectRatio: RATIO, backgroundColor: '#1B2A44' },
+  // Darkens the bottom of the photo so the white name always reads.
+  scrim: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '60%' },
   acting: {
     position: 'absolute',
     left: space.xs,
@@ -140,9 +132,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   badgeText: { color: '#FFFFFF', ...typo.bold, fontSize: textSize.caption },
-  // The white strip under the photo: small squad photo, name and size.
+  // Over the bottom of the photo: small squad photo, name and size.
   body: {
-    flex: 1,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,
@@ -150,7 +145,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.xs,
   },
   text: { flex: 1, minWidth: 0 },
-  name: { color: colors.text, ...typo.bold, fontSize: textSize.body },
-  meta: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption },
-  metaWaiting: { color: colors.accent },
+  name: { color: '#FFFFFF', ...typo.bold, fontSize: textSize.body, ...textShadow },
+  meta: { color: 'rgba(255,255,255,0.8)', ...typo.mono, fontSize: textSize.caption, ...textShadow },
+  metaWaiting: { color: sun },
 });

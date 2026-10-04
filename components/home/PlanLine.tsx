@@ -284,7 +284,7 @@ function LineRow({
 
 // Fades and lifts in whatever it wraps the moment it appears: a row folding
 // back, or a row opening into the ticket.
-function Reveal({ children, style }: { children: ReactNode; style?: object }) {
+export function Reveal({ children, style }: { children: ReactNode; style?: object }) {
   const t = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {

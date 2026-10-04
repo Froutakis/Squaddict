@@ -3,15 +3,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Group } from '../../services/serviceGroup';
 import { getActingSquad } from '../../services/serviceUser';
-import {
-  castVote,
-  getOpenVote,
-  isFollowing,
-  proposeFollow,
-  type FollowVote,
-} from '../../services/serviceFollow';
+import { isFollowing } from '../../services/serviceFollow';
+import { castVote, getOpenSquadVote, type SquadVote } from '../../services/serviceVotes';
 import { followButtonLabel } from '../../lib/follows';
-import { voteButtonLabel } from '../../lib/followVote';
+import { voteButtonLabel } from '../../lib/squadVote';
 import Monogram from '../general/Monogram';
 import { colors, paper, radius, space, textSize, typo } from '../../theme';
 
@@ -20,16 +15,19 @@ type FollowButtonProps = {
   userId: string;
   // Full width, for a row of its own under the profile buttons.
   block?: boolean;
-  // Called when a vote opens, moves or settles.
+  // Called when a vote moves or settles.
   onChanged?: () => void;
+  // Opens the acting squad's Votes page: a follow vote only starts there.
+  onOpenVotes: (groupId?: string) => void;
 };
 
-// Following is the acting squad's call, not one member's: the button puts it
-// to that squad's vote, and shows the vote while it is open.
-export default function FollowButton({ group, userId, block = false, onChanged }: FollowButtonProps) {
+// Following is the acting squad's call, not one member's: the button shows
+// whether it follows and the vote while one is open. A tap says yes to that
+// vote, or takes you to Votes to start one.
+export default function FollowButton({ group, userId, block = false, onChanged, onOpenVotes }: FollowButtonProps) {
   const [acting, setActing] = useState<Group | null>(null);
   const [following, setFollowing] = useState<boolean | null>(null);
-  const [vote, setVote] = useState<FollowVote | null>(null);
+  const [vote, setVote] = useState<SquadVote | null>(null);
   const [followsBack, setFollowsBack] = useState(false);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -39,7 +37,7 @@ export default function FollowButton({ group, userId, block = false, onChanged }
     async function readState(mine: Group) {
       const [out, open] = await Promise.all([
         isFollowing(mine.id, group.id),
-        getOpenVote(mine.id, group.id, userId).catch(() => null),
+        getOpenSquadVote(mine.id, group.id, userId).catch(() => null),
       ]);
       return { out, open };
     },
@@ -84,16 +82,17 @@ export default function FollowButton({ group, userId, block = false, onChanged }
 
   async function press() {
     if (!acting || following === null || saving) return;
-    if (vote && vote.myVote === true) return;
+    if (!vote || vote.myVote === true) {
+      onOpenVotes(acting.id);
+      return;
+    }
 
     setSaving(true);
     setNote(null);
     setError(null);
 
     try {
-      const status = vote
-        ? await castVote(vote.id, true)
-        : await proposeFollow(acting.id, group.id, following ? 'unfollow' : 'follow');
+      const status = await castVote(vote.id, true);
 
       const state = await readState(acting);
       setFollowing(state.out);
@@ -112,7 +111,7 @@ export default function FollowButton({ group, userId, block = false, onChanged }
 
   const waiting = vote !== null && vote.myVote === true;
   const label = vote
-    ? voteButtonLabel(vote.action, vote.myVote, vote.yes, acting.memberCount)
+    ? voteButtonLabel(vote.kind, vote.myVote, vote.yes, acting.memberCount)
     : followButtonLabel(following, acting.name);
   const quiet = vote ? waiting : following;
   const icon = vote ? (waiting ? 'time-outline' : 'thumbs-up-outline') : following ? 'checkmark' : 'add';
@@ -121,13 +120,11 @@ export default function FollowButton({ group, userId, block = false, onChanged }
     <View style={[styles.wrap, block && styles.wrapBlock]}>
       <Pressable
         onPress={press}
-        disabled={saving || waiting}
+        disabled={saving}
         accessibilityRole="button"
         accessibilityLabel={label}
-        accessibilityHint={
-          vote ? undefined : `Puts it to the vote in ${acting.name}`
-        }
-        accessibilityState={{ disabled: saving || waiting }}
+        accessibilityHint={vote && !waiting ? undefined : `Opens Votes in ${acting.name}`}
+        accessibilityState={{ disabled: saving }}
         style={({ pressed }) => [
           styles.button,
           block && styles.buttonBlock,
@@ -144,7 +141,7 @@ export default function FollowButton({ group, userId, block = false, onChanged }
 
       {vote ? (
         <Text style={styles.note}>
-          {acting.name} {vote.action === 'follow' ? 'follows' : 'unfollows'} once most members say yes.
+          {acting.name} {vote.kind === 'follow' ? 'follows' : 'unfollows'} once most members say yes.
         </Text>
       ) : null}
 

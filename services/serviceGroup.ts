@@ -92,8 +92,9 @@ export async function createGroup(handle: string, name: string): Promise<Group> 
     throw error;
   }
 
+  // No open invite code any more: the creator is the whole squad, so their
+  // own invite vote passes at once and gives a link that works once.
   await addMember(data.id, user.id);
-  await rotateInviteCode(data.id);
 
   return toGroup(data);
 }
@@ -106,14 +107,14 @@ export async function deleteGroup(groupId: string): Promise<void> {
   if (error) throw error;
 }
 
+// The bio only: the name and photo change by a vote (propose 'rename' /
+// 'photo'), and the database refuses them here (lock_voted_squad_fields).
 export async function updateGroupProfile(
   groupId: string,
-  changes: { name?: string; bio?: string | null; avatarUrl?: string | null },
+  changes: { bio?: string | null },
 ): Promise<Group> {
   const patch: Record<string, unknown> = {};
-  if (changes.name !== undefined) patch.name = changes.name.trim();
   if (changes.bio !== undefined) patch.bio = changes.bio;
-  if (changes.avatarUrl !== undefined) patch.avatar_url = changes.avatarUrl;
 
   const { data, error } = await supabase
     .from("groups")
@@ -251,29 +252,12 @@ export async function getGroupsForUser(userId: string): Promise<Array<Group>> {
   return (data ?? []).map((row: any) => toGroup(row.groups));
 }
 
-export async function getInviteCode(groupId: string): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("group_invites")
-    .select("code")
-    .eq("group_id", groupId)
-    .maybeSingle();
-  if (error) throw error;
-
-  return data?.code ?? null;
-}
-
-export async function rotateInviteCode(groupId: string): Promise<string> {
-  const { data, error } = await supabase
-    .rpc("rotate_invite_code", { target_group: groupId });
-  if (error) throw error;
-
-  return data as string;
-}
-
+// The code of a link from a passed invite vote. Each works once, so the
+// database's own reason (not valid, used already) is passed on.
 export async function joinByInviteCode(inviteCode: string): Promise<Group> {
   const { data, error } = await supabase
     .rpc("join_squad", { invite_code: inviteCode.trim().toUpperCase() });
-  if (error || !data) throw new Error("That invite code is not valid.");
+  if (error || !data) throw new Error(error?.message || "That invite is not valid.");
 
   return toGroup(data);
 }

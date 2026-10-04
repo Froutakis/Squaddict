@@ -23,8 +23,8 @@ const TABS: { key: Mode; label: string }[] = [
 ];
 
 const HINTS: Record<Mode, string> = {
-  create: 'The handle is permanent and unique. The name you can change later.',
-  join: 'Ask someone already in the squad for its invite code.',
+  create: 'The handle is permanent and unique. The name the squad can change later, by a vote.',
+  join: 'Paste the invite the squad sent you. Each invite works once.',
 };
 
 type GroupFormSheetProps = {

@@ -27,11 +27,15 @@ import { isHappeningNow } from '../lib/datetime';
 import { useNow } from '../components/home/useNow';
 import { getGroupById, getGroupsForUser, searchGroups, type Group } from '../services/serviceGroup';
 import { getActingSquad, getUserById } from '../services/serviceUser';
-import { getFollowing, proposeFollow } from '../services/serviceFollow';
+import { getFollowing } from '../services/serviceFollow';
 import { clearRsvp, getMyEvents, setRsvp, type MyEvent, type RsvpStatus } from '../services/serviceEvents';
 import { getCurrentCoords, type Coords, type LocationState } from '../services/serviceLocation';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
+import RsvpButtons from '../components/events/RsvpButtons';
+import SquadGoStub from '../components/events/SquadGoStub';
+import { useSquadPlans } from '../components/events/useSquadPlans';
+import type { PlanStance } from '../lib/squadVote';
 import type { Person } from '../lib/people';
 import { colors, typo, layout, radius, shadow, solidFor, space, textSize } from '../theme';
 import Chip from '../components/general/Chip';
@@ -81,7 +85,8 @@ const TITLE_ROW = 36;
 export const EXPLORE_FAB_DROP = TITLE_TOP + TITLE_ROW / 2 - FAB_CENTER_Y;
 const SEARCH_DELAY_MS = 300;
 
-function toCardData(event: FeedEvent, friendsGoing?: Person[]): CardEvent {
+function toCardData(event: FeedEvent, friendsGoing?: Person[], stance?: PlanStance | null): CardEvent {
+  const via = stance && stance.kind === 'rsvp' ? stance.via : null;
   return {
     friendsGoing,
     id: event.id,
@@ -90,7 +95,7 @@ function toCardData(event: FeedEvent, friendsGoing?: Person[]): CardEvent {
     startTime: event.startTime,
     location: event.location,
     placeLabel: event.placeLabel,
-    groupName: event.groupName,
+    groupName: via ? `${event.groupName} · ${via} going` : event.groupName,
     myStatus: event.myStatus,
     going: [],
     goingCount: event.goingCount,
@@ -122,6 +127,8 @@ function toSheetEvent(event: FeedEvent): SheetEvent {
     lat: event.lat,
     lng: event.lng,
     isMember: event.isMember,
+    groupId: event.groupId,
+    isPublic: true,
   };
 }
 
@@ -138,9 +145,12 @@ function mergeGroups(current: FeedGroup[], more: FeedGroup[]): FeedGroup[] {
 
 type ExploreScreenProps = {
   userId: string;
+  // Following a parea and going to its plans are votes, and votes start on
+  // the Votes page: this takes the member there.
+  onOpenVotes: (groupId?: string) => void;
 };
 
-export default function ExploreScreen({ userId }: ExploreScreenProps) {
+export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProps) {
   const [center, setCenter] = useState<Coords | null>(null);
   const [locationState, setLocationState] = useState<LocationState>('asking');
 
@@ -160,7 +170,6 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const [acting, setActing] = useState<Group | null>(null);
   const [following, setFollowing] = useState<Record<string, true>>({});
   const [followsNonce, setFollowsNonce] = useState(0);
-  const [voteNotice, setVoteNotice] = useState<string | null>(null);
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
   // The map is the front page of Explore; the list is one tap away.
   const [mode, setMode] = useState<ViewMode>('map');
@@ -184,6 +193,30 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const [highlights, setHighlights] = useState<FeedHighlight[]>([]);
   const [friendsGoing, setFriendsGoing] = useState<Record<string, Person[]>>({});
   const { signed, signPaths, dropSigned } = useSignedImages();
+  const squadPlans = useSquadPlans(
+    userId,
+    events.filter((event) => !event.isMember).map((event) => ({ id: event.id, groupId: event.groupId })),
+    onOpenVotes,
+  );
+
+  // Another squad's plan: answer only once a squad of yours is going.
+  function cardProps(event: FeedEvent) {
+    const stance = event.isMember ? null : squadPlans.stanceFor(event);
+    return {
+      event: toCardData(event, friendsGoing[event.id], stance),
+      stub: event.isMember ? undefined : (
+        <SquadGoStub stance={stance} busy={squadPlans.busyId === event.id} onAct={() => squadPlans.act(event)}>
+          <RsvpButtons
+            status={event.myStatus}
+            saving={savingId === event.id}
+            onChange={(status) => handleRsvp(event.id, status)}
+            compact
+            stretch
+          />
+        </SquadGoStub>
+      ),
+    };
+  }
   // The city's public nights, below now on the line.
   const [cityNights, setCityNights] = useState<FeedPhoto[]>([]);
   const [cityLoading, setCityLoading] = useState(true);
@@ -388,31 +421,10 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
     });
   }
 
-  async function toggleFollow(groupId: string) {
+  // Following is the acting squad's vote, started on its Votes page.
+  function toggleFollow(groupId: string) {
     if (!acting || acting.id === groupId) return;
-
-    const wasFollowing = following[groupId] === true;
-    setError(null);
-    setVoteNotice(null);
-
-    try {
-      const status = await proposeFollow(acting.id, groupId, wasFollowing ? 'unfollow' : 'follow');
-
-      if (status === 'passed') {
-        const next = { ...following };
-        if (wasFollowing) delete next[groupId];
-        else next[groupId] = true;
-        setFollowing(next);
-      } else if (status === 'open') {
-        setVoteNotice(
-          `Put to the vote in ${acting.name}. It ${wasFollowing ? 'unfollows' : 'follows'} once most members say yes.`,
-        );
-      } else {
-        setVoteNotice(`${acting.name} voted this down.`);
-      }
-    } catch {
-      setError('Could not update who you follow. Try again.');
-    }
+    onOpenVotes(acting.id);
   }
 
   function openProfile(card: CardGroup) {
@@ -777,12 +789,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
       {searchBar()}
       {locationInfo(false)}
       {chipRow(false)}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {voteNotice ? (
-        <Text style={styles.notice} accessibilityLiveRegion="polite">
-          {voteNotice}
-        </Text>
-      ) : null}
+      {error ?? squadPlans.error ? <Text style={styles.error}>{error ?? squadPlans.error}</Text> : null}
     </>
   );
 
@@ -819,7 +826,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
             {live.map((event) => (
               <View key={event.id} style={styles.liveCard}>
                 <EventCard
-                  event={toCardData(event, friendsGoing[event.id])}
+                  {...cardProps(event)}
                   action="rsvp"
                   saving={savingId === event.id}
                   onPress={() => setOpenEvent(toSheetEvent(event))}
@@ -891,6 +898,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
         group={profileGroup}
         userId={userId}
         backLabel="Explore"
+        onOpenVotes={onOpenVotes}
         onBack={() => {
           // The profile can follow or unfollow; pick that up on the cards.
           setProfileGroup(null);
@@ -919,6 +927,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
       currentUserId={userId}
       onClose={() => setOpenEvent(null)}
       onChanged={() => load(0, false)}
+      onOpenVotes={onOpenVotes}
     />
   );
 
@@ -1023,9 +1032,9 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
               </Glass>
             ) : null}
 
-            {error ? (
+            {error ?? squadPlans.error ? (
               <Glass radius={radius.lg} style={styles.island}>
-                <Text style={[styles.error, styles.flush]}>{error}</Text>
+                <Text style={[styles.error, styles.flush]}>{error ?? squadPlans.error}</Text>
               </Glass>
             ) : null}
           </View>
@@ -1035,7 +1044,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
           <View style={styles.popWrap} pointerEvents="box-none">
             <PopIn key={selected.id} style={styles.popCard}>
               <EventCard
-                event={toCardData(selected, friendsGoing[selected.id])}
+                {...cardProps(selected)}
                 action="rsvp"
                 saving={savingId === selected.id}
                 onPress={() => setOpenEvent(toSheetEvent(selected))}
@@ -1108,7 +1117,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
         renderItem={({ item }) => (
           <View style={styles.item}>
             <EventCard
-              event={toCardData(item, friendsGoing[item.id])}
+              {...cardProps(item)}
               action="rsvp"
               saving={savingId === item.id}
               onPress={() => setOpenEvent(toSheetEvent(item))}
@@ -1291,13 +1300,6 @@ const styles = StyleSheet.create({
     ...typo.medium,
     fontSize: textSize.body,
   },
-  notice: {
-    paddingHorizontal: space.lg,
-    color: colors.textSoft,
-    ...typo.medium,
-    fontSize: textSize.body,
-  },
-
   item: { paddingHorizontal: space.lg, paddingBottom: space.sm },
   empty: { paddingHorizontal: space.lg, paddingTop: space.sm },
 });

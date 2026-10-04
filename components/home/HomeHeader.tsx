@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Group } from '../../services/serviceGroup';
 import { todayLabel } from '../../lib/datetime';
@@ -11,12 +12,14 @@ type HomeHeaderProps = {
   // Which face of Parea this is: Memories or Plans.
   label: string;
   onMenu: () => void;
+  // A button on the right of the squad's name (Votes: New vote).
+  right?: ReactNode;
 };
 
 // The squad you are looking at, and under it which face of it this is. Tapping the squad opens the side
 // rail, where chat, plans and the other squads are; the floating menu button
 // opens it from anywhere.
-export default function HomeHeader({ squad, label, onMenu }: HomeHeaderProps) {
+export default function HomeHeader({ squad, label, onMenu, right }: HomeHeaderProps) {
   return (
     <View style={styles.header}>
       <View style={styles.top}>
@@ -33,6 +36,7 @@ export default function HomeHeader({ squad, label, onMenu }: HomeHeaderProps) {
             </Text>
           </Pressable>
         ) : null}
+        {right ? <View style={styles.right}>{right}</View> : null}
       </View>
 
       <Text style={styles.date}>
@@ -60,4 +64,6 @@ const styles = StyleSheet.create({
   squad: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space.xs },
   name: { flexShrink: 1, color: colors.text, ...typo.display, fontSize: textSize.heading, letterSpacing: -0.4 },
   pressed: { opacity: 0.7 },
+  // Taller than the name row (a 44pt button) without pushing the name down.
+  right: { marginVertical: -space.xs, marginLeft: 'auto' },
 });

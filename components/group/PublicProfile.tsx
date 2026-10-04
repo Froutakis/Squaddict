@@ -34,6 +34,8 @@ type PublicProfileProps = {
   onBack: () => void;
   onAnswer: (plan: FeedEvent, status: RsvpStatus | null) => void;
   onOpenPlan: (plan: FeedEvent) => void;
+  // The vote button for a plan, in place of I'm in / Pass.
+  stubFor?: (plan: FeedEvent) => ReactNode;
 };
 
 // A squad as people outside it see it: who they are, where they go,
@@ -47,6 +49,7 @@ export default function PublicProfile({
   onBack,
   onAnswer,
   onOpenPlan,
+  stubFor,
 }: PublicProfileProps) {
   const [profile, setProfile] = useState<PareaProfile | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
@@ -183,6 +186,7 @@ export default function PublicProfile({
               action="rsvp"
               saving={savingId === next.id}
               onPress={() => onOpenPlan(next)}
+              stub={stubFor?.(next)}
               onRsvp={(status) => onAnswer(next, status)}
             />
           ) : (

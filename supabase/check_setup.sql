@@ -89,7 +89,27 @@ with checks(file, step, what, ok) as (
   ('feed_nights.sql', 13, 'policy read public night photos',
      exists (select 1 from pg_policies where tablename = 'event_photos' and policyname = 'read public night photos')),
   ('feed_nights.sql', 13, 'storage policy read public night photo files',
-     exists (select 1 from pg_policies where schemaname = 'storage' and policyname = 'read public night photo files'))
+     exists (select 1 from pg_policies where schemaname = 'storage' and policyname = 'read public night photo files')),
+  -- squad_votes.sql
+  ('squad_votes.sql', 14, 'table squad_proposals',    to_regclass('public.squad_proposals') is not null),
+  ('squad_votes.sql', 14, 'table squad_ballots',      to_regclass('public.squad_ballots') is not null),
+  ('squad_votes.sql', 14, 'table squad_event_going',  to_regclass('public.squad_event_going') is not null),
+  ('squad_votes.sql', 14, 'table squad_proposal_options', to_regclass('public.squad_proposal_options') is not null),
+  ('squad_votes.sql', 14, 'table squad_invite_links', to_regclass('public.squad_invite_links') is not null),
+  ('squad_votes.sql', 14, 'function propose',         to_regprocedure('public.propose(uuid,text,uuid,jsonb)') is not null),
+  ('squad_votes.sql', 14, 'function vote',            to_regprocedure('public.vote(uuid,boolean,uuid)') is not null),
+  ('squad_votes.sql', 14, 'trigger groups_voted_fields_locked',
+     exists (select 1 from pg_trigger where tgname = 'groups_voted_fields_locked' and not tgisinternal)),
+  ('squad_votes.sql', 14, 'open invite codes retired',
+     not exists (select 1 from pg_policies where tablename = 'group_invites' and policyname = 'members rotate invite')),
+  ('squad_votes.sql', 14, 'policy join as self (new squads only)',
+     exists (select 1 from pg_policies where tablename = 'group_members' and policyname = 'join as self' and with_check ilike '%member_count%')),
+  ('squad_votes.sql', 14, 'policy creator updates squad (members only)',
+     exists (select 1 from pg_policies where tablename = 'groups' and policyname = 'creator updates squad' and qual ilike '%my_group_ids%')),
+  ('squad_votes.sql', 14, 'function can_answer_event', to_regprocedure('public.can_answer_event(uuid)') is not null),
+  ('squad_votes.sql', 14, 'policy answer plans i can go to',
+     exists (select 1 from pg_policies where tablename = 'event_attendees' and policyname = 'answer plans i can go to')),
+  ('squad_votes.sql', 14, 'old follow-vote tables dropped', to_regclass('public.squad_follow_proposals') is null)
 )
 select step,
        file,

@@ -6,7 +6,8 @@ import { supabase } from "./supabaseClient";
 
 export type PushTarget =
   | { type: "message"; groupId: string }
-  | { type: "event"; groupId: string; eventId: string };
+  | { type: "event"; groupId: string; eventId: string }
+  | { type: "votes"; groupId: string };
 
 let registeredToken: string | null = null;
 
@@ -83,6 +84,7 @@ function targetOf(response: NotificationsModule.NotificationResponse | null): Pu
   if (data.type === "event" && typeof data.eventId === "string") {
     return { type: "event", groupId: data.groupId, eventId: data.eventId };
   }
+  if (data.type === "votes") return { type: "votes", groupId: data.groupId };
   return null;
 }
 

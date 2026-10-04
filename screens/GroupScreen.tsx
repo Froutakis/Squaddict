@@ -2,35 +2,30 @@ import { useCallback, useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
-import { inviteMessage } from '../lib/invite';
 import SquadMemories from '../components/group/SquadMemories';
 import SquadLookSheet from '../components/group/SquadLookSheet';
 import FollowButton from '../components/group/FollowButton';
 import SquadFollows from '../components/group/SquadFollows';
 import SquadVotes from '../components/group/SquadVotes';
 import SquadProfileHeader, { ACTING_ACCENT } from '../components/group/SquadProfileHeader';
-import { getFollowerIds, getFollowing, getOpenVotes, type FollowVote } from '../services/serviceFollow';
+import { getFollowerIds, getFollowing } from '../services/serviceFollow';
+import { getOpenVotes, waitsOnMe, type SquadVote } from '../services/serviceVotes';
 import Monogram from '../components/general/Monogram';
 import IconTabs from '../components/general/IconTabs';
 import DashedDivider from '../components/general/DashedDivider';
 import { getActingSquad, setActingGroup } from '../services/serviceUser';
 import {
   getGroupById,
-  getInviteCode,
   getMembers,
   getNightsKept,
   leaveGroup,
-  rotateInviteCode,
   type Group,
 } from '../services/serviceGroup';
 import { layout, paper, typo, radius, space, textSize } from '../theme';
@@ -38,6 +33,10 @@ import { getGroupPublicEvents, type FeedEvent } from '../services/serviceFeed';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import PublicProfile from '../components/group/PublicProfile';
+import RsvpButtons from '../components/events/RsvpButtons';
+import SquadGoStub from '../components/events/SquadGoStub';
+import { useSquadPlans } from '../components/events/useSquadPlans';
+import { voteEventToSheet } from '../components/votes/VoteCard';
 import { FAB_CENTER_Y, FAB_INSET } from '../components/general/MenuFab';
 import { features } from '../lib/features';
 
@@ -56,12 +55,18 @@ const ALL_TABS = [
 ];
 const TABS = ALL_TABS.filter((option) => option.value !== 'following' || features.squadFollows);
 
+// The votes the Following tab answers in place; the rest live on the Votes page.
+const FOLLOWING_TAB_KINDS = ['follow', 'unfollow', 'attend', 'unattend'];
+
 type GroupScreenProps = {
   group: Group;
   userId: string;
   onBack: () => void;
   onLeave?: () => void;
   onChange?: (group: Group) => void;
+  // Opens the Votes page of a squad (the acting one when no id is given).
+  // Inviting, following and the squad's name and photo all go through it.
+  onOpenVotes: (groupId?: string) => void;
   // What the top bar's back button says, e.g. "You".
   backLabel?: string;
 };
@@ -72,19 +77,17 @@ export default function GroupScreen({
   onBack,
   onLeave,
   onChange,
+  onOpenVotes,
   backLabel = 'Back',
 }: GroupScreenProps) {
   const [plans, setPlans] = useState<FeedEvent[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [openPlan, setOpenPlan] = useState<SheetEvent | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
-  const [code, setCode] = useState<string | null>(null);
-  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [member, setMember] = useState(false);
   const [restricted, setRestricted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [rotating, setRotating] = useState(false);
   const [current, setCurrent] = useState(group);
   const [nights, setNights] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -96,11 +99,16 @@ export default function GroupScreen({
   const [actingError, setActingError] = useState<string | null>(null);
   const [opened, setOpened] = useState<Group | null>(null);
   const [followsReload, setFollowsReload] = useState(0);
-  const [votes, setVotes] = useState<FollowVote[]>([]);
+  const [votes, setVotes] = useState<SquadVote[]>([]);
   const [followCounts, setFollowCounts] = useState<{ following: number | null; followers: number | null }>({
     following: null,
     followers: null,
   });
+  const squadPlans = useSquadPlans(
+    userId,
+    plans.map((plan) => ({ id: plan.id, groupId: plan.groupId })),
+    onOpenVotes,
+  );
 
   useEffect(() => {
     setCurrent(group);
@@ -236,15 +244,6 @@ export default function GroupScreen({
         }
       }
 
-      if (mine) {
-        try {
-          const invite = await getInviteCode(group.id);
-          if (!cancelled) setCode(invite);
-        } catch {
-          if (!cancelled) setError("Couldn't load the invite code");
-        }
-      }
-
       if (!cancelled) setLoading(false);
     }
 
@@ -279,47 +278,6 @@ export default function GroupScreen({
     }
   }
 
-  // One tap: the phone's share sheet with the invite link. Where there is no
-  // share sheet (most desktop browsers) the invite is copied instead.
-  async function shareInvite() {
-    if (!code) {
-      setTab('members');
-      return;
-    }
-
-    const message = inviteMessage(current.name, code);
-    setInviteNotice(null);
-
-    try {
-      if (Platform.OS === 'web' && !(typeof navigator !== 'undefined' && 'share' in navigator)) {
-        throw new Error('No share sheet');
-      }
-      await Share.share({ message });
-    } catch {
-      // The note sits by the code, on the members tab.
-      setTab('members');
-      try {
-        await Clipboard.setStringAsync(message);
-        setInviteNotice('Invite copied. Paste it to your people.');
-      } catch {
-        setInviteNotice('Could not share the invite. Send them the code below.');
-      }
-    }
-  }
-
-  async function handleRotate() {
-    setRotating(true);
-    setError(null);
-
-    try {
-      setCode(await rotateInviteCode(group.id));
-    } catch {
-      setError('Could not make a new code. Try again.');
-    } finally {
-      setRotating(false);
-    }
-  }
-
   async function handleLeave() {
     setError(null);
     setLeaving(true);
@@ -337,6 +295,7 @@ export default function GroupScreen({
 
   const count = members.length > 0 ? members.length : group.memberCount;
   const isActing = actingId === group.id;
+  const tabVotes = votes.filter((vote) => FOLLOWING_TAB_KINDS.includes(vote.kind));
 
   function openSheet(plan: FeedEvent) {
     setOpenPlan({
@@ -350,6 +309,8 @@ export default function GroupScreen({
       lat: plan.lat,
       lng: plan.lng,
       isMember: false,
+      groupId: plan.groupId,
+      isPublic: true,
     });
   }
 
@@ -359,6 +320,7 @@ export default function GroupScreen({
       currentUserId={userId}
       onClose={() => setOpenPlan(null)}
       onChanged={async () => setPlans(await getGroupPublicEvents(group.id))}
+      onOpenVotes={onOpenVotes}
     />
   );
 
@@ -369,7 +331,14 @@ export default function GroupScreen({
       setFollowsReload((n) => n + 1);
     };
     return (
-      <GroupScreen group={opened} userId={userId} onBack={close} onLeave={close} backLabel={current.name} />
+      <GroupScreen
+        group={opened}
+        userId={userId}
+        onBack={close}
+        onLeave={close}
+        onOpenVotes={onOpenVotes}
+        backLabel={current.name}
+      />
     );
   }
 
@@ -381,11 +350,30 @@ export default function GroupScreen({
           group={current}
           plans={plans}
           savingId={savingId}
-          error={error}
-          followAction={features.squadFollows ? <FollowButton group={current} userId={userId} /> : undefined}
+          error={error ?? squadPlans.error}
+          followAction={
+            features.squadFollows ? (
+              <FollowButton group={current} userId={userId} onOpenVotes={onOpenVotes} />
+            ) : undefined
+          }
           onBack={onBack}
           onAnswer={answer}
           onOpenPlan={openSheet}
+          stubFor={(plan) => (
+            <SquadGoStub
+              stance={squadPlans.stanceFor(plan)}
+              busy={squadPlans.busyId === plan.id}
+              onAct={() => squadPlans.act(plan)}
+            >
+              <RsvpButtons
+                status={plan.myStatus}
+                saving={savingId === plan.id}
+                onChange={(status) => answer(plan, status)}
+                compact
+                stretch
+              />
+            </SquadGoStub>
+          )}
         />
         {sheet}
       </>
@@ -465,9 +453,10 @@ export default function GroupScreen({
                 ) : null}
 
                 <Pressable
-                  onPress={shareInvite}
+                  onPress={() => onOpenVotes(group.id)}
                   accessibilityRole="button"
                   accessibilityLabel="Invite people"
+                  accessibilityHint="Opens Votes: new members join through a vote"
                   style={({ pressed }) => [styles.button, pressed && styles.pressed]}
                 >
                   <Text style={styles.buttonText} numberOfLines={1}>
@@ -482,6 +471,7 @@ export default function GroupScreen({
                   group={current}
                   userId={userId}
                   onChanged={() => setFollowsReload((n) => n + 1)}
+                  onOpenVotes={onOpenVotes}
                 />
               ) : null}
 
@@ -493,7 +483,7 @@ export default function GroupScreen({
               <IconTabs
                 options={TABS.map((option) =>
                   option.value === 'following'
-                    ? { ...option, dot: votes.some((vote) => vote.myVote === null) }
+                    ? { ...option, dot: tabVotes.some((vote) => waitsOnMe(vote, userId)) }
                     : option,
                 )}
                 value={tab}
@@ -513,11 +503,13 @@ export default function GroupScreen({
               {tab === 'following' && features.squadFollows ? (
                 <>
                   <SquadVotes
-                    votes={votes}
+                    votes={tabVotes}
                     members={count}
                     userId={userId}
-                    onOpen={setOpened}
+                    onOpenSquad={setOpened}
+                    onOpenEvent={(event) => setOpenPlan(voteEventToSheet(event))}
                     onChanged={() => setFollowsReload((n) => n + 1)}
+                    onOpenVotes={() => onOpenVotes(group.id)}
                   />
                   <SquadFollows group={current} reloadKey={followsReload} onOpen={setOpened} />
                 </>
@@ -525,45 +517,20 @@ export default function GroupScreen({
 
               {tab === 'members' ? (
                 <View style={styles.membersTab}>
+                  {/* No open code any more: the parea votes on each new member. */}
                   <View style={styles.invite}>
-                    <View style={styles.inviteText}>
-                      <Text style={styles.inviteLabel}>Invite code</Text>
-                      <Text style={styles.code} selectable>
-                        {code ?? '——————'}
-                      </Text>
-                    </View>
+                    <Text style={styles.inviteText}>New members join through a vote.</Text>
                     <Pressable
-                      onPress={shareInvite}
-                      disabled={!code}
+                      onPress={() => onOpenVotes(group.id)}
                       accessibilityRole="button"
-                      accessibilityLabel="Share the invite link"
-                      hitSlop={6}
+                      accessibilityLabel="Invite someone"
+                      accessibilityHint="Opens Votes to start an invite vote"
                       style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]}
                     >
-                      <Ionicons name="share-outline" size={16} color={paper.surface} />
+                      <Ionicons name="person-add-outline" size={16} color={paper.surface} />
                       <Text style={styles.shareText}>Invite</Text>
                     </Pressable>
-                    <Pressable
-                      onPress={handleRotate}
-                      disabled={rotating}
-                      accessibilityRole="button"
-                      accessibilityLabel="Make a new invite code"
-                      hitSlop={6}
-                      style={({ pressed }) => [styles.roundButton, pressed && styles.pressed]}
-                    >
-                      {rotating ? (
-                        <ActivityIndicator size="small" color={paper.ink} />
-                      ) : (
-                        <Ionicons name="refresh" size={17} color={paper.ink} />
-                      )}
-                    </Pressable>
                   </View>
-
-                  {inviteNotice ? (
-                    <Text style={styles.hint} accessibilityLiveRegion="polite">
-                      {inviteNotice}
-                    </Text>
-                  ) : null}
 
                   {restricted ? (
                     <Text style={styles.hint}>Only members see who is in this squad.</Text>
@@ -583,7 +550,7 @@ export default function GroupScreen({
 
                   {confirmLeave ? (
                     <View style={styles.leaveConfirm}>
-                      <Text style={styles.leaveQuestion}>Leave {current.name}? You can come back with a code.</Text>
+                      <Text style={styles.leaveQuestion}>Leave {current.name}? To come back, the parea has to vote you in again.</Text>
                       <View style={styles.buttons}>
                         <Pressable
                           onPress={() => setConfirmLeave(false)}
@@ -632,7 +599,12 @@ export default function GroupScreen({
           setCurrent(fresh);
           onChange?.(fresh);
         }}
+        onOpenVotes={function () {
+          setEditing(false);
+          onOpenVotes(group.id);
+        }}
       />
+      {sheet}
     </SafeAreaView>
   );
 }
@@ -693,27 +665,17 @@ const styles = StyleSheet.create({
     borderColor: paper.line,
     backgroundColor: paper.surface,
   },
-  inviteText: { flex: 1, gap: 2 },
-  inviteLabel: { color: paper.inkSoft, ...typo.regular, fontSize: textSize.small },
-  code: { color: paper.ink, ...typo.mono, fontSize: textSize.heading, letterSpacing: 3 },
+  inviteText: { flex: 1, color: paper.inkSoft, ...typo.medium, fontSize: textSize.body },
   shareButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    height: 36,
-    paddingHorizontal: space.sm,
+    height: 44,
+    paddingHorizontal: space.md,
     borderRadius: radius.pill,
     backgroundColor: paper.ink,
   },
   shareText: { color: paper.surface, ...typo.semi, fontSize: textSize.body },
-  roundButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: paper.surfaceAlt,
-  },
   memberList: { gap: 2 },
   member: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: 8 },
   memberDivider: {},

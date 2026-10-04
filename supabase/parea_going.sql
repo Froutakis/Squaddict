@@ -18,6 +18,8 @@ alter table public.parea_going_pushes enable row level security;
 -- on, and that you have not answered yet. Security definer because the
 -- friends' squads and profiles are not all readable to you row by row; it only
 -- returns people who share a squad with you.
+-- squad_votes.sql replaces this function with one that also leaves out plans
+-- a squad of yours already goes to.
 create or replace function public.parea_going()
 returns table (
   event_id     uuid,

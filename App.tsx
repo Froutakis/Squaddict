@@ -34,7 +34,7 @@ type HomeAsk = 'plan' | 'calendar' | 'squad';
 const PENDING_INVITE_KEY = 'squaddict.pendingInvite';
 const NOTICE_MS = 4000;
 
-const NO_RAIL_DATA: RailData = { squads: [], activeId: null, unread: {}, me: { name: '', avatarUrl: null } };
+const NO_RAIL_DATA: RailData = { squads: [], activeId: null, unread: {}, votes: 0, me: { name: '', avatarUrl: null } };
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -47,7 +47,9 @@ export default function App() {
   const [focusEventId, setFocusEventId] = useState<string | null>(null);
   const [selectGroup, setSelectGroup] = useState<{ id: string; nonce: number } | null>(null);
   const [createNonce, setCreateNonce] = useState(0);
+  const [votesNonce, setVotesNonce] = useState(0);
   const [calendarNonce, setCalendarNonce] = useState(0);
+  const [railHomeNonce, setRailHomeNonce] = useState(0);
   const [newSquadNonce, setNewSquadNonce] = useState(0);
   const [railOpen, setRailOpen] = useState(false);
   // Parea keeps this up to date; the rail shows it on every screen.
@@ -82,6 +84,10 @@ export default function App() {
     return onPushOpened(function (target) {
       if (target.type === 'message') {
         setChatTarget({ groupId: target.groupId, nonce: Date.now() });
+        setScreen('home');
+      } else if (target.type === 'votes') {
+        setSelectGroup({ id: target.groupId, nonce: Date.now() });
+        setVotesNonce((n) => n + 1);
         setScreen('home');
       } else {
         setFocusEventId(target.eventId);
@@ -175,12 +181,23 @@ export default function App() {
       setCreateNonce(0);
       setCalendarNonce(0);
       setNewSquadNonce(0);
+      setVotesNonce(0);
     }
     if (ask === 'plan' || ask === 'calendar') setScreen('events');
     else if (ask === 'squad' || !onParea) setScreen('home');
     if (ask === 'plan') setCreateNonce((n) => n + 1);
     if (ask === 'calendar') setCalendarNonce((n) => n + 1);
     if (ask === 'squad') setNewSquadNonce((n) => n + 1);
+  }
+
+  // Every vote starts on the Votes page, so buttons elsewhere that would have
+  // opened one bring you here instead. groupId is the squad deciding; without
+  // it, Parea's current squad.
+  function openVotes(groupId?: string) {
+    if (chatTarget) closeChat();
+    if (groupId) setSelectGroup({ id: groupId, nonce: Date.now() });
+    goHome();
+    setVotesNonce((n) => n + 1);
   }
 
   // Sheets wait for the rail to finish sliding away (iOS can't stack them).
@@ -193,9 +210,9 @@ export default function App() {
     <View style={styles.app}>
       <View style={styles.body}>
         {screen === 'explore' && features.explore ? (
-          <ExploreScreen userId={user.id} />
+          <ExploreScreen userId={user.id} onOpenVotes={openVotes} />
         ) : screen === 'you' ? (
-          <YouScreen user={user} onPlan={() => goHome('plan')} />
+          <YouScreen user={user} onPlan={() => goHome('plan')} onOpenVotes={openVotes} />
         ) : (
           <HomeScreen
             key={`home-${homeKey}`}
@@ -207,7 +224,9 @@ export default function App() {
             onUnreadChange={setUnread}
             selectGroup={selectGroup}
             createNonce={createNonce}
+            openVotesNonce={votesNonce}
             calendarNonce={calendarNonce}
+            railHomeNonce={railHomeNonce}
             newSquadNonce={newSquadNonce}
             onOpenRail={() => setRailOpen(true)}
             view={screen === 'events' ? 'events' : 'memories'}
@@ -224,6 +243,7 @@ export default function App() {
               user={user}
               initialGroupId={chatTarget.groupId}
               onExit={closeChat}
+              onOpenVotes={openVotes}
             />
           </View>
         ) : null}
@@ -254,16 +274,26 @@ export default function App() {
           setRailOpen(false);
           goHome();
           setScreen('home');
+          setRailHomeNonce((n) => n + 1);
         }}
         onEvents={() => {
           setRailOpen(false);
           goHome();
           setScreen('events');
+          setRailHomeNonce((n) => n + 1);
         }}
+        votes={railData.votes}
+        onVotes={() =>
+          afterRail(() => {
+            goHome();
+            setVotesNonce((n) => n + 1);
+          })
+        }
         onCalendar={() => {
           setRailOpen(false);
           // A page, not a sheet, so it can open while the rail slides away.
           goHome('calendar');
+          setRailHomeNonce((n) => n + 1);
         }}
         onExplore={() => {
           setRailOpen(false);

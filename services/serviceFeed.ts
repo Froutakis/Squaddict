@@ -79,7 +79,7 @@ export function distanceKm(a: Coords, b: Coords): number {
 
 const FEED_FIELDS =
   "id, title, date, start_time, end_time, location, lat, lng, place_label, tags, group_id, cover_url, " +
-  "groups(name, handle, bio, avatar_url, member_count, parea_follower_count), event_attendees(user_id, status)";
+  "groups!events_group_id_fkey(name, handle, bio, avatar_url, member_count, parea_follower_count), event_attendees(user_id, status)";
 
 function score(event: FeedEvent, radiusKm: number, tags: EventTag[]): number {
   const near =

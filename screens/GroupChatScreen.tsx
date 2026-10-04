@@ -110,6 +110,8 @@ type GroupChatScreenProps = {
   // When set, leaving the thread goes back to where it was opened from,
   // instead of to the list of squads.
   onExit?: () => void;
+  // Opens the Votes page (votes start only there).
+  onOpenVotes: (groupId?: string) => void;
 };
 
 export default function GroupChatScreen({
@@ -118,6 +120,7 @@ export default function GroupChatScreen({
   onBack,
   onThreadChange,
   onExit,
+  onOpenVotes,
 }: GroupChatScreenProps) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [activeId, setActiveId] = useState<string | null>(initialGroupId);
@@ -1055,6 +1058,7 @@ export default function GroupChatScreen({
         group={activeGroup}
         userId={user.id}
         backLabel="Chat"
+        onOpenVotes={onOpenVotes}
         onBack={function () {
           setGroupScreen(false);
         }}
