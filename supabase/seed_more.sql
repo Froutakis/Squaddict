@@ -213,11 +213,11 @@ begin
       end if;
 
       insert into public.events
-        (group_id, created_by, title, date, start_time, end_time, location,
+        (group_id, created_by, title, date, start_time, end_time, location, place_label,
          description, lat, lng, tags, is_public, created_at)
       values
         (squad_id, member_ids[(e - 1) % size + 1], titles[place], current_date + day,
-         starts_at, ends_at, locations[place],
+         starts_at, ends_at, locations[place], labels[place],
          blurbs[(s + e) % 6 + 1],
          lats[place] + (random() - 0.5) * 0.004, lngs[place] + (random() - 0.5) * 0.004,
          array[tags[place]], s > 5 or e % 3 = 0,
@@ -279,16 +279,6 @@ declare
   people uuid[] := array(select md5('squaddict-more-user-' || n)::uuid from generate_series(1, 30) n);
 begin
   perform setseed(0.77);
-
-  -- Place names under the title (parea_going.sql / explore).
-  if exists (select 1 from information_schema.columns
-              where table_schema = 'public' and table_name = 'events' and column_name = 'place_label') then
-    execute $sql$
-      update public.events e
-         set place_label = coalesce(e.place_label, 'Θεσσαλονίκη')
-       where e.group_id = any($1)
-    $sql$ using squads;
-  end if;
 
   -- Covers: a photo behind most tickets.
   if exists (select 1 from information_schema.columns

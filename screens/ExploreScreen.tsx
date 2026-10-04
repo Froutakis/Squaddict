@@ -51,6 +51,8 @@ import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
 import { FAB_CENTER_Y, FAB_INSET } from '../components/general/MenuFab';
 import { features } from '../lib/features';
+import CityLine from '../components/explore/CityLine';
+import { getCityNights, type FeedPhoto } from '../services/servicePhotoFeed';
 
 const RADII = [5, 10, 25, 50, 100];
 // Where the map looks before we know where you are: Thessaloniki.
@@ -182,6 +184,9 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const [highlights, setHighlights] = useState<FeedHighlight[]>([]);
   const [friendsGoing, setFriendsGoing] = useState<Record<string, Person[]>>({});
   const { signed, signPaths, dropSigned } = useSignedImages();
+  // The city's public nights, below now on the line.
+  const [cityNights, setCityNights] = useState<FeedPhoto[]>([]);
+  const [cityLoading, setCityLoading] = useState(true);
 
   const followedIds = Object.keys(following).sort().join(',');
   const followFilter = followingOnly ? followedIds : null;
@@ -355,6 +360,18 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
         if (!cancelled) setHighlights([]);
       });
 
+    setCityLoading(true);
+    getCityNights(center, radiusKm)
+      .then((found) => {
+        if (!cancelled) setCityNights(found);
+      })
+      .catch(() => {
+        if (!cancelled) setCityNights([]);
+      })
+      .finally(() => {
+        if (!cancelled) setCityLoading(false);
+      });
+
     return () => {
       cancelled = true;
     };
@@ -455,6 +472,8 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const visible = liveOnly
     ? live
     : events.filter((event) => event.myStatus === undefined && !liveIds.has(event.id));
+  // The city's line keeps the plans you said yes to, so Join can be taken back.
+  const linePlans = liveOnly ? live : events.filter((event) => event.myStatus !== 'out');
   const hasFilters =
     tags.length > 0 || when !== null || followingOnly || liveOnly || activeSearch !== '';
 
@@ -614,7 +633,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
                 if (option === 'map') setMapSearching(query !== '');
               }}
               accessibilityRole="button"
-              accessibilityLabel={option === 'list' ? 'Show as a list' : 'Show on a map'}
+              accessibilityLabel={option === 'list' ? 'Show as a line' : 'Show on a map'}
               accessibilityState={{ selected: mode === option }}
               style={[styles.toggleItem, mode === option && styles.toggleItemActive]}
             >
@@ -1035,11 +1054,44 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
     <SafeAreaView style={styles.screen}>
       <FlatList
         keyboardShouldPersistTaps="handled"
-        data={visible}
+        data={search === '' ? [] : visible}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
-        ListHeaderComponent={header}
+        ListHeaderComponent={
+          search === '' ? (
+            <>
+              {header}
+              <CityLine
+                plans={linePlans}
+                nights={cityNights}
+                nightsLoading={cityLoading}
+                now={now}
+                center={center}
+                me={{ id: userId, name: myName, avatarUrl: null }}
+                acting={acting}
+                savingId={savingId}
+                signed={signed}
+                signPaths={signPaths}
+                onImageError={dropSigned}
+                onOpenPlan={(plan) => setOpenEvent(toSheetEvent(plan))}
+                onRsvp={(plan, status) => handleRsvp(plan.id, status)}
+                onOpenGroup={(id) => {
+                  getGroupById(id)
+                    .then((group) => {
+                      if (group) setProfileGroup(group);
+                    })
+                    .catch(() => {});
+                }}
+                onShowMap={() => setMode('map')}
+                onClearFilters={hasFilters ? clearFilters : undefined}
+              />
+            </>
+          ) : (
+            header
+          )
+        }
         ListEmptyComponent={
+          search === '' ? null : 
           <View style={styles.empty}>
             {events.length > 0 ? (
               <ListEmpty
@@ -1064,7 +1116,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
             />
           </View>
         )}
-        onEndReached={loadMore}
+        onEndReached={search === '' ? undefined : loadMore}
         onEndReachedThreshold={0.5}
         refreshControl={
           <RefreshControl

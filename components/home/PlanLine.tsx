@@ -322,7 +322,7 @@ function stretches(plans: MyEvent[], now: Date): { label: string; plans: MyEvent
   return out;
 }
 
-function stretchOf(date: string, now: Date): string {
+export function stretchOf(date: string, now: Date): string {
   const d = parseLocal(date);
   const week = startOfWeek(now);
   const nextWeek = addDays(week, 7);
@@ -335,7 +335,7 @@ function stretchOf(date: string, now: Date): string {
 }
 
 // "TOMORROW", or "SAT 3 OCT".
-function dayWord(date: string, now: Date): string {
+export function dayWord(date: string, now: Date): string {
   if (date === keyOf(addDays(now, 1))) return 'TOMORROW';
   const d = parseLocal(date);
   const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });

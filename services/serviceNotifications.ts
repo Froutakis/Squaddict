@@ -10,6 +10,8 @@ export type PushTarget =
 
 let registeredToken: string | null = null;
 
+// Expo Go on Android dropped remote push in SDK 53 and throws as soon as the
+// module starts watching push tokens, so it is only loaded where push works.
 const pushSupported = Platform.OS === "ios" || (Platform.OS === "android" && !isRunningInExpoGo());
 
 function notifications(): typeof NotificationsModule | null {

@@ -68,6 +68,12 @@ type PhotoPostProps = {
   onShare?: () => void;
   // Someone who was at the night but isn't on Squaddict yet.
   missing?: { name: string; onSend: () => void };
+  // Under the title, above the tear: "Rooftop Gang was there too".
+  between?: ReactNode;
+  // At the end of the stub: a wave from another parea.
+  footer?: ReactNode;
+  // Why the night is here ("Kostas was there"); off where every night is public.
+  showWhy?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -87,6 +93,9 @@ export default function PhotoPost({
   onImageError,
   onShare,
   missing,
+  between = null,
+  footer = null,
+  showWhy = true,
   style,
 }: PhotoPostProps) {
   const lastTap = useRef(0);
@@ -96,7 +105,7 @@ export default function PhotoPost({
   const tally = tallyReactions(reactions, userId);
   const line = reactorsLine(reactions, userId);
   const place = item.event.placeLabel ?? item.event.location;
-  const why = whyLabel(item.reason, item.via);
+  const why = showWhy ? whyLabel(item.reason, item.via) : null;
   const shots = [url, ...item.more.map((_, i) => moreUrls[i])];
   const hidden = item.photoCount - shots.length;
   const sub = [item.group.name, place, item.wentCount > 1 ? `${item.wentCount} went` : null]
@@ -197,6 +206,8 @@ export default function PhotoPost({
         </Pressable>
       </View>
 
+      {between}
+
       <Perforation />
 
       <View style={styles.body}>
@@ -270,6 +281,8 @@ export default function PhotoPost({
             </Pressable>
           </View>
         ) : null}
+
+        {footer}
       </View>
     </View>
   );

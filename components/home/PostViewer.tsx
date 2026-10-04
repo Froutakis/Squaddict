@@ -41,8 +41,8 @@ type PostViewerProps = {
   signPaths: (paths: string[]) => void;
   onImageError: (path: string) => void;
   onReact: (emoji: string) => void;
-  onShowReactors: () => void;
-  onShare: () => void;
+  onShowReactors?: () => void;
+  onShare?: () => void;
   onOpenGroup?: () => void;
   onClose: () => void;
 };
@@ -246,6 +246,7 @@ export default function PostViewer({
                     </Pressable>
                   );
                 })}
+{onShare ? (
                 <Pressable
                   onPress={onShare}
                   accessibilityRole="button"
@@ -255,12 +256,14 @@ export default function PostViewer({
                   <Ionicons name="share-outline" size={16} color={colors.onInk} />
                   <Text style={styles.shareText}>Share</Text>
                 </Pressable>
+                ) : null}
               </View>
 
               {line ? (
                 <Pressable
                   onPress={onShowReactors}
-                  accessibilityRole="button"
+                  disabled={!onShowReactors}
+                  accessibilityRole={onShowReactors ? 'button' : 'text'}
                   accessibilityLabel={`Reactions from ${line}. See everyone.`}
                   hitSlop={6}
                 >

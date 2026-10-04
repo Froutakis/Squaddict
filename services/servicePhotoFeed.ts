@@ -29,6 +29,8 @@ const PHOTOS = 600;
 // The post shows the newest photo big and two more beside it.
 const PER_NIGHT = 1;
 const SHOTS = 3;
+// How far back Explore's line looks for public nights.
+const CITY_DAYS = 60;
 
 // A parea's feed: its own nights and the pareas it follows, with a few public
 // nights of other pareas mixed in (one of yours went, a parea you follow went,
@@ -46,8 +48,19 @@ export async function getPhotoFeed(groupId: string): Promise<FeedPhoto[]> {
     .order("date", { ascending: false });
   if (eventError) throw eventError;
 
+  const posts = await toPosts((eventRows ?? []) as any[], why);
+  // The mix decides which nights from other pareas get in; the feed itself
+  // stays in time order, so "This week" and "Last week" read straight down.
+  return mixFeed(posts, (post) => isOwnCircle(post.reason)).sort((a, b) =>
+    `${b.event.date} ${b.event.startTime ?? ''}`.localeCompare(`${a.event.date} ${a.event.startTime ?? ''}`),
+  );
+}
+
+// Turns night rows (with their parea) into posts: the newest photo of each
+// night, two more beside it, how many photos and how many went.
+async function toPosts(rows: any[], why: Map<string, Night>): Promise<FeedPhoto[]> {
   const byEvent = new Map<string, Omit<FeedPhoto, "photo" | "more" | "photoCount" | "wentCount">>();
-  for (const row of (eventRows ?? []) as any[]) {
+  for (const row of rows) {
     if (!row.groups) continue;
     const group = toGroup(row.groups);
     const night = why.get(row.id);
@@ -104,7 +117,7 @@ export async function getPhotoFeed(groupId: string): Promise<FeedPhoto[]> {
   }
   const went = await countWent([...ofNight.keys()]);
 
-  const posts = capPerNight(photos, PER_NIGHT).map((photo) => {
+  return capPerNight(photos, PER_NIGHT).map((photo) => {
     const all = ofNight.get(photo.eventId) ?? [photo];
     return {
       photo,
@@ -114,9 +127,36 @@ export async function getPhotoFeed(groupId: string): Promise<FeedPhoto[]> {
       wentCount: went.get(photo.eventId) ?? 0,
     };
   });
-  // The mix decides which nights from other pareas get in; the feed itself
-  // stays in time order, so "This week" and "Last week" read straight down.
-  return mixFeed(posts, (post) => isOwnCircle(post.reason)).sort((a, b) =>
+}
+
+// Public nights of every parea around a point, newest first: what Explore's
+// line shows below now. The last two months, only nights that kept photos.
+export async function getCityNights(center: { lat: number; lng: number } | null, radiusKm: number): Promise<FeedPhoto[]> {
+  const today = keyOf(new Date());
+  const from = keyOf(new Date(Date.now() - CITY_DAYS * 24 * 60 * 60 * 1000));
+
+  let query = supabase
+    .from("events")
+    .select(`*, groups(${GROUP_FIELDS})`)
+    .eq("is_public", true)
+    .gte("date", from)
+    .lt("date", today);
+  if (center) {
+    const dLat = radiusKm / 111;
+    const dLng = radiusKm / (111 * Math.max(0.2, Math.cos((center.lat * Math.PI) / 180)));
+    query = query
+      .gte("lat", center.lat - dLat)
+      .lte("lat", center.lat + dLat)
+      .gte("lng", center.lng - dLng)
+      .lte("lng", center.lng + dLng);
+  }
+  const { data, error } = await query.order("date", { ascending: false }).limit(NIGHTS);
+  if (error) throw error;
+
+  const rows = (data ?? []) as any[];
+  const why = new Map<string, Night>(rows.map((row) => [row.id, { id: row.id, reason: "public" as FeedReason, via: null }]));
+  const posts = await toPosts(rows, why);
+  return posts.sort((a, b) =>
     `${b.event.date} ${b.event.startTime ?? ''}`.localeCompare(`${a.event.date} ${a.event.startTime ?? ''}`),
   );
 }

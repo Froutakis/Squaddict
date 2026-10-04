@@ -454,14 +454,13 @@ export default function HomeScreen({
   });
   const pool = upcoming.filter((e) => e.id !== heroEvent?.id);
   const waiting = pool.filter((e) => e.myStatus === undefined);
-  // TODAY holds every plan of yours today, from all your pareas.
-  // Your plans from today on, from all your pareas, plus one from yesterday
-  // still going past midnight.
+  // The selected parea's plans from today on, plus one from yesterday still
+  // going past midnight: Home is one parea's line, above now and below it.
   const horizon = keyOf(addDays(new Date(), AHEAD_DAYS));
   const linePlans = [
-    ...events.filter((e) => e.date < today && isHappeningNow(e.date, e.startTime, e.endTime, now)),
-    ...events.filter((e) => e.date === today),
-    ...events
+    ...visible.filter((e) => e.date < today && isHappeningNow(e.date, e.startTime, e.endTime, now)),
+    ...visible.filter((e) => e.date === today),
+    ...visible
       .filter((e) => e.date > today && e.date <= horizon)
       .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? '').localeCompare(b.startTime ?? ''))
       .slice(0, AHEAD_PLANS),
@@ -643,6 +642,7 @@ export default function HomeScreen({
 
           {activeGroup ? (
             <PhotoFeed
+              ownOnly
               group={activeGroup}
               me={{ id: user.id, name: displayName, avatarUrl }}
               signed={signed}

@@ -17,6 +17,9 @@ import PostViewer from './PostViewer';
 import { AgainCard, ThrowbackCard } from './FeedCards';
 import { DateNode, GroupNode, GroupTitle, TimelineRow } from './Timeline';
 import { readJson, writeJson } from '../../lib/store';
+import { getGroupById } from '../../services/serviceGroup';
+import { getBoard, getCrossings, getWaves, sendWave, type BoardRow, type Crossing, type Wave } from '../../services/serviceCrossed';
+import { BoardSheet, CrossedSheet, CrossedStrip, RankRow, WaveRow } from './Meeting';
 import { colors, radius, shadow, space, textSize, typo } from '../../theme';
 
 const PAGE = 10;
@@ -38,6 +41,10 @@ type PhotoFeedProps = {
   empty?: ReactNode;
   // "Plan it again" on a night that went well.
   onPlanAgain?: (item: FeedPhoto) => void;
+  // Home: only this parea's own nights (other pareas' public nights live in
+  // Explore), with the pareas it crossed, the waves it got and its place in
+  // the city.
+  ownOnly?: boolean;
 };
 
 // Between the memories: the first card after the 2nd post, then one every 4.
@@ -63,6 +70,7 @@ export default function PhotoFeed({
   empty = null,
   canOpenGroup = () => true,
   onPlanAgain,
+  ownOnly = false,
 }: PhotoFeedProps) {
   const [items, setItems] = useState<FeedPhoto[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -74,6 +82,14 @@ export default function PhotoFeed({
   const [error, setError] = useState<string | null>(null);
   // The post opened full screen.
   const [openPost, setOpenPost] = useState<FeedPhoto | null>(null);
+  // Meeting other pareas (Home only).
+  const [crossings, setCrossings] = useState<Crossing[]>([]);
+  const [waves, setWaves] = useState<Wave[]>([]);
+  const [waving, setWaving] = useState<string | null>(null);
+  const [boards, setBoards] = useState<Record<string, BoardRow[]>>({});
+  const asked = useRef(new Set<string>());
+  const [crossedWith, setCrossedWith] = useState<Crossing[]>([]);
+  const [boardOf, setBoardOf] = useState<string | null>(null);
   // Photos added after this were not on screen the last time you looked.
   const [seenUntil, setSeenUntil] = useState<string | null>(null);
   const reactionsRef = useRef(reactions);
@@ -88,7 +104,7 @@ export default function PhotoFeed({
         if (cancelled) return;
         const firstVisit = new Date(Date.now() - FIRST_VISIT_DAYS * 24 * 60 * 60 * 1000).toISOString();
         setSeenUntil(seen ?? firstVisit);
-        setItems(feed);
+        setItems(ownOnly ? feed.filter((item) => item.group.id === group.id) : feed);
         setLoaded(true);
         const newest = feed.reduce((max, item) => (item.photo.createdAt > max ? item.photo.createdAt : max), seen ?? '');
         if (newest !== '') writeJson(seenKey(group.id), newest);
@@ -109,11 +125,45 @@ export default function PhotoFeed({
   }, [group.id, reloadKey, retry]);
 
   useEffect(() => {
+    if (!ownOnly) return;
+    let cancelled = false;
+    setCrossings([]);
+    setWaves([]);
+    Promise.all([getCrossings(group.id), getWaves(group.id)]).then(([c, w]) => {
+      if (cancelled) return;
+      setCrossings(c);
+      setWaves(w);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [group.id, reloadKey, ownOnly]);
+
+  useEffect(() => {
     setShown(PAGE);
     setLoaded(false);
   }, [group.id]);
 
   const visible = items.slice(0, shown);
+
+  // The months on screen, each with the board it gets under its diamond.
+  // Only nights that sit under a month's header (not This week / Last week).
+  const monthKeys = ownOnly
+    ? [...new Set(visible.filter((item) => isMonthLabel(whenLabel(item.event.date, new Date()))).map((item) => item.event.date.slice(0, 7)))]
+    : [];
+  const monthList = monthKeys.join(',');
+  const boardKey = (month: string) => `${group.id}:${reloadKey}:${month}`;
+  useEffect(() => {
+    if (!ownOnly || monthList === '') return;
+    for (const month of monthList.split(',')) {
+      const key = `${group.id}:${reloadKey}:${month}`;
+      if (asked.current.has(key)) continue;
+      asked.current.add(key);
+      getBoard(group.id, new Date(`${month}-15T12:00:00`)).then((rows) => {
+        setBoards((all) => ({ ...all, [key]: rows }));
+      });
+    }
+  }, [group.id, monthList, ownOnly, reloadKey]);
 
   // The nudges between the memories.
   const now = new Date();
@@ -228,6 +278,30 @@ export default function PhotoFeed({
   const reactors = reactorsOf ? reactions[reactorsOf] ?? [] : [];
   const today = new Date();
 
+
+  async function waveBack(wave: Wave) {
+    setWaving(wave.id);
+    setError(null);
+    try {
+      await sendWave(group.id, wave.fromGroupId);
+      setWaves((all) => all.map((w) => (w.id === wave.id ? { ...w, wavedBack: true } : w)));
+    } catch {
+      setError('Could not wave back. Try again.');
+    } finally {
+      setWaving(null);
+    }
+  }
+
+  async function openGroupById(groupId: string) {
+    const found = await getGroupById(groupId).catch(() => null);
+    if (!found || !canOpenGroup(found)) {
+      setError("Couldn't open that parea's page.");
+      return;
+    }
+    setCrossedWith([]);
+    onOpenGroup(found);
+  }
+
   // How many nights, and how many fires, in each stretch of time.
   const groups = new Map<string, { nights: number; fires: number }>();
   for (const item of visible) {
@@ -236,6 +310,36 @@ export default function PhotoFeed({
     one.nights += 1;
     one.fires += (reactions[item.photo.id] ?? []).length;
     groups.set(when, one);
+  }
+
+  const mine = { name: group.name, avatarUrl: group.avatarUrl };
+
+  function crossedStrip(item: FeedPhoto) {
+    const crossing = ownOnly ? crossings.find((c) => c.myEventId === item.event.id) : undefined;
+    if (!crossing) return null;
+    return (
+      <CrossedStrip
+        mine={mine}
+        crossing={crossing}
+        onPress={() => setCrossedWith(crossings.filter((c) => c.otherGroupId === crossing.otherGroupId))}
+      />
+    );
+  }
+
+  function waveRow(item: FeedPhoto) {
+    const wave = ownOnly ? waves.find((w) => w.eventId === item.event.id) : undefined;
+    if (!wave) return null;
+    const place = crossings.find((c) => c.myEventId === item.event.id && c.otherGroupId === wave.fromGroupId)?.place
+      ?? item.event.placeLabel ?? item.event.location ?? null;
+    return <WaveRow wave={wave} parea={group.name} place={place} busy={waving === wave.id} onWaveBack={() => waveBack(wave)} />;
+  }
+
+  function rankFor(when: string, month: string) {
+    if (!isMonthLabel(when)) return null;
+    const rows = boards[boardKey(month)];
+    const row = rows?.find((r) => r.isMine);
+    if (!rows || !row) return null;
+    return <RankRow mine={row} rows={rows} month={monthName(month)} onPress={() => setBoardOf(month)} />;
   }
 
   return (
@@ -257,9 +361,11 @@ export default function PhotoFeed({
                   title={counts && counts.nights === 1 ? 'One night out' : `${counts?.nights ?? 0} nights out`}
                   meta={counts && counts.fires > 0 ? `${counts.fires} ${counts.fires === 1 ? 'fire' : 'fires'}` : undefined}
                 />
+                {rankFor(when, item.event.date.slice(0, 7))}
               </TimelineRow>
             ) : null}
             <TimelineRow
+              solid
               enterIndex={enterIndex}
               node={
                 <DateNode
@@ -282,6 +388,8 @@ export default function PhotoFeed({
                 moreUrls={item.more.map((photo) => signed[photo.path]?.url)}
                 fresh={fresh}
                 onShare={() => shareNight(item)}
+                between={crossedStrip(item)}
+                footer={waveRow(item)}
                 style={FLUSH}
               />
             </TimelineRow>
@@ -311,6 +419,19 @@ export default function PhotoFeed({
           <Text style={styles.end}>That's every night from the last two months. Keep the line going.</Text>
         </TimelineRow>
       )}
+
+      <CrossedSheet
+        mine={mine}
+        crossings={crossedWith}
+        onClose={() => setCrossedWith([])}
+        onWave={(other) => sendWave(group.id, other)}
+        onOpenGroup={openGroupById}
+      />
+      <BoardSheet
+        month={boardOf ? monthName(boardOf) : null}
+        rows={boardOf ? boards[boardKey(boardOf)] ?? [] : []}
+        onClose={() => setBoardOf(null)}
+      />
 
       <PostViewer
         item={openPost}
@@ -409,6 +530,15 @@ function pickThrowback(items: FeedPhoto[], now: Date, skipPhotoId?: string) {
 
 function onTheDay(item: FeedPhoto, now: Date) {
   return parseDateKey(item.event.date)?.getDate() === now.getDate();
+}
+
+function isMonthLabel(label: string) {
+  return label !== 'This week' && label !== 'Last week' && label !== 'Earlier';
+}
+
+// "2026-09" → "September"
+function monthName(month: string) {
+  return new Date(`${month}-15T12:00:00`).toLocaleDateString('en-US', { month: 'long' });
 }
 
 // "This week", "Last week", then the month: "September".
