@@ -347,8 +347,8 @@ const styles = StyleSheet.create({
   // A fixed column down the whole left edge, whatever is in it.
   rail: {
     position: 'absolute',
-    top: space.sm,
-    bottom: space.sm,
+    top: space.sm + 50,
+    bottom: space.sm + 50,
     left: RAIL_LEFT,
     width: RAIL,
     marginTop: space.sm,
