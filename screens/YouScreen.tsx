@@ -38,6 +38,8 @@ const AVATAR_SIZE = 76;
 type YouScreenProps = {
   user: AuthUser;
   onPlan?: () => void;
+  // Opens the Votes page (votes start only there).
+  onOpenVotes: (groupId?: string) => void;
 };
 
 function sinceLabel(iso?: string) {
@@ -48,7 +50,7 @@ function sinceLabel(iso?: string) {
 }
 
 // You: your year out and every squad you are in.
-export default function YouScreen({ user, onPlan }: YouScreenProps) {
+export default function YouScreen({ user, onPlan, onOpenVotes }: YouScreenProps) {
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [joinedAt, setJoinedAt] = useState<string | undefined>(undefined);
@@ -213,7 +215,14 @@ export default function YouScreen({ user, onPlan }: YouScreenProps) {
       load();
     };
     return (
-      <GroupScreen group={profileGroup} userId={user.id} onBack={close} onLeave={close} backLabel="You" />
+      <GroupScreen
+        group={profileGroup}
+        userId={user.id}
+        onBack={close}
+        onLeave={close}
+        onOpenVotes={onOpenVotes}
+        backLabel="You"
+      />
     );
   }
 

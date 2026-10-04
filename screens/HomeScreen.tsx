@@ -400,8 +400,16 @@ export default function HomeScreen({
   }, [createNonce]);
 
   useEffect(() => {
-    if (openVotesNonce > 0) setVotesOpen(true);
+    if (openVotesNonce > 0) openVotes();
   }, [openVotesNonce]);
+
+  // Votes open on top of Home. A squad page shown in Home's place steps aside
+  // first, and the squad deciding (one of yours) becomes the current one.
+  function openVotes(id?: string) {
+    setProfileGroup(null);
+    if (id && id !== groupId && groups.some((group) => group.id === id)) chooseSquad(id);
+    setVotesOpen(true);
+  }
 
   useEffect(() => {
     if (selectGroup) chooseSquad(selectGroup.id);
@@ -519,6 +527,7 @@ export default function HomeScreen({
   const squadPlans = useSquadPlans(
     user.id,
     friendsPlans.map((plan) => ({ id: plan.event.id, groupId: plan.event.groupId })),
+    openVotes,
   );
   const goingSlice = visibleSlice(friendsPlans, 2, showAllGoing);
   const waitingSlice = visibleSlice(waiting, 3, showAllWaiting);
@@ -908,6 +917,7 @@ export default function HomeScreen({
       <GroupScreen
         group={profileGroup}
         userId={user.id}
+        onOpenVotes={openVotes}
         onBack={() => setProfileGroup(null)}
         onLeave={() => {
           setProfileGroup(null);
@@ -1054,6 +1064,7 @@ export default function HomeScreen({
         livePeople={openEvent !== null && openEvent.id === sharingEvent?.id ? livePeople : undefined}
         currentUserId={user.id}
         onClose={() => setOpenEvent(null)}
+        onOpenVotes={openVotes}
         onChanged={async () => {
           const [myEvents, friendsPlans] = await Promise.all([
             getMyEvents(user.id),

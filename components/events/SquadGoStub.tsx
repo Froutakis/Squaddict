@@ -7,13 +7,16 @@ import { colors, radius, space, textSize, typo } from '../../theme';
 type SquadGoStubProps = {
   stance: PlanStance | null;
   busy: boolean;
+  // Yes on the acting squad's open vote, or the Votes page when there is
+  // none to answer (useSquadPlans' act).
   onAct: () => void;
   // The plain I'm in / Pass buttons, shown when the member can answer.
   children: ReactNode;
 };
 
 // Where I'm in / Pass sit on another squad's public plan: the squad decides
-// first, so until then this puts it to the acting squad's vote.
+// first. Until then this shows the acting squad's vote, says yes to it, or
+// takes you to Votes to start one.
 export default function SquadGoStub({ stance, busy, onAct, children }: SquadGoStubProps) {
   if (stance === null) {
     return (
@@ -39,10 +42,11 @@ export default function SquadGoStub({ stance, busy, onAct, children }: SquadGoSt
   return (
     <Pressable
       onPress={onAct}
-      disabled={busy || waiting}
+      disabled={busy}
       accessibilityRole="button"
       accessibilityLabel={stance.label}
-      accessibilityState={{ disabled: busy || waiting }}
+      accessibilityHint={stance.kind === 'propose' || waiting ? 'Opens Votes' : undefined}
+      accessibilityState={{ disabled: busy }}
       style={({ pressed }) => [
         styles.button,
         waiting ? styles.outlined : styles.solid,

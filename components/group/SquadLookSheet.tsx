@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { lookOf, updateSquadLook, type Group } from '../../services/serviceGroup';
 import { pickImage, removeSquadImage, uploadSquadImage } from '../../services/serviceMedia';
 import { urlOf, withImage, type SquadImageKind, type SquadLook } from '../../lib/squadLook';
@@ -7,21 +7,24 @@ import { messageFor } from '../events/EventPhotos';
 import SheetHeader from '../general/SheetHeader';
 import { colors, radius, space, textSize, typo } from '../../theme';
 
+// The name, photo and public memories are the parea's call: they change by a
+// vote (see Votes), so only the banner is edited here.
 const ROWS: { kind: SquadImageKind; label: string; hint: string }[] = [
-  { kind: 'avatar', label: 'Photo', hint: 'Round, next to the name everywhere.' },
   { kind: 'banner', label: 'Banner', hint: 'The cover across the top of the profile.' },
 ];
 
-type Busy = SquadImageKind | 'memories' | null;
+type Busy = SquadImageKind | null;
 
 type SquadLookSheetProps = {
   visible: boolean;
   group: Group;
   onClose: () => void;
   onChange: (group: Group) => void;
+  // Name, photo and public memories: start a vote there.
+  onOpenVotes: () => void;
 };
 
-export default function SquadLookSheet({ visible, group, onClose, onChange }: SquadLookSheetProps) {
+export default function SquadLookSheet({ visible, group, onClose, onChange, onOpenVotes }: SquadLookSheetProps) {
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
   const [brokenUrl, setBrokenUrl] = useState<Partial<Record<SquadImageKind, string>>>({});
@@ -65,19 +68,6 @@ export default function SquadLookSheet({ visible, group, onClose, onChange }: Sq
     setBusy(kind);
     try {
       await save(withImage(look, kind, null), null, urlOf(look, kind));
-    } catch (problem) {
-      setError(messageFor(problem));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function toggleMemories(value: boolean) {
-    if (busy) return;
-    setError(null);
-    setBusy('memories');
-    try {
-      await save({ ...look, memoriesPublic: value }, null, null);
     } catch (problem) {
       setError(messageFor(problem));
     } finally {
@@ -166,19 +156,21 @@ export default function SquadLookSheet({ visible, group, onClose, onChange }: Sq
 
           <View style={styles.row}>
             <View style={styles.rowText}>
-              <Text style={styles.label}>Memories visible to everyone</Text>
-              <Text style={styles.hint}>Off: only members see your nights. On: anyone who opens the profile.</Text>
+              <Text style={styles.label}>Name, photo, public memories</Text>
+              <Text style={styles.hint}>
+                Changed by a vote. Memories are {look.memoriesPublic ? 'public' : 'private'} now.
+              </Text>
             </View>
-            {busy === 'memories' ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : (
-              <Switch
-                value={look.memoriesPublic}
-                onValueChange={toggleMemories}
-                disabled={busy !== null}
-                accessibilityLabel="Memories visible to everyone"
-              />
-            )}
+            <Pressable
+              onPress={onOpenVotes}
+              disabled={busy !== null}
+              accessibilityRole="button"
+              accessibilityLabel="Open Votes"
+              accessibilityHint="Start a vote on the name, photo or public memories"
+              style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+            >
+              <Text style={styles.actionText}>Open Votes</Text>
+            </Pressable>
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -213,7 +205,7 @@ const styles = StyleSheet.create({
   label: { color: colors.text, ...typo.semi, fontSize: textSize.base },
   hint: { color: colors.textFaint, ...typo.medium, fontSize: textSize.small },
   actions: { flexDirection: 'row', gap: space.xs },
-  action: { paddingVertical: space.xs, paddingHorizontal: space.xs },
+  action: { minHeight: 44, justifyContent: 'center', paddingHorizontal: space.xs },
   actionText: { color: colors.primary, ...typo.semi, fontSize: textSize.body },
   removeText: { color: colors.danger, ...typo.semi, fontSize: textSize.body },
   pressed: { opacity: 0.6 },

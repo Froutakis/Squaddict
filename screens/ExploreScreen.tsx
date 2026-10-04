@@ -28,7 +28,6 @@ import { useNow } from '../components/home/useNow';
 import { getGroupById, getGroupsForUser, searchGroups, type Group } from '../services/serviceGroup';
 import { getActingSquad, getUserById } from '../services/serviceUser';
 import { getFollowing } from '../services/serviceFollow';
-import { propose } from '../services/serviceVotes';
 import { clearRsvp, getMyEvents, setRsvp, type MyEvent, type RsvpStatus } from '../services/serviceEvents';
 import { getCurrentCoords, type Coords, type LocationState } from '../services/serviceLocation';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
@@ -146,9 +145,12 @@ function mergeGroups(current: FeedGroup[], more: FeedGroup[]): FeedGroup[] {
 
 type ExploreScreenProps = {
   userId: string;
+  // Following a parea and going to its plans are votes, and votes start on
+  // the Votes page: this takes the member there.
+  onOpenVotes: (groupId?: string) => void;
 };
 
-export default function ExploreScreen({ userId }: ExploreScreenProps) {
+export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProps) {
   const [center, setCenter] = useState<Coords | null>(null);
   const [locationState, setLocationState] = useState<LocationState>('asking');
 
@@ -168,7 +170,6 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const [acting, setActing] = useState<Group | null>(null);
   const [following, setFollowing] = useState<Record<string, true>>({});
   const [followsNonce, setFollowsNonce] = useState(0);
-  const [voteNotice, setVoteNotice] = useState<string | null>(null);
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
   // The map is the front page of Explore; the list is one tap away.
   const [mode, setMode] = useState<ViewMode>('map');
@@ -195,6 +196,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const squadPlans = useSquadPlans(
     userId,
     events.filter((event) => !event.isMember).map((event) => ({ id: event.id, groupId: event.groupId })),
+    onOpenVotes,
   );
 
   // Another squad's plan: answer only once a squad of yours is going.
@@ -419,31 +421,10 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
     });
   }
 
-  async function toggleFollow(groupId: string) {
+  // Following is the acting squad's vote, started on its Votes page.
+  function toggleFollow(groupId: string) {
     if (!acting || acting.id === groupId) return;
-
-    const wasFollowing = following[groupId] === true;
-    setError(null);
-    setVoteNotice(null);
-
-    try {
-      const status = await propose(acting.id, wasFollowing ? 'unfollow' : 'follow', groupId);
-
-      if (status === 'passed') {
-        const next = { ...following };
-        if (wasFollowing) delete next[groupId];
-        else next[groupId] = true;
-        setFollowing(next);
-      } else if (status === 'open') {
-        setVoteNotice(
-          `Put to the vote in ${acting.name}. It ${wasFollowing ? 'unfollows' : 'follows'} once most members say yes.`,
-        );
-      } else {
-        setVoteNotice(`${acting.name} voted this down.`);
-      }
-    } catch {
-      setError('Could not update who you follow. Try again.');
-    }
+    onOpenVotes(acting.id);
   }
 
   function openProfile(card: CardGroup) {
@@ -809,11 +790,6 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
       {locationInfo(false)}
       {chipRow(false)}
       {error ?? squadPlans.error ? <Text style={styles.error}>{error ?? squadPlans.error}</Text> : null}
-      {voteNotice ? (
-        <Text style={styles.notice} accessibilityLiveRegion="polite">
-          {voteNotice}
-        </Text>
-      ) : null}
     </>
   );
 
@@ -922,6 +898,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
         group={profileGroup}
         userId={userId}
         backLabel="Explore"
+        onOpenVotes={onOpenVotes}
         onBack={() => {
           // The profile can follow or unfollow; pick that up on the cards.
           setProfileGroup(null);
@@ -950,6 +927,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
       currentUserId={userId}
       onClose={() => setOpenEvent(null)}
       onChanged={() => load(0, false)}
+      onOpenVotes={onOpenVotes}
     />
   );
 
@@ -1322,13 +1300,6 @@ const styles = StyleSheet.create({
     ...typo.medium,
     fontSize: textSize.body,
   },
-  notice: {
-    paddingHorizontal: space.lg,
-    color: colors.textSoft,
-    ...typo.medium,
-    fontSize: textSize.body,
-  },
-
   item: { paddingHorizontal: space.lg, paddingBottom: space.sm },
   empty: { paddingHorizontal: space.lg, paddingTop: space.sm },
 });

@@ -41,6 +41,8 @@ type EventSheetProps = {
   onChanged: () => void | Promise<void>;
   onEdit?: (event: SheetEvent) => void;
   onPhotosChanged?: () => void;
+  // Votes start only on the Votes page: the sheet closes and that opens.
+  onOpenVotes: (groupId?: string) => void;
 };
 
 export default function EventSheet({
@@ -51,6 +53,7 @@ export default function EventSheet({
   onChanged,
   onEdit,
   onPhotosChanged,
+  onOpenVotes,
 }: EventSheetProps) {
   const [roster, setRoster] = useState(false);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
@@ -61,6 +64,10 @@ export default function EventSheet({
   const squad = useSquadPlans(
     currentUserId,
     event?.groupId ? [{ id: event.id, groupId: event.groupId }] : [],
+    (groupId) => {
+      onClose();
+      onOpenVotes(groupId);
+    },
   );
   const stance = event?.groupId
     ? squad.stanceFor({ id: event.id, groupId: event.groupId })
@@ -117,7 +124,8 @@ export default function EventSheet({
     }
   }
 
-  // Opens (or says yes to) the acting squad's vote to go, or to skip.
+  // Says yes to the acting squad's vote to go, or to skip; with none open to
+  // answer, the Votes page.
   async function handleSquad(which: 'go' | 'skip') {
     if (!event?.groupId) return;
     const plan = { id: event.id, groupId: event.groupId };
@@ -288,9 +296,10 @@ export default function EventSheet({
                     ) : (
                       <Pressable
                         onPress={() => handleSquad('go')}
-                        disabled={squad.busyId !== null || (stance.kind === 'vote' && stance.waiting)}
+                        disabled={squad.busyId !== null}
                         accessibilityRole="button"
                         accessibilityLabel={stance.label}
+                        accessibilityHint={stance.kind === 'propose' || stance.waiting ? 'Opens Votes' : undefined}
                         style={({ pressed }) => [styles.squadButton, pressed && styles.pressed]}
                       >
                         <Ionicons
@@ -346,9 +355,10 @@ export default function EventSheet({
                 {stance && stance.kind === 'rsvp' && stance.skipLabel ? (
                   <Pressable
                     onPress={() => handleSquad('skip')}
-                    disabled={squad.busyId !== null || stance.skipWaiting}
+                    disabled={squad.busyId !== null}
                     accessibilityRole="button"
                     accessibilityLabel={stance.skipLabel}
+                    accessibilityHint={stance.skipWaiting || stance.skipLabel === 'Vote to skip' ? 'Opens Votes' : undefined}
                     style={({ pressed }) => [styles.skip, pressed && styles.pressed]}
                   >
                     <Text style={styles.skipText}>{stance.skipLabel}</Text>

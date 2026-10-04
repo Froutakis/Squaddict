@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Group } from '../../services/serviceGroup';
-import { cancelVote, castVote, type SquadVote, type VoteEvent } from '../../services/serviceVotes';
+import { cancelVote, castOption, castVote, type SquadVote, type VoteEvent } from '../../services/serviceVotes';
+import { errorText } from '../../lib/postgres';
 import VoteCard from '../votes/VoteCard';
 import { colors, space, textSize, typo } from '../../theme';
 
@@ -13,10 +15,13 @@ type SquadVotesProps = {
   onOpenSquad: (group: Group) => void;
   onOpenEvent: (event: VoteEvent) => void;
   onChanged: () => void;
+  // Every vote, and starting a new one, live on the Votes page.
+  onOpenVotes: () => void;
 };
 
-// What this squad is still deciding on. Shows nothing when there is nothing.
-export default function SquadVotes({ votes, members, userId, onOpenSquad, onOpenEvent, onChanged }: SquadVotesProps) {
+// What this squad is still deciding on about follows and plans, to answer in
+// place. Shows nothing when there is nothing.
+export default function SquadVotes({ votes, members, userId, onOpenSquad, onOpenEvent, onChanged, onOpenVotes }: SquadVotesProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,8 +35,8 @@ export default function SquadVotes({ votes, members, userId, onOpenSquad, onOpen
     try {
       await action();
       onChanged();
-    } catch {
-      setError('Could not save that. Try again.');
+    } catch (problem) {
+      setError(errorText(problem, 'Could not save that. Try again.'));
     } finally {
       setBusy(null);
     }
@@ -39,7 +44,18 @@ export default function SquadVotes({ votes, members, userId, onOpenSquad, onOpen
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.summary}>OPEN VOTES {votes.length}</Text>
+      <View style={styles.head}>
+        <Text style={styles.summary}>OPEN VOTES {votes.length}</Text>
+        <Pressable
+          onPress={onOpenVotes}
+          accessibilityRole="button"
+          accessibilityLabel="See all votes"
+          style={({ pressed }) => [styles.all, pressed && styles.pressed]}
+        >
+          <Text style={styles.allText}>All votes</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+        </Pressable>
+      </View>
 
       {votes.map((vote) => (
         <VoteCard
@@ -50,8 +66,13 @@ export default function SquadVotes({ votes, members, userId, onOpenSquad, onOpen
           busy={busy === vote.id}
           onYes={() => run(vote.id, () => castVote(vote.id, true))}
           onNo={() => run(vote.id, () => castVote(vote.id, false))}
+          onPick={(optionId) => run(vote.id, () => castOption(vote.id, optionId))}
           onCancel={() => run(vote.id, () => cancelVote(vote.id))}
-          onOpen={() => (vote.target.type === 'squad' ? onOpenSquad(vote.target.group) : onOpenEvent(vote.target.event))}
+          onOpen={() => {
+            if (vote.target.type === 'squad') onOpenSquad(vote.target.group);
+            else if (vote.target.type === 'event') onOpenEvent(vote.target.event);
+          }}
+          onStale={onChanged}
         />
       ))}
 
@@ -66,6 +87,10 @@ export default function SquadVotes({ votes, members, userId, onOpenSquad, onOpen
 
 const styles = StyleSheet.create({
   wrap: { gap: space.sm },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   summary: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption, letterSpacing: 1.2 },
+  all: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 44, paddingLeft: space.sm },
+  allText: { color: colors.primary, ...typo.semi, fontSize: textSize.body },
+  pressed: { opacity: 0.6 },
   error: { color: colors.danger, ...typo.medium, fontSize: textSize.body },
 });

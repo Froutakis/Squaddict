@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getGroupsForUser, type Group } from '../../services/serviceGroup';
 import { getActingGroupId } from '../../services/serviceUser';
-import { castVote, getMyGoing, getOpenEventVotes, propose, type SquadVote } from '../../services/serviceVotes';
+import { castVote, getMyGoing, getOpenEventVotes, type SquadVote } from '../../services/serviceVotes';
 import { pickActing } from '../../lib/acting';
 import { planStance, type PlanStance, type SquadRef } from '../../lib/squadVote';
 
@@ -11,9 +11,11 @@ function toRef(group: Group): SquadRef {
   return { id: group.id, name: group.name, memberCount: group.memberCount };
 }
 
-// For a list of plans: what this member can do on each (answer, or put it to
-// the acting squad's vote), and the actions that change it.
-export function useSquadPlans(userId: string, plans: PlanRef[]) {
+// For a list of plans: what this member can do on each (answer, or vote in
+// the acting squad), and the actions that change it. A vote only starts on the
+// Votes page: where there is no open vote to say yes to, onOpenVotes takes
+// the member there, with the acting squad's id.
+export function useSquadPlans(userId: string, plans: PlanRef[], onOpenVotes: (groupId?: string) => void) {
   const [myGroups, setMyGroups] = useState<Group[] | null>(null);
   const [acting, setActing] = useState<Group | null>(null);
   const [going, setGoing] = useState<Record<string, string[]>>({});
@@ -92,29 +94,33 @@ export function useSquadPlans(userId: string, plans: PlanRef[]) {
       setNonce((n) => n + 1);
       return true;
     } catch {
-      setError('Could not put that to the vote. Try again.');
+      setError('Could not save your vote. Try again.');
       return false;
     } finally {
       setBusyId(null);
     }
   }
 
-  // "Go with MVPS?": opens the attend vote, or says yes to the open one.
-  function act(plan: PlanRef): Promise<boolean> {
+  // Yes on the open vote of this kind, or, with none to answer (or your yes
+  // already in), the Votes page.
+  function yesOrVotes(plan: PlanRef, kind: 'attend' | 'unattend'): Promise<boolean> {
     const vote = votes[plan.id];
     if (!acting) return Promise.resolve(false);
-    return run(plan.id, () =>
-      vote && vote.kind === 'attend' ? castVote(vote.id, true) : propose(acting.id, 'attend', plan.id),
-    );
+    if (!vote || vote.kind !== kind || vote.myVote === true) {
+      onOpenVotes(acting.id);
+      return Promise.resolve(false);
+    }
+    return run(plan.id, () => castVote(vote.id, true));
   }
 
-  // "Vote to skip": opens the unattend vote, or says yes to the open one.
+  // "Go with MVPS?" / "Vote yes · 1/2".
+  function act(plan: PlanRef): Promise<boolean> {
+    return yesOrVotes(plan, 'attend');
+  }
+
+  // "Vote to skip" / "Vote to skip · 1/2".
   function skip(plan: PlanRef): Promise<boolean> {
-    const vote = votes[plan.id];
-    if (!acting) return Promise.resolve(false);
-    return run(plan.id, () =>
-      vote && vote.kind === 'unattend' ? castVote(vote.id, true) : propose(acting.id, 'unattend', plan.id),
-    );
+    return yesOrVotes(plan, 'unattend');
   }
 
   return { stanceFor, act, skip, busyId, error, reload: () => setNonce((n) => n + 1) };

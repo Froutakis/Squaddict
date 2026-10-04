@@ -189,6 +189,16 @@ export default function App() {
     if (ask === 'squad') setNewSquadNonce((n) => n + 1);
   }
 
+  // Every vote starts on the Votes page, so buttons elsewhere that would have
+  // opened one bring you here instead. groupId is the squad deciding; without
+  // it, Parea's current squad.
+  function openVotes(groupId?: string) {
+    if (chatTarget) closeChat();
+    if (groupId) setSelectGroup({ id: groupId, nonce: Date.now() });
+    goHome();
+    setVotesNonce((n) => n + 1);
+  }
+
   // Sheets wait for the rail to finish sliding away (iOS can't stack them).
   function afterRail(open: () => void) {
     setRailOpen(false);
@@ -199,9 +209,9 @@ export default function App() {
     <View style={styles.app}>
       <View style={styles.body}>
         {screen === 'explore' && features.explore ? (
-          <ExploreScreen userId={user.id} />
+          <ExploreScreen userId={user.id} onOpenVotes={openVotes} />
         ) : screen === 'you' ? (
-          <YouScreen user={user} onPlan={() => goHome('plan')} />
+          <YouScreen user={user} onPlan={() => goHome('plan')} onOpenVotes={openVotes} />
         ) : (
           <HomeScreen
             key={`home-${homeKey}`}
@@ -231,6 +241,7 @@ export default function App() {
               user={user}
               initialGroupId={chatTarget.groupId}
               onExit={closeChat}
+              onOpenVotes={openVotes}
             />
           </View>
         ) : null}
