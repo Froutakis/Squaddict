@@ -15,7 +15,8 @@ import FollowButton from '../components/group/FollowButton';
 import SquadFollows from '../components/group/SquadFollows';
 import SquadVotes from '../components/group/SquadVotes';
 import SquadProfileHeader, { ACTING_ACCENT } from '../components/group/SquadProfileHeader';
-import { getFollowerIds, getFollowing, getOpenVotes, type FollowVote } from '../services/serviceFollow';
+import { getFollowerIds, getFollowing } from '../services/serviceFollow';
+import { getOpenVotes, type SquadVote } from '../services/serviceVotes';
 import Monogram from '../components/general/Monogram';
 import IconTabs from '../components/general/IconTabs';
 import DashedDivider from '../components/general/DashedDivider';
@@ -34,6 +35,10 @@ import { getGroupPublicEvents, type FeedEvent } from '../services/serviceFeed';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import PublicProfile from '../components/group/PublicProfile';
+import RsvpButtons from '../components/events/RsvpButtons';
+import SquadGoStub from '../components/events/SquadGoStub';
+import { useSquadPlans } from '../components/events/useSquadPlans';
+import { voteEventToSheet } from '../components/votes/VoteCard';
 
 type Member = {
   id: string;
@@ -88,11 +93,15 @@ export default function GroupScreen({
   const [actingError, setActingError] = useState<string | null>(null);
   const [opened, setOpened] = useState<Group | null>(null);
   const [followsReload, setFollowsReload] = useState(0);
-  const [votes, setVotes] = useState<FollowVote[]>([]);
+  const [votes, setVotes] = useState<SquadVote[]>([]);
   const [followCounts, setFollowCounts] = useState<{ following: number | null; followers: number | null }>({
     following: null,
     followers: null,
   });
+  const squadPlans = useSquadPlans(
+    userId,
+    plans.map((plan) => ({ id: plan.id, groupId: plan.groupId })),
+  );
 
   useEffect(() => {
     setCurrent(group);
@@ -314,6 +323,8 @@ export default function GroupScreen({
       lat: plan.lat,
       lng: plan.lng,
       isMember: false,
+      groupId: plan.groupId,
+      isPublic: true,
     });
   }
 
@@ -345,11 +356,26 @@ export default function GroupScreen({
           group={current}
           plans={plans}
           savingId={savingId}
-          error={error}
+          error={error ?? squadPlans.error}
           followAction={<FollowButton group={current} userId={userId} />}
           onBack={onBack}
           onAnswer={answer}
           onOpenPlan={openSheet}
+          stubFor={(plan) => (
+            <SquadGoStub
+              stance={squadPlans.stanceFor(plan)}
+              busy={squadPlans.busyId === plan.id}
+              onAct={() => squadPlans.act(plan)}
+            >
+              <RsvpButtons
+                status={plan.myStatus}
+                saving={savingId === plan.id}
+                onChange={(status) => answer(plan, status)}
+                compact
+                stretch
+              />
+            </SquadGoStub>
+          )}
         />
         {sheet}
       </>
@@ -476,7 +502,8 @@ export default function GroupScreen({
                     votes={votes}
                     members={count}
                     userId={userId}
-                    onOpen={setOpened}
+                    onOpenSquad={setOpened}
+                    onOpenEvent={(event) => setOpenPlan(voteEventToSheet(event))}
                     onChanged={() => setFollowsReload((n) => n + 1)}
                   />
                   <SquadFollows group={current} reloadKey={followsReload} onOpen={setOpened} />
@@ -576,6 +603,7 @@ export default function GroupScreen({
           onChange?.(fresh);
         }}
       />
+      {sheet}
     </SafeAreaView>
   );
 }

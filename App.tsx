@@ -30,6 +30,7 @@ export default function App() {
   const [focusEventId, setFocusEventId] = useState<string | null>(null);
   const [selectGroup, setSelectGroup] = useState<{ id: string; nonce: number } | null>(null);
   const [createNonce, setCreateNonce] = useState(0);
+  const [votesNonce, setVotesNonce] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -56,11 +57,13 @@ export default function App() {
     return onPushOpened(function (target) {
       if (target.type === 'message') {
         setChatTarget({ groupId: target.groupId, nonce: Date.now() });
-        setScreen('home');
+      } else if (target.type === 'votes') {
+        setSelectGroup({ id: target.groupId, nonce: Date.now() });
+        setVotesNonce((n) => n + 1);
       } else {
         setFocusEventId(target.eventId);
-        setScreen('home');
       }
+      setScreen('home');
     });
   }, []);
 
@@ -109,6 +112,7 @@ export default function App() {
             onUnreadChange={setUnread}
             selectGroup={selectGroup}
             createNonce={createNonce}
+            openVotesNonce={votesNonce}
           />
         )}
 
@@ -131,6 +135,7 @@ export default function App() {
           onNavigate={(tab) => {
             // One-off requests from another tab must not replay when Parea remounts.
             setCreateNonce(0);
+            setVotesNonce(0);
             setSelectGroup(null);
             setScreen(tab);
           }}

@@ -23,7 +23,7 @@ import SectionHead from '../components/general/SectionHead';
 import GroupFormSheet from '../components/group/GroupFormSheet';
 import YearTicket from '../components/you/YearTicket';
 import SquadGrid from '../components/you/SquadGrid';
-import { getPendingVoteCounts } from '../services/serviceFollow';
+import { getPendingVoteCounts } from '../services/serviceVotes';
 import GroupScreen from './GroupScreen';
 import SettingsSheet from '../components/you/SettingsSheet';
 import { keyOf, parseLocal, todayLabel } from '../lib/datetime';

@@ -14,6 +14,7 @@ import type { Group } from '../services/serviceGroup';
 import type { EventCover, MyEvent, RsvpStatus } from '../services/serviceEvents';
 import { getActingGroupId, getUserById, setActingGroup } from '../services/serviceUser';
 import { pickActing } from '../lib/acting';
+import { isSquadPlan } from '../lib/squadVote';
 import { getGroupsForUser, leaveGroup } from '../services/serviceGroup';
 import { getPareaGoing, type PareaGoing } from '../services/serviceFeed';
 import { getUnreadCounts } from '../services/serviceChat';
@@ -37,6 +38,9 @@ import {
 } from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
 import PareaSidebar from '../components/home/PareaSidebar';
+import { getPendingVoteCounts } from '../services/serviceVotes';
+import VotesScreen from './VotesScreen';
+import { voteEventToSheet } from '../components/votes/VoteCard';
 import CalendarScreen from './CalendarScreen';
 import { useNow } from '../components/home/useNow';
 import MemoriesBar from '../components/home/MemoriesBar';
@@ -51,6 +55,9 @@ import StoryViewer from '../components/events/StoryViewer';
 import SectionHead from '../components/general/SectionHead';
 import Button from '../components/general/Button';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
+import RsvpButtons from '../components/events/RsvpButtons';
+import SquadGoStub from '../components/events/SquadGoStub';
+import { useSquadPlans } from '../components/events/useSquadPlans';
 import UpNext from '../components/events/UpNext';
 import {
   capture,
@@ -77,9 +84,11 @@ type HomeScreenProps = {
   onUnreadChange?: (total: number) => void;
   // Set from elsewhere (You) to open Parea on one squad.
   selectGroup?: { id: string; nonce: number } | null;
+  // Bumped by a vote push: open the Votes sheet.
+  openVotesNonce?: number;
 };
 
-function toCardData(event: MyEvent, coverUrl?: string | null): CardEvent {
+function toCardData(event: MyEvent, coverUrl?: string | null, withName?: string): CardEvent {
   return {
     coverUrl,
     id: event.id,
@@ -88,7 +97,7 @@ function toCardData(event: MyEvent, coverUrl?: string | null): CardEvent {
     startTime: event.startTime,
     location: event.location,
     placeLabel: event.placeLabel,
-    groupName: event.groupName,
+    groupName: withName ? `${event.groupName} · with ${withName}` : event.groupName,
     myStatus: event.myStatus,
     going: event.going,
     goingCount: event.going.length,
@@ -104,6 +113,7 @@ export default function HomeScreen({
   chatClosedNonce = 0,
   onUnreadChange,
   selectGroup = null,
+  openVotesNonce = 0,
 }: HomeScreenProps) {
   const { signed, signPaths, dropSigned } = useSignedImages();
   const [displayName, setDisplayName] = useState('');
@@ -125,6 +135,9 @@ export default function HomeScreen({
   const [showCreate, setShowCreate] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [votesOpen, setVotesOpen] = useState(false);
+  const [pendingVotes, setPendingVotes] = useState<Record<string, number>>({});
+  const [votesNonce, setVotesNonce] = useState(0);
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
   const [fullCalendar, setFullCalendar] = useState(false);
   const [formDate, setFormDate] = useState<string | null>(null);
@@ -205,7 +218,8 @@ export default function HomeScreen({
         setAvatarUrl(profile?.avatarUrl ?? null);
         setGroups(myGroups);
         setEvents(myEvents);
-      } catch {
+      } catch (problem) {
+        console.warn("[squaddict] home load failed:", problem);
         if (!quiet) setError("Couldn't load your week");
       } finally {
         setLoading(false);
@@ -228,11 +242,16 @@ export default function HomeScreen({
         if (!cancelled) setUnread(counts);
       })
       .catch(() => {});
+    getPendingVoteCounts(user.id)
+      .then((counts) => {
+        if (!cancelled) setPendingVotes(counts);
+      })
+      .catch(() => {});
 
     return () => {
       cancelled = true;
     };
-  }, [chatClosedNonce, photoNonce]);
+  }, [chatClosedNonce, photoNonce, votesNonce, user.id]);
 
   useEffect(() => {
     const mine = new Set(groups.map((g) => g.id));
@@ -317,6 +336,10 @@ export default function HomeScreen({
   }, [createNonce]);
 
   useEffect(() => {
+    if (openVotesNonce > 0) setVotesOpen(true);
+  }, [openVotesNonce]);
+
+  useEffect(() => {
     if (selectGroup) setGroupId(selectGroup.id);
   }, [selectGroup?.nonce]);
 
@@ -363,9 +386,16 @@ export default function HomeScreen({
   const now = useNow();
   const today = keyOf(new Date());
   const visible = useMemo(
-    () => (groupId ? events.filter((e) => e.groupId === groupId) : events),
+    () => (groupId ? events.filter((e) => isSquadPlan(e, groupId)) : events),
     [events, groupId],
   );
+
+  // "with MVPS" on another squad's plan that the squad on screen is going to.
+  function withNameFor(event: MyEvent): string | undefined {
+    if (!groupId || event.groupId === groupId) return undefined;
+    if (!(event.withGroupIds ?? []).includes(groupId)) return undefined;
+    return groups.find((group) => group.id === groupId)?.name;
+  }
   const upcoming = visible.filter((e) => e.date >= today);
   const upNextEvent = upcoming.find((e) => e.myStatus !== 'out');
   const liveEvent = visible.find(
@@ -389,6 +419,10 @@ export default function HomeScreen({
   const friendsPlans = groupId
     ? going.filter((plan) => plan.viaGroupIds.includes(groupId))
     : going;
+  const squadPlans = useSquadPlans(
+    user.id,
+    friendsPlans.map((plan) => ({ id: plan.event.id, groupId: plan.event.groupId })),
+  );
   const goingSlice = visibleSlice(friendsPlans, 2, showAllGoing);
   const waitingSlice = visibleSlice(waiting, 3, showAllWaiting);
   const nights = useMemo(
@@ -644,6 +678,23 @@ export default function HomeScreen({
                   saving={goingSaving === plan.event.id}
                   onPress={() => setOpenEvent(plan.event)}
                   onRsvp={(status) => answerFriendsPlan(plan.event.id, status)}
+                  stub={
+                    <SquadGoStub
+                      stance={squadPlans.stanceFor({ id: plan.event.id, groupId: plan.event.groupId })}
+                      busy={squadPlans.busyId === plan.event.id}
+                      onAct={async () => {
+                        if (await squadPlans.act({ id: plan.event.id, groupId: plan.event.groupId })) load(true);
+                      }}
+                    >
+                      <RsvpButtons
+                        status={plan.event.myStatus}
+                        saving={goingSaving === plan.event.id}
+                        onChange={(status) => answerFriendsPlan(plan.event.id, status)}
+                        compact
+                        stretch
+                      />
+                    </SquadGoStub>
+                  }
                 />
               ))}
               <ShowMore
@@ -676,6 +727,11 @@ export default function HomeScreen({
             <Text style={styles.error}>{rsvpError}</Text>
           </View>
         ) : null}
+        {squadPlans.error ? (
+          <View style={styles.body}>
+            <Text style={styles.error}>{squadPlans.error}</Text>
+          </View>
+        ) : null}
 
         {waiting.length > 0 ? (
           <View>
@@ -684,7 +740,7 @@ export default function HomeScreen({
             {waitingSlice.shown.map((event) => (
               <EventCard
                 key={event.id}
-                event={toCardData(event, coverFor(event))}
+                event={toCardData(event, coverFor(event), withNameFor(event))}
                 action="rsvp"
                 onPress={() => setOpenEvent(event)}
                 onRsvp={(status) => handleRsvp(event.id, status)}
@@ -730,7 +786,10 @@ export default function HomeScreen({
         <HomeHeader
           squad={groups.find((group) => group.id === groupId)}
           onMenu={() => setMenuOpen(true)}
-          menuUnread={Object.values(unread).reduce((sum, count) => sum + count, 0)}
+          menuUnread={
+            Object.values(unread).reduce((sum, count) => sum + count, 0) +
+            (groupId ? pendingVotes[groupId] ?? 0 : 0)
+          }
         />
         {renderBody()}
       </ScrollView>
@@ -756,7 +815,7 @@ export default function HomeScreen({
       <DayPlansSheet
         label={dayPlans ? dayFilterLabel(dayPlans) : null}
         plans={dayPlans ? visible.filter((e) => e.date === dayPlans) : []}
-        toCard={(event) => toCardData(event, coverFor(event))}
+        toCard={(event) => toCardData(event, coverFor(event), withNameFor(event))}
         onOpen={(event) => {
           setDayPlans(null);
           setOpenEvent(event);
@@ -812,6 +871,7 @@ export default function HomeScreen({
           ]);
           setEvents(myEvents);
           setGoing(friendsPlans);
+          setVotesNonce((n) => n + 1);
         }}
         onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
         onEdit={(e) => {
@@ -858,6 +918,11 @@ export default function HomeScreen({
           setGroupId(null);
           load(true);
         }}
+        votes={groupId ? pendingVotes[groupId] ?? 0 : 0}
+        onVotes={() => {
+          setMenuOpen(false);
+          afterMenu(() => setVotesOpen(true));
+        }}
         onClose={() => setMenuOpen(false)}
       />
 
@@ -869,6 +934,22 @@ export default function HomeScreen({
           covers={covers}
           onBack={() => setFullCalendar(false)}
           onSelectDate={openDay}
+        />
+      ) : null}
+
+      {/* Votes are a page of their own too, on top of Home. */}
+      {votesOpen && groups.some((group) => group.id === groupId) ? (
+        <VotesScreen
+          group={groups.find((group) => group.id === groupId)!}
+          userId={user.id}
+          reloadKey={votesNonce}
+          onBack={() => setVotesOpen(false)}
+          onOpenSquad={setProfileGroup}
+          onOpenEvent={(event) => setOpenEvent(voteEventToSheet(event))}
+          onChanged={() => {
+            setVotesNonce((n) => n + 1);
+            load(true);
+          }}
         />
       ) : null}
     </SafeAreaView>

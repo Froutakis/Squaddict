@@ -1,5 +1,5 @@
 import type { Person } from '../../lib/people';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { RsvpStatus } from '../../services/serviceEvents';
 import { colors, radius, solidFor, space, textSize, tracking, typo } from '../../theme';
@@ -36,6 +36,8 @@ type EventCardProps = {
   onPress?: () => void;
   onRsvp?: (status: RsvpStatus | null) => void;
   onRequest?: () => void;
+  // Replaces the bottom row (e.g. the squad vote button).
+  stub?: ReactNode;
 };
 
 export function friendsLine(people: Person[]): string {
@@ -59,6 +61,7 @@ export default function EventCard({
   onPress,
   onRsvp,
   onRequest,
+  stub,
 }: EventCardProps) {
   const { day } = dateParts(event.date);
   const groupColor = solidFor(event.groupName);
@@ -174,6 +177,8 @@ export default function EventCard({
   }
 
   function renderStub() {
+    if (stub) return stub;
+
     if (action === 'rsvp' && onRsvp) {
       return (
         <RsvpButtons

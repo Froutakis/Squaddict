@@ -82,7 +82,18 @@ with checks(file, step, what, ok) as (
   ('parea_profile.sql', 11, 'function parea_profile', to_regprocedure('public.parea_profile(uuid)') is not null),
 
   -- delete_account.sql
-  ('delete_account.sql', 12, 'function delete_account', to_regprocedure('public.delete_account()') is not null)
+  ('delete_account.sql', 12, 'function delete_account', to_regprocedure('public.delete_account()') is not null),
+
+  -- squad_votes.sql
+  ('squad_votes.sql', 13, 'table squad_proposals',    to_regclass('public.squad_proposals') is not null),
+  ('squad_votes.sql', 13, 'table squad_ballots',      to_regclass('public.squad_ballots') is not null),
+  ('squad_votes.sql', 13, 'table squad_event_going',  to_regclass('public.squad_event_going') is not null),
+  ('squad_votes.sql', 13, 'function propose',         to_regprocedure('public.propose(uuid,text,uuid)') is not null),
+  ('squad_votes.sql', 13, 'function vote',            to_regprocedure('public.vote(uuid,boolean)') is not null),
+  ('squad_votes.sql', 13, 'function can_answer_event', to_regprocedure('public.can_answer_event(uuid)') is not null),
+  ('squad_votes.sql', 13, 'policy answer plans i can go to',
+     exists (select 1 from pg_policies where tablename = 'event_attendees' and policyname = 'answer plans i can go to')),
+  ('squad_votes.sql', 13, 'old follow-vote tables dropped', to_regclass('public.squad_follow_proposals') is null)
 )
 select step,
        file,

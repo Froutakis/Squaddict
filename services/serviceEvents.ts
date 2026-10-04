@@ -94,6 +94,8 @@ export type MyEvent = GroupEvent & {
   groupName: string;
   myStatus?: RsvpStatus;
   going: Person[];
+  // Your squads that voted to go to this plan (another squad's public plan).
+  withGroupIds?: string[];
 };
 
 function toEvent(r: EventRow): GroupEvent {
@@ -208,7 +210,21 @@ export async function getMyEvents(userId: string): Promise<MyEvent[]> {
     if (aErr) throw aErr;
 
     const groupIds = (memberships ?? []).map((m) => m.group_id);
-    const eventIds = (answered ?? []).map((a) => a.event_id);
+
+    // Other squads' public plans your squads voted to go to.
+    const withByEvent: Record<string, string[]> = {};
+    if (groupIds.length > 0) {
+        const { data: goingRows, error: gErr } = await supabase
+            .from("squad_event_going")
+            .select("group_id, event_id")
+            .in("group_id", groupIds);
+        if (gErr) throw gErr;
+        for (const row of (goingRows ?? []) as { group_id: string; event_id: string }[]) {
+            (withByEvent[row.event_id] ??= []).push(row.group_id);
+        }
+    }
+
+    const eventIds = [...new Set([...(answered ?? []).map((a) => a.event_id), ...Object.keys(withByEvent)])];
     if (groupIds.length === 0 && eventIds.length === 0) return [];
 
     const filters: string[] = [];
@@ -217,13 +233,16 @@ export async function getMyEvents(userId: string): Promise<MyEvent[]> {
 
     const { data, error } = await supabase
         .from("events")
-        .select("*, groups(name), event_attendees(user_id, status, profiles(display_name, avatar_url))")
+        .select("*, groups!events_group_id_fkey(name), event_attendees(user_id, status, profiles(display_name, avatar_url))")
         .or(filters.join(","))
         .order("date", { ascending: true })
         .order("start_time", { ascending: true, nullsFirst: true });
     if (error) throw error;
 
-    return (data as EventRowWithJoins[]).map((r) => toMyEvent(r, userId));
+    return (data as EventRowWithJoins[]).map((r) => ({
+        ...toMyEvent(r, userId),
+        withGroupIds: withByEvent[r.id] ?? [],
+    }));
 }
 
 export async function setEventCover(eventId: string, coverUrl: string | null): Promise<void> {
@@ -340,7 +359,7 @@ export async function getGroupMemories(groupId: string, userId: string): Promise
 
     const { data, error } = await supabase
         .from("events")
-        .select("*, groups(name), event_attendees(user_id, status, profiles(display_name))")
+        .select("*, groups!events_group_id_fkey(name), event_attendees(user_id, status, profiles(display_name))")
         .eq("group_id", groupId)
         .lt("date", today)
         .order("date", { ascending: false });

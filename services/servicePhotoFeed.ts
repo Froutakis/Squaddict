@@ -26,7 +26,7 @@ export async function getPhotoFeed(groupId: string): Promise<FeedPhoto[]> {
 
   const { data: eventRows, error: eventError } = await supabase
     .from("events")
-    .select(`*, groups(${GROUP_FIELDS})`)
+    .select(`*, groups!events_group_id_fkey(${GROUP_FIELDS})`)
     .in("group_id", groupIds)
     .lte("date", keyOf(new Date()))
     .order("date", { ascending: false })

@@ -27,11 +27,16 @@ import { isHappeningNow } from '../lib/datetime';
 import { useNow } from '../components/home/useNow';
 import { getGroupsForUser, searchGroups, type Group } from '../services/serviceGroup';
 import { getActingSquad } from '../services/serviceUser';
-import { getFollowing, proposeFollow } from '../services/serviceFollow';
+import { getFollowing } from '../services/serviceFollow';
+import { propose } from '../services/serviceVotes';
 import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import { getCurrentCoords, type Coords, type LocationState } from '../services/serviceLocation';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
+import RsvpButtons from '../components/events/RsvpButtons';
+import SquadGoStub from '../components/events/SquadGoStub';
+import { useSquadPlans } from '../components/events/useSquadPlans';
+import type { PlanStance } from '../lib/squadVote';
 import type { Person } from '../lib/people';
 import { colors, typo, layout, radius, shadow, space, textSize } from '../theme';
 import Chip from '../components/general/Chip';
@@ -71,7 +76,8 @@ const ISLAND_PAD = space.md;
 const TITLE_TOP = space.sm + space.sm + GLASS_BORDER;
 const SEARCH_DELAY_MS = 300;
 
-function toCardData(event: FeedEvent, friendsGoing?: Person[]): CardEvent {
+function toCardData(event: FeedEvent, friendsGoing?: Person[], stance?: PlanStance | null): CardEvent {
+  const via = stance && stance.kind === 'rsvp' ? stance.via : null;
   return {
     friendsGoing,
     id: event.id,
@@ -80,7 +86,7 @@ function toCardData(event: FeedEvent, friendsGoing?: Person[]): CardEvent {
     startTime: event.startTime,
     location: event.location,
     placeLabel: event.placeLabel,
-    groupName: event.groupName,
+    groupName: via ? `${event.groupName} · ${via} going` : event.groupName,
     myStatus: event.myStatus,
     going: [],
     goingCount: event.goingCount,
@@ -112,6 +118,8 @@ function toSheetEvent(event: FeedEvent): SheetEvent {
     lat: event.lat,
     lng: event.lng,
     isMember: event.isMember,
+    groupId: event.groupId,
+    isPublic: true,
   };
 }
 
@@ -169,6 +177,29 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
   const [highlights, setHighlights] = useState<FeedHighlight[]>([]);
   const [friendsGoing, setFriendsGoing] = useState<Record<string, Person[]>>({});
   const { signed, signPaths, dropSigned } = useSignedImages();
+  const squadPlans = useSquadPlans(
+    userId,
+    events.filter((event) => !event.isMember).map((event) => ({ id: event.id, groupId: event.groupId })),
+  );
+
+  // Another squad's plan: answer only once a squad of yours is going.
+  function cardProps(event: FeedEvent) {
+    const stance = event.isMember ? null : squadPlans.stanceFor(event);
+    return {
+      event: toCardData(event, friendsGoing[event.id], stance),
+      stub: event.isMember ? undefined : (
+        <SquadGoStub stance={stance} busy={squadPlans.busyId === event.id} onAct={() => squadPlans.act(event)}>
+          <RsvpButtons
+            status={event.myStatus}
+            saving={savingId === event.id}
+            onChange={(status) => handleRsvp(event.id, status)}
+            compact
+            stretch
+          />
+        </SquadGoStub>
+      ),
+    };
+  }
 
   const followedIds = Object.keys(following).sort().join(',');
   const followFilter = followingOnly ? followedIds : null;
@@ -348,7 +379,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
     setVoteNotice(null);
 
     try {
-      const status = await proposeFollow(acting.id, groupId, wasFollowing ? 'unfollow' : 'follow');
+      const status = await propose(acting.id, wasFollowing ? 'unfollow' : 'follow', groupId);
 
       if (status === 'passed') {
         const next = { ...following };
@@ -639,7 +670,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
       {searchBar()}
       {locationInfo(false)}
       {chipRow(false)}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ?? squadPlans.error ? <Text style={styles.error}>{error ?? squadPlans.error}</Text> : null}
       {voteNotice ? (
         <Text style={styles.notice} accessibilityLiveRegion="polite">
           {voteNotice}
@@ -681,7 +712,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
             {live.map((event) => (
               <View key={event.id} style={styles.liveCard}>
                 <EventCard
-                  event={toCardData(event, friendsGoing[event.id])}
+                  {...cardProps(event)}
                   action="rsvp"
                   saving={savingId === event.id}
                   onPress={() => setOpenEvent(toSheetEvent(event))}
@@ -872,9 +903,9 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
               {chipRow(true)}
             </Glass>
 
-            {error ? (
+            {error ?? squadPlans.error ? (
               <Glass radius={radius.lg} style={styles.island}>
-                <Text style={[styles.error, styles.flush]}>{error}</Text>
+                <Text style={[styles.error, styles.flush]}>{error ?? squadPlans.error}</Text>
               </Glass>
             ) : null}
           </View>
@@ -884,7 +915,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
           <View style={styles.popWrap} pointerEvents="box-none">
             <PopIn key={selected.id} style={styles.popCard}>
               <EventCard
-                event={toCardData(selected, friendsGoing[selected.id])}
+                {...cardProps(selected)}
                 action="rsvp"
                 saving={savingId === selected.id}
                 onPress={() => setOpenEvent(toSheetEvent(selected))}
@@ -924,7 +955,7 @@ export default function ExploreScreen({ userId }: ExploreScreenProps) {
         renderItem={({ item }) => (
           <View style={styles.item}>
             <EventCard
-              event={toCardData(item, friendsGoing[item.id])}
+              {...cardProps(item)}
               action="rsvp"
               saving={savingId === item.id}
               onPress={() => setOpenEvent(toSheetEvent(item))}

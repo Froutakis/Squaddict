@@ -3,15 +3,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Group } from '../../services/serviceGroup';
 import { getActingSquad } from '../../services/serviceUser';
-import {
-  castVote,
-  getOpenVote,
-  isFollowing,
-  proposeFollow,
-  type FollowVote,
-} from '../../services/serviceFollow';
+import { isFollowing } from '../../services/serviceFollow';
+import { castVote, getOpenSquadVote, propose, type SquadVote } from '../../services/serviceVotes';
 import { followButtonLabel } from '../../lib/follows';
-import { voteButtonLabel } from '../../lib/followVote';
+import { voteButtonLabel } from '../../lib/squadVote';
 import Monogram from '../general/Monogram';
 import { colors, paper, radius, space, textSize, typo } from '../../theme';
 
@@ -29,7 +24,7 @@ type FollowButtonProps = {
 export default function FollowButton({ group, userId, block = false, onChanged }: FollowButtonProps) {
   const [acting, setActing] = useState<Group | null>(null);
   const [following, setFollowing] = useState<boolean | null>(null);
-  const [vote, setVote] = useState<FollowVote | null>(null);
+  const [vote, setVote] = useState<SquadVote | null>(null);
   const [followsBack, setFollowsBack] = useState(false);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -39,7 +34,7 @@ export default function FollowButton({ group, userId, block = false, onChanged }
     async function readState(mine: Group) {
       const [out, open] = await Promise.all([
         isFollowing(mine.id, group.id),
-        getOpenVote(mine.id, group.id, userId).catch(() => null),
+        getOpenSquadVote(mine.id, group.id, userId).catch(() => null),
       ]);
       return { out, open };
     },
@@ -93,7 +88,7 @@ export default function FollowButton({ group, userId, block = false, onChanged }
     try {
       const status = vote
         ? await castVote(vote.id, true)
-        : await proposeFollow(acting.id, group.id, following ? 'unfollow' : 'follow');
+        : await propose(acting.id, following ? 'unfollow' : 'follow', group.id);
 
       const state = await readState(acting);
       setFollowing(state.out);
@@ -112,7 +107,7 @@ export default function FollowButton({ group, userId, block = false, onChanged }
 
   const waiting = vote !== null && vote.myVote === true;
   const label = vote
-    ? voteButtonLabel(vote.action, vote.myVote, vote.yes, acting.memberCount)
+    ? voteButtonLabel(vote.kind, vote.myVote, vote.yes, acting.memberCount)
     : followButtonLabel(following, acting.name);
   const quiet = vote ? waiting : following;
   const icon = vote ? (waiting ? 'time-outline' : 'thumbs-up-outline') : following ? 'checkmark' : 'add';
@@ -144,7 +139,7 @@ export default function FollowButton({ group, userId, block = false, onChanged }
 
       {vote ? (
         <Text style={styles.note}>
-          {acting.name} {vote.action === 'follow' ? 'follows' : 'unfollows'} once most members say yes.
+          {acting.name} {vote.kind === 'follow' ? 'follows' : 'unfollows'} once most members say yes.
         </Text>
       ) : null}
 
