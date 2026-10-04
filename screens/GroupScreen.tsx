@@ -2,13 +2,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import { inviteMessage } from '../lib/invite';
 import SquadMemories from '../components/group/SquadMemories';
 import SquadLookSheet from '../components/group/SquadLookSheet';
 import FollowButton from '../components/group/FollowButton';
@@ -39,6 +43,8 @@ import RsvpButtons from '../components/events/RsvpButtons';
 import SquadGoStub from '../components/events/SquadGoStub';
 import { useSquadPlans } from '../components/events/useSquadPlans';
 import { voteEventToSheet } from '../components/votes/VoteCard';
+import { FAB_CENTER_Y, FAB_INSET } from '../components/general/MenuFab';
+import { features } from '../lib/features';
 
 type Member = {
   id: string;
@@ -48,11 +54,12 @@ type Member = {
 
 type Tab = 'memories' | 'following' | 'members';
 
-const TABS = [
+const ALL_TABS = [
   { value: 'memories' as const, label: 'Memories', icon: 'grid-outline' as const, activeIcon: 'grid' as const },
   { value: 'following' as const, label: 'Following', icon: 'compass-outline' as const, activeIcon: 'compass' as const },
   { value: 'members' as const, label: 'Members', icon: 'people-outline' as const, activeIcon: 'people' as const },
 ];
+const TABS = ALL_TABS.filter((option) => option.value !== 'following' || features.squadFollows);
 
 type GroupScreenProps = {
   group: Group;
@@ -77,6 +84,7 @@ export default function GroupScreen({
   const [openPlan, setOpenPlan] = useState<SheetEvent | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [code, setCode] = useState<string | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [member, setMember] = useState(false);
   const [restricted, setRestricted] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -280,6 +288,34 @@ export default function GroupScreen({
     }
   }
 
+  // One tap: the phone's share sheet with the invite link. Where there is no
+  // share sheet (most desktop browsers) the invite is copied instead.
+  async function shareInvite() {
+    if (!code) {
+      setTab('members');
+      return;
+    }
+
+    const message = inviteMessage(current.name, code);
+    setInviteNotice(null);
+
+    try {
+      if (Platform.OS === 'web' && !(typeof navigator !== 'undefined' && 'share' in navigator)) {
+        throw new Error('No share sheet');
+      }
+      await Share.share({ message });
+    } catch {
+      // The note sits by the code, on the members tab.
+      setTab('members');
+      try {
+        await Clipboard.setStringAsync(message);
+        setInviteNotice('Invite copied. Paste it to your people.');
+      } catch {
+        setInviteNotice('Could not share the invite. Send them the code below.');
+      }
+    }
+  }
+
   async function handleRotate() {
     setRotating(true);
     setError(null);
@@ -349,7 +385,7 @@ export default function GroupScreen({
   }
 
   // People outside the squad get its public profile instead.
-  if (!loading && !member) {
+  if (!loading && !member && features.publicProfiles) {
     return (
       <>
         <PublicProfile
@@ -357,7 +393,7 @@ export default function GroupScreen({
           plans={plans}
           savingId={savingId}
           error={error ?? squadPlans.error}
-          followAction={<FollowButton group={current} userId={userId} />}
+          followAction={features.squadFollows ? <FollowButton group={current} userId={userId} /> : undefined}
           onBack={onBack}
           onAnswer={answer}
           onOpenPlan={openSheet}
@@ -441,19 +477,21 @@ export default function GroupScreen({
                   </Pressable>
                 )}
 
-                <Pressable
-                  onPress={() => setEditing(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Edit look"
-                  style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-                >
-                  <Text style={styles.buttonText} numberOfLines={1}>
-                    Edit look
-                  </Text>
-                </Pressable>
+                {features.squadLookEditing ? (
+                  <Pressable
+                    onPress={() => setEditing(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit look"
+                    style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+                  >
+                    <Text style={styles.buttonText} numberOfLines={1}>
+                      Edit look
+                    </Text>
+                  </Pressable>
+                ) : null}
 
                 <Pressable
-                  onPress={() => setTab('members')}
+                  onPress={shareInvite}
                   accessibilityRole="button"
                   accessibilityLabel="Invite people"
                   style={({ pressed }) => [styles.button, pressed && styles.pressed]}
@@ -464,12 +502,14 @@ export default function GroupScreen({
                 </Pressable>
               </View>
 
-              <FollowButton
-                key={actingId ?? 'none'}
-                group={current}
-                userId={userId}
-                onChanged={() => setFollowsReload((n) => n + 1)}
-              />
+              {features.squadFollows ? (
+                <FollowButton
+                  key={actingId ?? 'none'}
+                  group={current}
+                  userId={userId}
+                  onChanged={() => setFollowsReload((n) => n + 1)}
+                />
+              ) : null}
 
               {actingError ? <Text style={styles.error}>{actingError}</Text> : null}
               {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -496,7 +536,7 @@ export default function GroupScreen({
                 />
               ) : null}
 
-              {tab === 'following' ? (
+              {tab === 'following' && features.squadFollows ? (
                 <>
                   <SquadVotes
                     votes={votes}
@@ -520,6 +560,17 @@ export default function GroupScreen({
                       </Text>
                     </View>
                     <Pressable
+                      onPress={shareInvite}
+                      disabled={!code}
+                      accessibilityRole="button"
+                      accessibilityLabel="Share the invite link"
+                      hitSlop={6}
+                      style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]}
+                    >
+                      <Ionicons name="share-outline" size={16} color={paper.surface} />
+                      <Text style={styles.shareText}>Invite</Text>
+                    </Pressable>
+                    <Pressable
                       onPress={handleRotate}
                       disabled={rotating}
                       accessibilityRole="button"
@@ -534,6 +585,12 @@ export default function GroupScreen({
                       )}
                     </Pressable>
                   </View>
+
+                  {inviteNotice ? (
+                    <Text style={styles.hint} accessibilityLiveRegion="polite">
+                      {inviteNotice}
+                    </Text>
+                  ) : null}
 
                   {restricted ? (
                     <Text style={styles.hint}>Only members see who is in this squad.</Text>
@@ -593,7 +650,7 @@ export default function GroupScreen({
       </View>
 
       <SquadLookSheet
-        visible={editing}
+        visible={editing && features.squadLookEditing}
         group={current}
         onClose={function () {
           setEditing(false);
@@ -613,7 +670,8 @@ const styles = StyleSheet.create({
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
   pressed: { opacity: 0.6 },
 
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xs, height: 48 },
+  // Starts right of the floating menu button, level with it.
+  topBar: { flexDirection: 'row', alignItems: 'center', paddingLeft: FAB_INSET - space.xs, paddingRight: space.xs, height: 48, marginTop: FAB_CENTER_Y - 24 },
   backButton: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 1, paddingRight: space.sm },
   backText: { color: paper.ink, ...typo.semi, fontSize: textSize.lead },
 
@@ -666,6 +724,16 @@ const styles = StyleSheet.create({
   inviteText: { flex: 1, gap: 2 },
   inviteLabel: { color: paper.inkSoft, ...typo.regular, fontSize: textSize.small },
   code: { color: paper.ink, ...typo.mono, fontSize: textSize.heading, letterSpacing: 3 },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 36,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.pill,
+    backgroundColor: paper.ink,
+  },
+  shareText: { color: paper.surface, ...typo.semi, fontSize: textSize.body },
   roundButton: {
     width: 36,
     height: 36,

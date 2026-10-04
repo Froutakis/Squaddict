@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
+import { inviteCodeFrom } from '../../lib/invite';
 import {
   createGroup,
   joinByInviteCode,
@@ -43,6 +46,8 @@ export default function GroupFormSheet({
   const [code, setCode] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // An invite code sitting on the clipboard, offered with one tap.
+  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -53,7 +58,22 @@ export default function GroupFormSheet({
     setCode('');
     setSaving(false);
     setFormError(null);
+    setCopied(null);
   }, [visible, initialMode]);
+
+  useEffect(() => {
+    if (!visible || mode !== 'join') return;
+
+    let cancelled = false;
+    Clipboard.getStringAsync()
+      .then((text) => {
+        if (!cancelled) setCopied(inviteCodeFrom(text));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, mode]);
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -171,6 +191,18 @@ export default function GroupFormSheet({
               />
             )}
 
+            {mode === 'join' && copied && copied !== code ? (
+              <Pressable
+                onPress={() => setCode(copied)}
+                accessibilityRole="button"
+                accessibilityLabel={`Paste invite code ${copied}`}
+                style={({ pressed }) => [styles.paste, pressed && styles.pastePressed]}
+              >
+                <Ionicons name="clipboard-outline" size={15} color={colors.primary} />
+                <Text style={styles.pasteText}>Paste {copied}</Text>
+              </Pressable>
+            ) : null}
+
             {formError ? <Text style={styles.formError}>{formError}</Text> : null}
 
             <Button title={mode === 'create' ? 'Create' : 'Join'} onPress={handleSave} loading={saving} />
@@ -207,4 +239,17 @@ const styles = StyleSheet.create({
   hint: { color: colors.textSoft, ...typo.medium, fontSize: 14 },
   form: { gap: space.md, marginTop: space.xs },
   formError: { color: colors.danger, ...typo.medium, fontSize: 13 },
+  paste: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    minHeight: 36,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  pastePressed: { opacity: 0.6 },
+  pasteText: { color: colors.primary, ...typo.semi, fontSize: 13 },
 });

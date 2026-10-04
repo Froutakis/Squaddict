@@ -303,17 +303,24 @@ export async function removeAvatar(url: string): Promise<void> {
 }
 
 export async function signImages(paths: string[]): Promise<SignedMap> {
-  if (paths.length === 0) {
-    return {};
+  const expiresAt = Date.now() + SIGNED_URL_TTL_SECONDS * 1000;
+  const signed: SignedMap = {};
+
+  // Demo photos from the seed SQL are plain web links, not files in Storage:
+  // they need no signature.
+  const stored = paths.filter((path) => !/^https?:\/\//.test(path));
+  for (const path of paths) {
+    if (!stored.includes(path)) signed[path] = { url: path, expiresAt };
+  }
+  if (stored.length === 0) {
+    return signed;
   }
 
   const { data, error } = await supabase.storage
     .from(BUCKET)
-    .createSignedUrls(paths, SIGNED_URL_TTL_SECONDS);
+    .createSignedUrls(stored, SIGNED_URL_TTL_SECONDS);
   if (error) throw error;
 
-  const expiresAt = Date.now() + SIGNED_URL_TTL_SECONDS * 1000;
-  const signed: SignedMap = {};
   for (const row of data ?? []) {
     if (row.signedUrl && row.path) {
       signed[row.path] = { url: row.signedUrl, expiresAt };

@@ -6,14 +6,16 @@ import { radius as radii } from '../../theme';
 type GlassProps = {
   children?: ReactNode;
   radius?: number;
+  // The white laid over the blur: more of it reads as frosted, less as clear.
+  sheen?: string;
   style?: StyleProp<ViewStyle>;
 };
 
-export default function Glass({ children, radius = radii.xl, style }: GlassProps) {
+export default function Glass({ children, radius = radii.xl, sheen = 'rgba(255,255,255,0.45)', style }: GlassProps) {
   return (
     <View style={[styles.island, { borderRadius: radius }, style]}>
       <BlurView intensity={40} tint="light" style={[styles.fill, { borderRadius: radius }]} />
-      <View style={[styles.fill, styles.sheen, { borderRadius: radius }]} pointerEvents="none" />
+      <View style={[styles.fill, { borderRadius: radius, backgroundColor: sheen }]} pointerEvents="none" />
       {children}
     </View>
   );
@@ -36,5 +38,4 @@ const styles = StyleSheet.create({
     left: 0,
     overflow: 'hidden',
   },
-  sheen: { backgroundColor: 'rgba(255,255,255,0.45)' },
 });

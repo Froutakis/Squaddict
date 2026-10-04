@@ -30,6 +30,33 @@ export function capPerNight<T extends { eventId: string }>(photos: T[], perNight
   });
 }
 
+// Why a night is in a parea's feed, closest first (feed_nights in feed_nights.sql).
+export type FeedReason = 'yours' | 'following' | 'member_went' | 'followed_went' | 'similar' | 'public';
+
+// Your own circle: the parea's nights and the pareas it follows.
+export function isOwnCircle(reason: FeedReason): boolean {
+  return reason === 'yours' || reason === 'following';
+}
+
+// The feed stays yours: after every `every` posts of your own circle comes one
+// from another parea. A parea with few nights of its own still gets a couple
+// at the end, and one with none yet gets all of them.
+export function mixFeed<T>(items: T[], isOwn: (item: T) => boolean, every = 3, atLeast = 2): T[] {
+  const own = items.filter(isOwn);
+  const others = items.filter((item) => !isOwn(item));
+  if (own.length === 0) return others;
+
+  const allowed = Math.min(others.length, Math.max(atLeast, Math.floor(own.length / every)));
+  const mixed: T[] = [];
+  let next = 0;
+  own.forEach(function (item, index) {
+    mixed.push(item);
+    if ((index + 1) % every === 0 && next < allowed) mixed.push(others[next++]);
+  });
+  while (next < allowed) mixed.push(others[next++]);
+  return mixed;
+}
+
 export type Tally = {
   counts: Record<string, number>;
   total: number;
