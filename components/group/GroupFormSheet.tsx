@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { inviteCodeFrom } from '../../lib/invite';
@@ -126,96 +126,104 @@ export default function GroupFormSheet({
         if (!saving) onClose();
       }}
     >
-      <Pressable
-        style={styles.backdrop}
-        onPress={function () {
-          if (!saving) onClose();
-        }}
-      >
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <SheetHeader title="New squad" onClose={onClose} closeDisabled={saving} grabber />
+      {/* On iOS the keyboard would cover the fields; the sheet rises above it. */}
+      <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Pressable
+          style={styles.backdrop}
+          onPress={function () {
+            if (!saving) onClose();
+          }}
+        >
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <SheetHeader title="New squad" onClose={onClose} closeDisabled={saving} grabber />
 
-          <View style={styles.tabs}>
-            {TABS.map((tab) => {
-              const active = tab.key === mode;
+            {/* Scrolls when the keyboard leaves little room, so the header stays in view. */}
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" bounces={false}>
+              <View style={styles.tabs}>
+                {TABS.map((tab) => {
+                  const active = tab.key === mode;
 
-              return (
-                <Pressable
-                  key={tab.key}
-                  onPress={() => switchMode(tab.key)}
-                  disabled={saving}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={tab.label}
-                  style={({ pressed }) => [styles.tab, active && styles.tabActive, pressed && styles.pressed]}
-                >
-                  <Text style={[styles.tabText, active && styles.tabTextActive]}>{tab.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                  return (
+                    <Pressable
+                      key={tab.key}
+                      onPress={() => switchMode(tab.key)}
+                      disabled={saving}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={tab.label}
+                      style={({ pressed }) => [styles.tab, active && styles.tabActive, pressed && styles.pressed]}
+                    >
+                      <Text style={[styles.tabText, active && styles.tabTextActive]}>{tab.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-          <Text style={styles.hint}>{HINTS[mode]}</Text>
+              <Text style={styles.hint}>{HINTS[mode]}</Text>
 
-          <View style={styles.form}>
-            {mode === 'create' ? (
-              <>
-                <AuthField
-                  label="Name"
-                  icon="people-outline"
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="Mpala"
-                  loading={saving}
-                  onSubmit={handleSave}
-                />
-                <AuthField
-                  label="Handle"
-                  icon="at-outline"
-                  value={handle}
-                  onChangeText={(text) => setHandle(text.toLowerCase())}
-                  placeholder="mvps"
-                  loading={saving}
-                  onSubmit={handleSave}
-                />
-              </>
-            ) : (
-              <AuthField
-                label="Invite code"
-                icon="key-outline"
-                value={code}
-                onChangeText={(text) => setCode(text.toUpperCase())}
-                placeholder="7KQ2XM"
-                loading={saving}
-                onSubmit={handleSave}
-              />
-            )}
+              <View style={styles.form}>
+                {mode === 'create' ? (
+                  <>
+                    <AuthField
+                      label="Name"
+                      icon="people-outline"
+                      value={name}
+                      onChangeText={setName}
+                      placeholder="Mpala"
+                      loading={saving}
+                      onSubmit={handleSave}
+                    />
+                    <AuthField
+                      label="Handle"
+                      icon="at-outline"
+                      value={handle}
+                      onChangeText={(text) => setHandle(text.toLowerCase())}
+                      placeholder="mvps"
+                      loading={saving}
+                      onSubmit={handleSave}
+                    />
+                  </>
+                ) : (
+                  <AuthField
+                    label="Invite code"
+                    icon="key-outline"
+                    value={code}
+                    onChangeText={(text) => setCode(text.toUpperCase())}
+                    placeholder="7KQ2XM"
+                    loading={saving}
+                    onSubmit={handleSave}
+                  />
+                )}
 
-            {mode === 'join' && copied && copied !== code ? (
-              <Pressable
-                onPress={() => setCode(copied)}
-                accessibilityRole="button"
-                accessibilityLabel={`Paste invite code ${copied}`}
-                style={({ pressed }) => [styles.paste, pressed && styles.pastePressed]}
-              >
-                <Ionicons name="clipboard-outline" size={15} color={colors.primary} />
-                <Text style={styles.pasteText}>Paste {copied}</Text>
-              </Pressable>
-            ) : null}
+                {mode === 'join' && copied && copied !== code ? (
+                  <Pressable
+                    onPress={() => setCode(copied)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Paste invite code ${copied}`}
+                    style={({ pressed }) => [styles.paste, pressed && styles.pastePressed]}
+                  >
+                    <Ionicons name="clipboard-outline" size={15} color={colors.primary} />
+                    <Text style={styles.pasteText}>Paste {copied}</Text>
+                  </Pressable>
+                ) : null}
 
-            {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+                {formError ? <Text style={styles.formError}>{formError}</Text> : null}
 
-            <Button title={mode === 'create' ? 'Create' : 'Join'} onPress={handleSave} loading={saving} />
-          </View>
+                <Button title={mode === 'create' ? 'Create' : 'Join'} onPress={handleSave} loading={saving} />
+              </View>
+            </ScrollView>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboard: { flex: 1 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
+    maxHeight: '90%',
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
@@ -224,6 +232,8 @@ const styles = StyleSheet.create({
     paddingBottom: space.xl,
     gap: space.sm,
   },
+  scroll: { flexGrow: 0 },
+  body: { gap: space.sm },
   tabs: {
     flexDirection: 'row',
     gap: 4,

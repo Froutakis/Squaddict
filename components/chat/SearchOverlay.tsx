@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -77,27 +78,30 @@ export default function SearchOverlay({ groupId, visible, onClose }: SearchOverl
 
   return (
     <Modal transparent visible animationType="fade" onRequestClose={onClose}>
-      <View style={styles.screen}>
-        <View style={styles.bar}>
-          <Ionicons name="search" size={16} color={paper.inkFaint} />
-          <TextInput
-            style={styles.input}
-            value={term}
-            onChangeText={setTerm}
-            placeholder="Search this squad"
-            placeholderTextColor={paper.inkFaint}
-            autoCorrect={false}
-            autoFocus
-            accessibilityLabel="Search messages"
-          />
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Close search"
-            hitSlop={8}
-          >
-            <Ionicons name="close" size={18} color={paper.inkSoft} />
-          </Pressable>
+      {/* Clear of the notch and the status bar on an iPhone. */}
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.barWrap}>
+          <View style={styles.bar}>
+            <Ionicons name="search" size={16} color={paper.inkFaint} />
+            <TextInput
+              style={styles.input}
+              value={term}
+              onChangeText={setTerm}
+              placeholder="Search this squad"
+              placeholderTextColor={paper.inkFaint}
+              autoCorrect={false}
+              autoFocus
+              accessibilityLabel="Search messages"
+            />
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close search"
+              hitSlop={8}
+            >
+              <Ionicons name="close" size={18} color={paper.inkSoft} />
+            </Pressable>
+          </View>
         </View>
 
         <ScrollView
@@ -107,7 +111,7 @@ export default function SearchOverlay({ groupId, visible, onClose }: SearchOverl
         >
           {body}
         </ScrollView>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -140,6 +144,8 @@ function Hit({ hit, term }: { hit: SearchHit; term: string }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: paper.bg },
+  // The side gaps live on a wrapper: a 100% wide bar with margins ran into the screen's edges.
+  barWrap: { marginTop: space.xl, paddingHorizontal: space.md },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -147,8 +153,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: layout.column,
     alignSelf: 'center',
-    marginTop: space.xl,
-    marginHorizontal: space.md,
     paddingHorizontal: 14,
     height: 42,
     backgroundColor: paper.surface,

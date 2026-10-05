@@ -455,7 +455,8 @@ const styles = StyleSheet.create({
   zoneLeft: { left: 0, width: '40%' },
   zoneRight: { right: 0, width: '60%' },
 
-  top: { position: 'absolute', left: 0, right: 0, top: 0, paddingTop: 54, paddingHorizontal: space.md },
+  // Below the Dynamic Island (59 pt on the newest iPhones).
+  top: { position: 'absolute', left: 0, right: 0, top: 0, paddingTop: 62, paddingHorizontal: space.md },
   hidden: { opacity: 0 },
   bars: { flexDirection: 'row', gap: 3 },
   bar: {

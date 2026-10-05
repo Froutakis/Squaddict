@@ -5,13 +5,14 @@ import {
   Image,
   Modal,
   Pressable,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
-  View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  useWindowDimensions,
+  View,
 } from 'react-native';
 import { getEventPhotos, type EventPhoto } from '../../services/serviceEvents';
 import type { FeedPhoto } from '../../services/servicePhotoFeed';
@@ -129,7 +130,8 @@ export default function PostViewer({
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
-      <View style={styles.screen}>
+      {/* Clear of the notch and the status bar on an iPhone. */}
+      <SafeAreaView style={styles.screen}>
         <View style={[styles.column, { width }]}>
           <View style={styles.bar}>
             <Pressable
@@ -287,7 +289,7 @@ export default function PostViewer({
             </View>
           </ScrollView>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

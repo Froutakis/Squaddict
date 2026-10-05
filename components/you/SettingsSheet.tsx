@@ -2,8 +2,10 @@ import { useEffect, useState, type ComponentProps } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Linking,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -327,18 +329,21 @@ export default function SettingsSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
-      <Pressable style={styles.backdrop} onPress={close}>
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.grabber} />
-          {page === 'main'
-            ? renderMain()
-            : page === 'name'
-              ? renderName()
-              : page === 'privacy'
-                ? renderPrivacy()
-                : renderDelete()}
+      {/* On iOS the keyboard would cover the fields; the sheet rises above it. */}
+      <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Pressable style={styles.backdrop} onPress={close}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.grabber} />
+            {page === 'main'
+              ? renderMain()
+              : page === 'name'
+                ? renderName()
+                : page === 'privacy'
+                  ? renderPrivacy()
+                  : renderDelete()}
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -380,6 +385,7 @@ function Row({ icon, label, value, hint, danger = false, trailing = 'chevron', o
 }
 
 const styles = StyleSheet.create({
+  keyboard: { flex: 1 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
     maxHeight: '90%',
