@@ -9,7 +9,7 @@ import { FAB_CENTER_Y, FAB_INSET } from '../general/MenuFab';
 type HomeHeaderProps = {
   // The squad Home is showing; switching squads happens in the side rail.
   squad?: Group;
-  // Which face of Parea this is: Memories or Plans.
+  // Which page of Parea this is: Home or Votes.
   label: string;
   onMenu: () => void;
   // A button on the right of the squad's name (Votes: New vote).

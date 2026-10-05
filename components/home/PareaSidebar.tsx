@@ -44,7 +44,7 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
 type Label = { key: string; text: string; extra?: string; y: number };
 
 // Every screen the rail opens. One of them is always where you are.
-export type RailScreen = 'home' | 'events' | 'explore' | 'chat' | 'calendar' | 'votes' | 'you';
+export type RailScreen = 'home' | 'explore' | 'chat' | 'calendar' | 'votes' | 'you';
 
 type Tool = {
   key: RailScreen | 'voice';
@@ -70,7 +70,6 @@ type PareaSidebarProps = {
   onNewSquad: () => void;
   onChat: () => void;
   onPlan: () => void;
-  onEvents: () => void;
   onHome: () => void;
   onCalendar: () => void;
   // Open votes in the current squad you have not answered.
@@ -83,7 +82,7 @@ type PareaSidebarProps = {
 
 // The side rail, the app's only menu: a short pill of icons, centred down the
 // left edge. The current parea on top (the others open beside it); then the
-// screens (Memories, Plans, Explore); then the parea's own pages; you at the
+// screens (Home, Explore); then the parea's own pages; you at the
 // bottom. The screen you are on is an ink key with its name on a tab. New plan
 // is not in the column: it is a plain + bottom-right that comes up with it.
 export default function PareaSidebar({
@@ -97,7 +96,6 @@ export default function PareaSidebar({
   onNewSquad,
   onChat,
   onPlan,
-  onEvents,
   onHome,
   onCalendar,
   votes = 0,
@@ -183,10 +181,9 @@ export default function PareaSidebar({
   const active = squads.find((squad) => squad.id === activeId);
   const othersUnread = squads.reduce((sum, squad) => (squad.id === activeId ? sum : sum + (unread[squad.id] ?? 0)), 0);
   const chatUnread = activeId ? unread[activeId] ?? 0 : 0;
-  // Where you go: Memories, Plans, Explore.
+  // Where you go: Home (the parea's plans and memories), Explore.
   const screens: Tool[] = [
-    { key: 'home', label: 'Memories', icon: 'images-outline', iconOn: 'images', onPress: onHome },
-    { key: 'events', label: 'Plans', icon: 'ticket-outline', iconOn: 'ticket', onPress: onEvents },
+    { key: 'home', label: 'Home', icon: 'images-outline', iconOn: 'images', onPress: onHome },
     ...(features.explore
       ? [{ key: 'explore' as const, label: 'Explore', icon: 'map-outline' as IconName, iconOn: 'map' as IconName, onPress: onExplore }]
       : []),

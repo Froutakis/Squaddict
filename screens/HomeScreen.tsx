@@ -21,7 +21,6 @@ import { getGroupsForUser } from '../services/serviceGroup';
 import { getPareaGoing, type PareaGoing } from '../services/serviceFeed';
 import { getSuggestions, type PlanSuggestion } from '../services/serviceSuggestions';
 import { getUnreadCounts } from '../services/serviceChat';
-import ShowMore, { visibleSlice } from '../components/general/ShowMore';
 import {
   checkIn as saveCheckIn,
   clearRsvp,
@@ -35,12 +34,10 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   addDays,
-  countdownLabel,
   dayFilterLabel,
   inPhotoWindow,
   isHappeningNow,
   keyOf,
-  liveLabel,
   parseDateKey,
 } from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
@@ -53,17 +50,15 @@ import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
 import PhotoPrompt from '../components/home/PhotoPrompt';
 import PhotoFeed from '../components/home/PhotoFeed';
-import PlanLine from '../components/home/PlanLine';
+import PlanLine, { type OtherPlan } from '../components/home/PlanLine';
 import { TimelineRow } from '../components/home/Timeline';
 import type { FeedPhoto } from '../services/servicePhotoFeed';
 import GroupScreen from './GroupScreen';
 import { MEMORY_LIMIT, toMemoryNights, type MemoryNight } from '../components/home/memories';
 import DayPlansSheet from '../components/home/DayPlansSheet';
 import StoryViewer from '../components/events/StoryViewer';
-import SectionHead from '../components/general/SectionHead';
 import Button from '../components/general/Button';
-import EventCard, { type CardEvent } from '../components/events/EventCard';
-import UpNext from '../components/events/UpNext';
+import { friendsLine, type CardEvent } from '../components/events/EventCard';
 import {
   capture,
   messageFor,
@@ -102,13 +97,10 @@ type HomeScreenProps = {
   // Asks from the side rail, which lives in App: bump to open.
   calendarNonce?: number;
   newSquadNonce?: number;
-  // Bumped when the rail asks for Parea itself (Memories, Plans, the
-  // calendar): a page on top of it, like Votes, steps aside.
+  // Bumped when the rail asks for Parea itself (Home, the calendar): a page
+  // on top of it, like Votes, steps aside.
   railHomeNonce?: number;
   onOpenRail?: () => void;
-  // Parea has two faces: the memories feed (Home) and the plans (Events).
-  view?: 'memories' | 'events';
-  onOpenEvents?: () => void;
   // What the side rail shows: your squads, the current one, their unread.
   onRailData?: (data: RailData) => void;
   // Tells App which page sits on top of Parea, if any.
@@ -155,8 +147,6 @@ export default function HomeScreen({
   newSquadNonce = 0,
   railHomeNonce = 0,
   onOpenRail,
-  view = 'memories',
-  onOpenEvents,
   onRailData,
   onOverlayChange,
   openVotesNonce = 0,
@@ -174,8 +164,6 @@ export default function HomeScreen({
   const [dayStory, setDayStory] = useState<MemoryNight[] | null>(null);
   const [groupId, setGroupId] = useState<string | null>(null);
   const [unread, setUnread] = useState<Record<string, number>>({});
-  const [showAllWaiting, setShowAllWaiting] = useState(false);
-  const [showAllGoing, setShowAllGoing] = useState(false);
   const [going, setGoing] = useState<PareaGoing[]>([]);
   const [goingSaving, setGoingSaving] = useState<string | null>(null);
   // Other pareas' plans a member suggested to the parea on screen.
@@ -260,19 +248,14 @@ export default function HomeScreen({
   const anchoredFor = useRef<string | null>(null);
   const topEdge = useRef(new Animated.Value(0)).current;
 
-  // Once per parea (and each time you come back to the memories), open on NOW.
+  // Once per parea (and each time Home mounts), open on NOW.
   useEffect(() => {
-    if (view !== 'memories') {
-      anchoredFor.current = null;
-      setAwayFromNow(null);
-      return;
-    }
     if (loading || nowAt === null || viewHeight === 0) return;
     const key = groupId ?? 'all';
     if (anchoredFor.current === key) return;
     anchoredFor.current = key;
     scrollRef.current?.scrollTo({ y: Math.max(0, nowAt - viewHeight * 0.45), animated: false });
-  }, [view, loading, nowAt, viewHeight, groupId]);
+  }, [loading, nowAt, viewHeight, groupId]);
   const lastLoad = useRef(0);
 
   // `quiet` keeps what is on screen while it reloads (pull to refresh, coming back).
@@ -447,7 +430,8 @@ export default function HomeScreen({
 
   // Votes has no Back of its own: the rail is the way out, like everywhere
   // else. Only a bump while Parea is up counts, not the value it mounts with.
-  // The calendar and a squad page step aside too, so Memories means Memories.
+  // The calendar and a squad page step aside too, so Home means Home, and the
+  // page goes back to NOW.
   const railHomeSeen = useRef(railHomeNonce);
   useEffect(() => {
     if (railHomeNonce === railHomeSeen.current) return;
@@ -455,6 +439,7 @@ export default function HomeScreen({
     setVotesOpen(false);
     setFullCalendar(false);
     setProfileGroup(null);
+    scrollToNow(false);
   }, [railHomeNonce]);
 
   // After the step-aside above: the rail's Calendar bumps both at once.
@@ -540,29 +525,26 @@ export default function HomeScreen({
     [events, groupId],
   );
 
-  const upcoming = visible.filter((e) => e.date >= today);
-  const upNextEvent = upcoming.find((e) => e.myStatus !== 'out');
   const liveEvent = visible.find(
     (e) => e.myStatus !== 'out' && isHappeningNow(e.date, e.startTime, e.endTime, now),
   );
-  const heroEvent = liveEvent ?? upNextEvent;
   const sharingEvent = liveEvent?.myStatus === 'in' ? liveEvent : undefined;
   const livePeople = useLiveLocations(features.liveLocation ? sharingEvent?.id : undefined, {
     id: user.id,
     name: displayName,
   });
-  const pool = upcoming.filter((e) => e.id !== heroEvent?.id);
-  const waiting = pool.filter((e) => e.myStatus === undefined);
   // The selected parea's plans from today on, plus one from yesterday still
   // going past midnight: Home is one parea's line, above now and below it.
+  // Past the horizon only the plans still waiting on your answer come along,
+  // so every one of those can be reached from here.
   const horizon = keyOf(addDays(new Date(), AHEAD_DAYS));
   const linePlans = [
     ...visible.filter((e) => e.date < today && isHappeningNow(e.date, e.startTime, e.endTime, now)),
     ...visible.filter((e) => e.date === today),
     ...visible
-      .filter((e) => e.date > today && e.date <= horizon)
+      .filter((e) => e.date > today)
       .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? '').localeCompare(b.startTime ?? ''))
-      .slice(0, AHEAD_PLANS),
+      .filter((e, i) => (i < AHEAD_PLANS && e.date <= horizon) || e.myStatus === undefined),
   ];
   const clockNow = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const recent = visible.filter((e) => inPhotoWindow(e.date, e.startTime, e.endTime, now));
@@ -572,19 +554,34 @@ export default function HomeScreen({
       e.myStatus === 'in' &&
       !posted[e.id] &&
       (e.date < today || !e.startTime || e.startTime <= clockNow) &&
-      !(e.id === liveEvent?.id && e.id === heroEvent?.id),
+      e.id !== liveEvent?.id,
   );
-  // "Nikos suggests": plans you have not answered yet. Answered, they move
-  // into your week like any plan of yours.
-  const suggestions = suggested.filter((one) => one.event.myStatus === undefined);
+  // Other pareas' plans on the line, each once. "Nikos suggests": plans you
+  // have not answered yet; answered, they move into your plans like any of
+  // yours. Then members of your parea who said I'm in to another parea's
+  // public plan; one already suggested here shows as the suggestion. One that
+  // is already on the line, or that you answered, is left out.
+  const skipIds = new Set([
+    ...visible.map((e) => e.id),
+    ...events.filter((e) => e.myStatus !== undefined).map((e) => e.id),
+  ]);
+  const suggestions = suggested.filter((one) => one.event.myStatus === undefined && !skipIds.has(one.event.id));
   const suggestedIds = new Set(suggestions.map((one) => one.event.id));
-  // Members of your parea who said I'm in to another parea's public plan;
-  // a plan already suggested here shows once, as the suggestion.
   const friendsPlans = (groupId ? going.filter((plan) => plan.viaGroupIds.includes(groupId)) : going).filter(
-    (plan) => !suggestedIds.has(plan.event.id),
+    (plan) => !suggestedIds.has(plan.event.id) && !skipIds.has(plan.event.id),
   );
-  const goingSlice = visibleSlice(friendsPlans, 2, showAllGoing);
-  const waitingSlice = visibleSlice(waiting, 3, showAllWaiting);
+  const otherPlans: OtherPlan[] = [
+    ...suggestions.map((one) => ({
+      event: one.event,
+      note: `${one.suggesterName.split(' ')[0] || one.suggesterName} suggests`,
+      saving: goingSaving === one.event.id,
+    })),
+    ...friendsPlans.map((plan) => ({
+      event: plan.event,
+      note: plan.friends.length > 0 ? friendsLine(plan.friends) : `${plan.goingCount} going`,
+      saving: goingSaving === plan.event.id,
+    })),
+  ];
   const nights = useMemo(
     () => toMemoryNights(visible, coverPhotos, today).slice(0, MEMORY_LIMIT),
     [visible, coverPhotos, today],
@@ -691,7 +688,7 @@ export default function HomeScreen({
     return photo ? signed[photo.path]?.url ?? null : null;
   }
 
-  // Home: the memories of this squad and the squads it follows, newest first.
+  // Home: the parea's plans above NOW, its memories below, newest first.
   function renderMemories() {
     const activeGroup = groups.find((g) => g.id === groupId);
 
@@ -712,6 +709,8 @@ export default function HomeScreen({
         <View>
           <PlanLine
             plans={linePlans}
+            others={otherPlans}
+            onAnswerOther={(plan, status) => answerFriendsPlan(plan.id, status)}
             now={now}
             userId={user.id}
             isCheckedIn={isCheckedIn}
@@ -766,11 +765,6 @@ export default function HomeScreen({
                   <Text style={styles.stateBody}>
                     Your first night out is one plan away. The photos from it land here.
                   </Text>
-                  {onOpenEvents ? (
-                    <View style={styles.stateButton}>
-                      <Button title="See the plans" onPress={onOpenEvents} />
-                    </View>
-                  ) : null}
                 </View>
               }
             />
@@ -815,157 +809,7 @@ export default function HomeScreen({
       );
     }
 
-    if (view === 'memories') return renderMemories();
-
-    if (events.length === 0) {
-      return (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>Nothing on. Suspicious.</Text>
-          <Text style={styles.stateBody}>
-            Your week is wide open. Somebody has to go first — might as well be you.
-          </Text>
-          <View style={styles.stateButton}>
-            <Button title="Propose an outing" onPress={() => openNewEvent(null)} />
-          </View>
-        </View>
-      );
-    }
-
-    const activeGroup = groups.find((g) => g.id === groupId);
-    if (activeGroup && visible.length === 0 && friendsPlans.length === 0 && suggestions.length === 0) {
-      return (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>Quiet in {activeGroup.name}</Text>
-          <Text style={styles.stateBody}>
-            No plans here yet. Throw one out and see who bites.
-          </Text>
-          <View style={styles.stateButton}>
-            <Button title="Propose a plan" onPress={() => openNewEvent(null)} />
-          </View>
-        </View>
-      );
-    }
-
-    return (
-      <>
-        {heroEvent ? (
-          <View>
-            <SectionHead
-              title={liveEvent ? 'Happening now' : 'Up next'}
-              live={liveEvent !== undefined}
-              meta={
-                liveEvent
-                  ? liveLabel(liveEvent.date, liveEvent.startTime, liveEvent.endTime, now)
-                  : countdownLabel(heroEvent.date)
-              }
-            />
-            <View style={styles.body}>
-            <UpNext
-              event={heroEvent}
-              cover={coverFor(heroEvent)}
-              live={liveEvent !== undefined}
-              liveText={
-                liveEvent
-                  ? liveLabel(liveEvent.date, liveEvent.startTime, liveEvent.endTime, now)
-                  : undefined
-              }
-              checkedIn={isCheckedIn(heroEvent.id)}
-              hereCount={checkins[heroEvent.id]?.length ?? 0}
-              onCheckIn={() => checkIn(heroEvent.id)}
-              onAddPhoto={isCheckedIn(heroEvent.id) ? () => setAddingPhoto(heroEvent) : undefined}
-              onPress={() => setOpenEvent(heroEvent)}
-              onRsvp={(status) => handleRsvp(heroEvent.id, status)}
-            />
-            {photoError ? <Text style={styles.error}>{photoError}</Text> : null}
-            </View>
-          </View>
-        ) : null}
-
-        {suggestions.length > 0 ? (
-          <View>
-            <SectionHead
-              title="Suggested"
-              meta={suggestions.length > 1 ? `${suggestions.length} plans` : undefined}
-            />
-            <View style={styles.body}>
-              {suggestions.map((one) => (
-                <EventCard
-                  key={one.event.id}
-                  event={{
-                    ...toCardData(one.event),
-                    groupName: `${one.suggesterName.split(' ')[0] || one.suggesterName} suggests · ${one.event.groupName}`,
-                    goingCount: one.goingCount,
-                  }}
-                  action="rsvp"
-                  saving={goingSaving === one.event.id}
-                  onPress={() => setOpenEvent(one.event)}
-                  onRsvp={(status) => answerFriendsPlan(one.event.id, status)}
-                />
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        {friendsPlans.length > 0 ? (
-          <View>
-            <SectionHead
-              title="Your parea is going"
-              meta={friendsPlans.length > 1 ? `${friendsPlans.length} plans` : undefined}
-            />
-            <View style={styles.body}>
-              {goingSlice.shown.map((plan) => (
-                <EventCard
-                  key={plan.event.id}
-                  event={{
-                    ...toCardData(plan.event),
-                    goingCount: plan.goingCount,
-                    friendsGoing: plan.friends,
-                  }}
-                  action="rsvp"
-                  saving={goingSaving === plan.event.id}
-                  onPress={() => setOpenEvent(plan.event)}
-                  onRsvp={(status) => answerFriendsPlan(plan.event.id, status)}
-                />
-              ))}
-              <ShowMore
-                hidden={goingSlice.hidden}
-                expanded={showAllGoing}
-                onToggle={() => setShowAllGoing(!showAllGoing)}
-              />
-            </View>
-          </View>
-        ) : null}
-
-        {rsvpError ? (
-          <View style={styles.body}>
-            <Text style={styles.error}>{rsvpError}</Text>
-          </View>
-        ) : null}
-
-        {waiting.length > 0 ? (
-          <View>
-            <SectionHead title="Waiting on you" count={waiting.length} />
-            <View style={styles.body}>
-            {waitingSlice.shown.map((event) => (
-              <EventCard
-                key={event.id}
-                event={toCardData(event, coverFor(event))}
-                action="rsvp"
-                onPress={() => setOpenEvent(event)}
-                onRsvp={(status) => handleRsvp(event.id, status)}
-              />
-            ))}
-            <ShowMore
-              hidden={waitingSlice.hidden}
-              expanded={showAllWaiting}
-              onToggle={() => setShowAllWaiting(!showAllWaiting)}
-            />
-            </View>
-          </View>
-        ) : null}
-
-      </>
-    );
+    return renderMemories();
   }
 
   // A squad opened from the photo feed stacks on top of Home.
@@ -1014,8 +858,8 @@ export default function HomeScreen({
         ref={scrollRef}
         contentContainerStyle={styles.content}
         onLayout={(event) => setViewHeight(event.nativeEvent.layout.height)}
-        onScroll={view === 'memories' ? onPageScroll : undefined}
-        onContentSizeChange={view === 'memories' ? measureNow : undefined}
+        onScroll={onPageScroll}
+        onContentSizeChange={measureNow}
         scrollEventThrottle={32}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />
@@ -1024,38 +868,34 @@ export default function HomeScreen({
         <View ref={contentRef} collapsable={false} style={styles.contentInner}>
           <HomeHeader
             squad={groups.find((group) => group.id === groupId)}
-            label={view === 'memories' ? 'Memories' : 'Plans'}
+            label="Home"
             onMenu={() => onOpenRail?.()}
           />
           {renderBody()}
         </View>
       </ScrollView>
 
-      {view === 'memories' ? (
-        <>
-          <Animated.View pointerEvents="none" style={[styles.edgeTop, { opacity: topEdge }]}>
-            <BlurView intensity={10} tint="light" style={styles.edgeBlurTop} />
-            <LinearGradient colors={[colors.bg, BG_HALF, BG_CLEAR]} locations={[0, 0.35, 1]} style={StyleSheet.absoluteFill} />
-          </Animated.View>
-          <View pointerEvents="none" style={styles.edgeBottom}>
-            <BlurView intensity={10} tint="light" style={styles.edgeBlurBottom} />
-            <LinearGradient colors={[BG_CLEAR, BG_HALF, colors.bg]} locations={[0, 0.65, 1]} style={StyleSheet.absoluteFill} />
-          </View>
-          {awayFromNow ? (
-            <Pressable
-              onPress={() => scrollToNow(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Back to today"
-              style={({ pressed }) => [
-                styles.backToday,
-                awayFromNow === 'up' ? styles.backTodayTop : styles.backTodayBottom,
-                pressed && styles.backTodayPressed,
-              ]}
-            >
-              <Text style={styles.backTodayText}>Back to today {awayFromNow === 'up' ? '↑' : '↓'}</Text>
-            </Pressable>
-          ) : null}
-        </>
+      <Animated.View pointerEvents="none" style={[styles.edgeTop, { opacity: topEdge }]}>
+        <BlurView intensity={10} tint="light" style={styles.edgeBlurTop} />
+        <LinearGradient colors={[colors.bg, BG_HALF, BG_CLEAR]} locations={[0, 0.35, 1]} style={StyleSheet.absoluteFill} />
+      </Animated.View>
+      <View pointerEvents="none" style={styles.edgeBottom}>
+        <BlurView intensity={10} tint="light" style={styles.edgeBlurBottom} />
+        <LinearGradient colors={[BG_CLEAR, BG_HALF, colors.bg]} locations={[0, 0.65, 1]} style={StyleSheet.absoluteFill} />
+      </View>
+      {awayFromNow ? (
+        <Pressable
+          onPress={() => scrollToNow(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Back to today"
+          style={({ pressed }) => [
+            styles.backToday,
+            awayFromNow === 'up' ? styles.backTodayTop : styles.backTodayBottom,
+            pressed && styles.backTodayPressed,
+          ]}
+        >
+          <Text style={styles.backTodayText}>Back to today {awayFromNow === 'up' ? '↑' : '↓'}</Text>
+        </Pressable>
       ) : null}
       </View>
 
@@ -1233,7 +1073,6 @@ const styles = StyleSheet.create({
     paddingBottom: 130,
   },
   contentInner: { gap: space.md },
-  body: { paddingHorizontal: space.lg, gap: space.sm },
   line: { paddingTop: space.xs },
   error: { color: colors.danger, ...typo.medium, fontSize: 13 },
   state: { alignItems: 'center', paddingHorizontal: space.lg, paddingVertical: space.xl, gap: space.xs },

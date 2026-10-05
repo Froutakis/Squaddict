@@ -6,10 +6,22 @@ import { DateNode, GroupNode, GroupTitle, TimeNode, TimelineRow, TodayNode } fro
 import LineTicket, { shortPlace, type DayPhase } from './LineTicket';
 import { colors, radius, space, textSize, typo } from '../../theme';
 
+// Another parea's public plan you haven't answered, that your parea is
+// looking at: suggested to it, or members of it are going.
+export type OtherPlan = {
+  event: MyEvent;
+  // "Μαρία & Νίκος are going", "Μαρία suggests".
+  note: string;
+  saving: boolean;
+};
+
 type PlanLineProps = {
   // Your plans from today on, from all your pareas (and one that started
   // yesterday and is still going).
   plans: MyEvent[];
+  // Other pareas' plans, on the line in date order but never the ticket.
+  others?: OtherPlan[];
+  onAnswerOther?: (plan: MyEvent, status: RsvpStatus) => void;
   now: Date;
   userId: string;
   isCheckedIn: (eventId: string) => boolean;
@@ -34,6 +46,8 @@ type PlanLineProps = {
 // any other row and it becomes the ticket instead.
 export default function PlanLine({
   plans,
+  others = [],
+  onAnswerOther,
   now,
   userId,
   isCheckedIn,
@@ -60,6 +74,11 @@ export default function PlanLine({
   const today = plans.filter((plan) => plan.date <= todayKey);
   const ahead = today.filter((plan) => phaseOf(plan) !== 'past');
   const over = today.filter((plan) => phaseOf(plan) === 'past');
+  // Other pareas' plans join the rows, not the ticket: one already over is gone.
+  const otherById = new Map(others.map((one) => [one.event.id, one]));
+  const otherPlans = others.map((one) => one.event).filter((plan) => plan.date > todayKey || phaseOf(plan) !== 'past');
+  const futureRows = [...future, ...otherPlans.filter((plan) => plan.date > todayKey)].sort(soonestFirst);
+  const aheadRows = [...ahead, ...otherPlans.filter((plan) => plan.date <= todayKey)];
 
   // On now first (one with a start time before an all-day one), else the next
   // one still to come, today or later; never one you passed on.
@@ -145,12 +164,25 @@ export default function PlanLine({
     );
   }
 
+  function otherRow(one: OtherPlan, showTime: boolean) {
+    return (
+      <Reveal key={`${one.event.id}-other`}>
+        <OtherRow
+          one={one}
+          showTime={showTime}
+          onOpen={() => onOpen(one.event)}
+          onAnswer={(status) => onAnswerOther?.(one.event, status)}
+        />
+      </Reveal>
+    );
+  }
+
   const rows: ReactNode[] = [];
   const isFirst = () => rows.length === 0;
 
   // The coming days, furthest stretch on top, each headed by a hollow diamond.
-  for (const stretch of stretches([...future].reverse(), now)) {
-    const asks = stretch.plans.filter((plan) => plan.myStatus === undefined).length;
+  for (const stretch of stretches([...futureRows].reverse(), now)) {
+    const asks = stretch.plans.filter((plan) => plan.myStatus === undefined && !otherById.has(plan.id)).length;
     rows.push(
       <TimelineRow key={`s-${stretch.label}`} first={isFirst()} node={<GroupNode hollow />}>
         <GroupTitle
@@ -162,7 +194,8 @@ export default function PlanLine({
     );
     stretch.plans.forEach((plan, i) => {
       const sameDayAbove = i > 0 && stretch.plans[i - 1].date === plan.date;
-      const ask = plan.myStatus === undefined;
+      const other = otherById.get(plan.id);
+      const ask = plan.myStatus === undefined && !other;
       rows.push(
         <TimelineRow
           key={plan.id}
@@ -174,20 +207,21 @@ export default function PlanLine({
             )
           }
         >
-          {body(plan, 'later', true)}
+          {other ? otherRow(other, true) : body(plan, 'later', true)}
         </TimelineRow>,
       );
     });
   }
 
   // Today, latest on top, down to NOW.
-  if (ahead.length > 0) {
-    for (const plan of [...ahead].sort(latestFirst)) {
+  if (aheadRows.length > 0) {
+    for (const plan of [...aheadRows].sort(latestFirst)) {
       const phase = phaseOf(plan);
-      const kind = phase === 'live' ? 'live' : plan.myStatus === undefined ? 'ask' : 'later';
+      const other = otherById.get(plan.id);
+      const kind = phase === 'live' ? 'live' : plan.myStatus === undefined && !other ? 'ask' : 'later';
       rows.push(
         <TimelineRow key={plan.id} first={isFirst()} node={<TimeNode time={plan.startTime} kind={kind} />}>
-          {body(plan, phase, false)}
+          {other ? otherRow(other, false) : body(plan, phase, false)}
         </TimelineRow>,
       );
     }
@@ -282,6 +316,63 @@ function LineRow({
       </View>
       {right}
     </Pressable>
+  );
+}
+
+// Another parea's plan: who brought it here, and I'm in / Pass right on the
+// row, since it never becomes the ticket. Tapping the rest opens it.
+function OtherRow({
+  one,
+  showTime,
+  onOpen,
+  onAnswer,
+}: {
+  one: OtherPlan;
+  showTime: boolean;
+  onOpen: () => void;
+  onAnswer: (status: RsvpStatus) => void;
+}) {
+  const plan = one.event;
+  const sub = [one.note, showTime ? plan.startTime : null, plan.groupName].filter(Boolean).join(' · ');
+
+  return (
+    <View style={[styles.row, styles.rowOther]}>
+      <Pressable
+        onPress={onOpen}
+        accessibilityRole="button"
+        accessibilityLabel={`${plan.title}, ${sub}. Show it`}
+        style={({ pressed }) => [styles.rowText, styles.otherText, pressed && styles.pressed]}
+      >
+        <Text style={styles.title} numberOfLines={1}>
+          {plan.title}
+        </Text>
+        <Text style={styles.sub} numberOfLines={1}>
+          {sub}
+        </Text>
+      </Pressable>
+      <Pressable
+        onPress={() => onAnswer('in')}
+        disabled={one.saving}
+        accessibilityRole="button"
+        accessibilityLabel={`I'm in, ${plan.title}`}
+        accessibilityState={{ disabled: one.saving }}
+        hitSlop={4}
+        style={({ pressed }) => [styles.chip, styles.chipIn, one.saving && styles.disabled, pressed && styles.chipPressed]}
+      >
+        <Text style={[styles.chipText, styles.chipInText]}>I'm in</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => onAnswer('out')}
+        disabled={one.saving}
+        accessibilityRole="button"
+        accessibilityLabel={`Pass, ${plan.title}`}
+        accessibilityState={{ disabled: one.saving }}
+        hitSlop={4}
+        style={({ pressed }) => [styles.chip, one.saving && styles.disabled, pressed && styles.chipPressed]}
+      >
+        <Text style={styles.chipText}>Pass</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -382,6 +473,20 @@ const styles = StyleSheet.create({
   rowPast: { opacity: 0.55, borderStyle: 'dashed', backgroundColor: 'transparent' },
   rowPressed: { backgroundColor: colors.surface },
   rowText: { flex: 1, minWidth: 0 },
+  rowOther: { gap: 6, paddingRight: 8, borderStyle: 'dashed', borderColor: colors.borderStrong },
+  otherText: { alignSelf: 'stretch', justifyContent: 'center' },
+  chip: {
+    height: 32,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surfaceAlt,
+  },
+  chipIn: { backgroundColor: colors.primary },
+  chipPressed: { transform: [{ scale: 0.95 }] },
+  chipText: { color: colors.text, ...typo.display, fontSize: textSize.small },
+  chipInText: { color: colors.onInk },
+  disabled: { opacity: 0.5 },
   title: { color: colors.text, ...typo.bold, fontSize: textSize.base },
   titlePassed: { color: colors.textSoft, textDecorationLine: 'line-through' },
   sub: { color: colors.textSoft, ...typo.medium, fontSize: textSize.caption },

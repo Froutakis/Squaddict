@@ -24,8 +24,8 @@ import { features } from './lib/features';
 
 showNotificationsInForeground();
 
-// Parea has two faces, both one HomeScreen: its memories (home) and its plans (events).
-type Screen = 'home' | 'events' | 'explore' | 'you';
+// Parea is Home: its plans above NOW and its memories below, one HomeScreen.
+type Screen = 'home' | 'explore' | 'you';
 
 // Things the side rail can ask Parea to open once it is showing.
 type HomeAsk = 'plan' | 'calendar' | 'squad';
@@ -93,7 +93,7 @@ export default function App() {
         setScreen('home');
       } else {
         setFocusEventId(target.eventId);
-        setScreen('events');
+        setScreen('home');
       }
     });
   }, []);
@@ -182,21 +182,18 @@ export default function App() {
     setChatClosedNonce((n) => n + 1);
   }
 
-  // Back to Parea, maybe with something to open there. Plans and the calendar
-  // open on the plans face, a new squad on the memories face, and with no ask
-  // Parea keeps whichever face it was on. An ask made on another screen must
-  // not replay the next time Parea mounts, so those counters start over
-  // whenever Parea is coming back.
+  // Back to Parea, maybe with something to open there (a new plan, the
+  // calendar, a new squad). An ask made on another screen must not replay the
+  // next time Parea mounts, so those counters start over whenever Parea is
+  // coming back.
   function goHome(ask?: HomeAsk) {
-    const onParea = screen === 'home' || screen === 'events';
-    if (!onParea) {
+    if (screen !== 'home') {
       setCreateNonce(0);
       setCalendarNonce(0);
       setNewSquadNonce(0);
       setVotesNonce(0);
+      setScreen('home');
     }
-    if (ask === 'plan' || ask === 'calendar') setScreen('events');
-    else if (ask === 'squad' || !onParea) setScreen('home');
     if (ask === 'plan') setCreateNonce((n) => n + 1);
     if (ask === 'calendar') setCalendarNonce((n) => n + 1);
     if (ask === 'squad') setNewSquadNonce((n) => n + 1);
@@ -223,7 +220,7 @@ export default function App() {
     if (chatTarget) closeChat();
   }
 
-  const onParea = screen === 'home' || screen === 'events';
+  const onParea = screen === 'home';
   // Where you are, as the rail marks it: a page on top wins over the screen under it.
   const current: RailScreen = chatTarget
     ? 'chat'
@@ -253,8 +250,6 @@ export default function App() {
             railHomeNonce={railHomeNonce}
             newSquadNonce={newSquadNonce}
             onOpenRail={() => setRailOpen(true)}
-            view={screen === 'events' ? 'events' : 'memories'}
-            onOpenEvents={() => setScreen('events')}
             onRailData={setRailData}
             onOverlayChange={setHomeOverlay}
           />
@@ -310,14 +305,6 @@ export default function App() {
           setRailOpen(false);
           leaveChat();
           goHome();
-          setScreen('home');
-          setRailHomeNonce((n) => n + 1);
-        }}
-        onEvents={() => {
-          setRailOpen(false);
-          leaveChat();
-          goHome();
-          setScreen('events');
           setRailHomeNonce((n) => n + 1);
         }}
         votes={railData.votes}

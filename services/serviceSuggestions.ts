@@ -3,7 +3,7 @@ import type { MyEvent, RsvpStatus } from "./serviceEvents";
 
 // "Suggest to my parea": a member points their parea at another parea's
 // public plan. It is not a vote: the plan shows in the chat as a card and on
-// the parea's Plans page, and everyone answers I'm in / Pass on their own.
+// the parea's Home line, and everyone answers I'm in / Pass on their own.
 
 export type PlanSuggestion = {
   // The chat message that carries the card (null if it was removed).
@@ -28,7 +28,7 @@ function toStatus(value: unknown): RsvpStatus | undefined {
 }
 
 // The parea's suggestions of plans still ahead. Before plans_by_vote.sql is
-// installed there are none, and the chat and Plans page simply show nothing.
+// installed there are none, and the chat and Home simply show nothing.
 export async function getSuggestions(groupId: string): Promise<PlanSuggestion[]> {
   const { data, error } = await supabase.rpc("parea_suggestions", { p_group_id: groupId });
   if (error) {

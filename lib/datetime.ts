@@ -136,33 +136,6 @@ export function isHappeningNow(
   return now >= startsAt && now < endsAt;
 }
 
-export function liveLabel(
-  dateStr: string,
-  rawStart?: string,
-  rawEnd?: string,
-  now: Date = new Date(),
-) {
-  const startTime = readTime(rawStart);
-  const endTime = readTime(rawEnd);
-  if (!startTime) return 'TODAY';
-
-  const { startsAt, endsAt } = eventWindow(dateStr, startTime, endTime);
-
-  if (endTime) {
-    const left = Math.round((endsAt.getTime() - now.getTime()) / 60000);
-    if (left <= 5) return 'ENDING NOW';
-
-    const hours = Math.floor(left / 60);
-    return hours > 0 ? `ENDS IN ${hours}H ${left % 60}M` : `ENDS IN ${left}M`;
-  }
-
-  const since = Math.max(0, Math.round((now.getTime() - startsAt.getTime()) / 60000));
-  if (since < 1) return 'STARTING NOW';
-
-  const hours = Math.floor(since / 60);
-  return hours > 0 ? `STARTED ${hours}H ${since % 60}M AGO` : `STARTED ${since}M AGO`;
-}
-
 export function photoWindow(dateStr: string, startTime?: string, endTime?: string) {
   const day = parseLocal(dateStr);
   const opensAt = new Date(day.getFullYear(), day.getMonth(), day.getDate());
