@@ -1,20 +1,22 @@
-import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import type { ChatMessage } from '../../services/serviceChat';
-import { layout, paper, typo, radius, space } from '../../theme';
+import { REACTIONS } from '../../lib/photoFeed';
+import { timeLabel } from '../../lib/datetime';
+import { REACTION_ICONS, REACTION_NAMES } from '../general/reactionIcons';
+import { colors, layout, paper, typo, radius, space, tint } from '../../theme';
 
-const QUICK = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉'];
+// Red text dark enough for small type (4.5:1), which paper.danger is not.
+const RED_TEXT = '#B23624';
+const MINE_EDGE = '#F1C6BD';
 
 type MessageMenuProps = {
   message: ChatMessage | null;
@@ -27,6 +29,8 @@ type MessageMenuProps = {
   onReply: (message: ChatMessage) => void;
 };
 
+// A long press on a message: the four reactions of the memories, each with
+// its name, then Reply, and Edit and Delete on your own.
 export default function MessageMenu({
   message,
   myEmoji = null,
@@ -37,14 +41,13 @@ export default function MessageMenu({
   onReact,
   onReply,
 }: MessageMenuProps) {
-  const [custom, setCustom] = useState('');
-  const [customOpen, setCustomOpen] = useState(false);
-
   if (!message) {
     return null;
   }
 
   const target = message;
+  const who = canEdit ? 'You' : target.senderName || 'Someone';
+  const preview = target.content.trim().length > 0 ? target.content : target.attachment ? 'Photo' : '';
 
   return (
     <Modal
@@ -55,19 +58,26 @@ export default function MessageMenu({
       accessibilityViewIsModal
     >
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close menu">
-        <Pressable style={styles.sheet}>
-          <Text style={styles.preview} numberOfLines={2}>
-            {target.content}
-          </Text>
+        <Pressable style={styles.sheet} accessibilityLabel="Message options">
+          <View style={styles.grab} />
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.quickRow}
-            keyboardShouldPersistTaps="handled"
-          >
-            {QUICK.map(function (emoji) {
+          <View style={styles.preview}>
+            <Text style={styles.previewWho} numberOfLines={1}>
+              {who} · {timeLabel(target.createdAt)}
+            </Text>
+            {preview ? (
+              <Text style={styles.previewText} numberOfLines={2}>
+                {preview}
+              </Text>
+            ) : null}
+          </View>
+
+          <View style={styles.reactRow}>
+            {REACTIONS.map(function (emoji) {
               const chosen = myEmoji === emoji;
+              const [outline, filled] = REACTION_ICONS[emoji];
+              const name = REACTION_NAMES[emoji];
+              const label = name.charAt(0).toUpperCase() + name.slice(1);
               return (
                 <Pressable
                   key={emoji}
@@ -75,103 +85,61 @@ export default function MessageMenu({
                     onReact(target, emoji);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={chosen ? `Remove ${emoji}` : `React with ${emoji}`}
-                  style={chosen ? [styles.quick, styles.quickChosen] : styles.quick}
+                  accessibilityLabel={chosen ? `Remove ${name}` : `React with ${name}`}
+                  accessibilityState={{ selected: chosen }}
+                  style={function ({ pressed }) {
+                    return [styles.react, chosen && styles.reactChosen, pressed && styles.reactPressed];
+                  }}
                 >
-                  <Text style={styles.quickEmoji}>{emoji}</Text>
+                  <Ionicons name={chosen ? filled : outline} size={24} color={chosen ? paper.danger : paper.ink} />
+                  <Text style={[styles.reactLabel, chosen && styles.reactLabelChosen]}>{label}</Text>
                 </Pressable>
               );
             })}
+          </View>
 
+          <View style={styles.rows}>
             <Pressable
               onPress={function () {
-                setCustomOpen(function (open) {
-                  return !open;
-                });
+                onReply(target);
               }}
               accessibilityRole="button"
-              accessibilityLabel="Any other emoji"
-              style={customOpen ? [styles.quick, styles.quickChosen] : styles.quick}
+              style={itemStyle}
             >
-              <Ionicons name="add" size={18} color={paper.inkSoft} />
+              <Ionicons name="arrow-undo" size={18} color={paper.ink} />
+              <Text style={styles.text}>Reply</Text>
             </Pressable>
-          </ScrollView>
 
-          {customOpen ? (
-            <View style={styles.customRow}>
-              <TextInput
-                style={styles.customInput}
-                value={custom}
-                onChangeText={setCustom}
-                placeholder="Any emoji"
-                placeholderTextColor={paper.inkFaint}
-                autoFocus
-                maxLength={16}
-                accessibilityLabel="Type any emoji"
-              />
-              <Pressable
-                onPress={function () {
-                  const picked = custom.trim();
-                  if (picked.length > 0) {
-                    onReact(target, picked);
-                  }
-                }}
-                disabled={custom.trim().length === 0}
-                accessibilityRole="button"
-                accessibilityLabel="Use this emoji"
-                style={styles.customGo}
-              >
-                <Ionicons
-                  name="arrow-forward"
-                  size={16}
-                  color={custom.trim().length > 0 ? paper.accent : paper.inkFaint}
-                />
-              </Pressable>
-            </View>
-          ) : null}
+            {canEdit ? (
+              <>
+                <View style={styles.divider} />
 
-          <View style={styles.divider} />
+                <Pressable
+                  onPress={function () {
+                    onEdit(target);
+                  }}
+                  accessibilityRole="button"
+                  style={itemStyle}
+                >
+                  <Ionicons name="pencil" size={18} color={paper.ink} />
+                  <Text style={styles.text}>Edit</Text>
+                </Pressable>
 
-          <Pressable
-            onPress={function () {
-              onReply(target);
-            }}
-            accessibilityRole="button"
-            style={itemStyle}
-          >
-            <Ionicons name="arrow-undo" size={17} color={paper.ink} />
-            <Text style={styles.text}>Reply</Text>
-          </Pressable>
+                <View style={styles.divider} />
 
-          {canEdit ? (
-            <>
-              <View style={styles.divider} />
-
-              <Pressable
-                onPress={function () {
-                  onEdit(target);
-                }}
-                accessibilityRole="button"
-                style={itemStyle}
-              >
-                <Ionicons name="pencil" size={17} color={paper.ink} />
-                <Text style={styles.text}>Edit</Text>
-              </Pressable>
-
-              <View style={styles.divider} />
-
-              <Pressable
-                onPress={function () {
-                  onDelete(target);
-                }}
-                accessibilityRole="button"
-                style={itemStyle}
-              >
-                <Ionicons name="trash-outline" size={17} color={paper.danger} />
-                <Text style={[styles.text, styles.textDanger]}>Delete</Text>
-              </Pressable>
-            </>
-          ) : null}
+                <Pressable
+                  onPress={function () {
+                    onDelete(target);
+                  }}
+                  accessibilityRole="button"
+                  style={itemStyle}
+                >
+                  <Ionicons name="trash-outline" size={18} color={RED_TEXT} />
+                  <Text style={[styles.text, styles.textDanger]}>Delete</Text>
+                </Pressable>
+              </>
+            ) : null}
+          </View>
         </Pressable>
       </Pressable>
     </Modal>
@@ -189,71 +157,64 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(31, 30, 29, 0.35)',
+    backgroundColor: 'rgba(12, 25, 38, 0.38)',
   },
   sheet: {
     width: '100%',
     maxWidth: layout.column,
     alignSelf: 'center',
-    paddingVertical: space.xs,
-    paddingBottom: space.md,
-    backgroundColor: paper.bg,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-  },
-  preview: {
     paddingHorizontal: space.md,
-    paddingTop: space.sm,
-    paddingBottom: space.sm,
-    color: paper.inkFaint,
-    ...typo.regular,
-    fontSize: 13,
+    paddingBottom: space.xl,
+    backgroundColor: paper.bg,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
   },
+  grab: {
+    alignSelf: 'center',
+    width: 38,
+    height: 5,
+    marginTop: 7,
+    marginBottom: 6,
+    borderRadius: 3,
+    backgroundColor: colors.borderStrong,
+  },
+  preview: { gap: 3, paddingHorizontal: 4, paddingTop: space.xs, paddingBottom: 14 },
+  previewWho: {
+    color: paper.inkSoft,
+    ...typo.mono,
+    fontSize: 10.5,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  previewText: { color: paper.ink, ...typo.regular, fontSize: 15, lineHeight: 21 },
+
+  reactRow: { flexDirection: 'row', gap: space.xs + 2 },
+  react: {
+    flex: 1,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: paper.surface,
+    borderWidth: 1,
+    borderColor: paper.line,
+    borderRadius: radius.md + 2,
+  },
+  reactChosen: { backgroundColor: tint.danger, borderColor: MINE_EDGE },
+  reactPressed: { transform: [{ scale: 0.95 }] },
+  reactLabel: { color: paper.inkSoft, ...typo.semi, fontSize: 12 },
+  reactLabelChosen: { color: RED_TEXT },
+
+  rows: { marginTop: space.sm + 2, backgroundColor: paper.surface, borderRadius: radius.md + 2, overflow: 'hidden' },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.sm,
+    gap: space.sm + 2,
+    minHeight: 52,
     paddingHorizontal: space.md,
-    paddingVertical: 14,
   },
   itemPressed: { backgroundColor: paper.surfaceAlt },
-
-  quickRow: { gap: space.xs, paddingHorizontal: space.md, paddingBottom: space.sm },
-  quick: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: paper.surface,
-    borderWidth: 1,
-    borderColor: paper.line,
-    borderRadius: radius.pill,
-  },
-  quickChosen: { borderColor: paper.accent, backgroundColor: paper.accentSoft },
-  quickEmoji: { fontSize: 20, lineHeight: 26 },
-
-  customRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    marginHorizontal: space.md,
-    marginBottom: space.sm,
-    paddingHorizontal: 14,
-    height: 40,
-    backgroundColor: paper.surface,
-    borderWidth: 1,
-    borderColor: paper.line,
-    borderRadius: radius.pill,
-  },
-  customInput: {
-    flex: 1,
-    color: paper.ink,
-    ...typo.regular,
-    fontSize: 18,
-    outlineStyle: 'none',
-  } as any,
-  customGo: { width: 24, alignItems: 'center' },
-  divider: { height: 1, marginLeft: space.md, backgroundColor: paper.lineSoft },
-  text: { color: paper.ink, ...typo.medium, fontSize: 15 },
-  textDanger: { color: paper.danger },
+  divider: { height: 1, backgroundColor: paper.line },
+  text: { color: paper.ink, ...typo.semi, fontSize: 16 },
+  textDanger: { color: RED_TEXT },
 });

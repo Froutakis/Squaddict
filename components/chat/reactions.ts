@@ -1,4 +1,6 @@
 
+import { REACTIONS, type ReactionEmoji } from '../../lib/photoFeed';
+
 export type Reaction = { messageId: string; userId: string; emoji: string };
 
 export type ReactionMap = Record<string, Reaction[]>;
@@ -36,6 +38,35 @@ export function summarise(list: Reaction[] | undefined, myId: string): ReactionC
     if (a.count !== b.count) return b.count - a.count;
     return a.emoji < b.emoji ? -1 : a.emoji > b.emoji ? 1 : 0;
   });
+}
+
+// The chat reacts with the same four as the memories. Older reactions with
+// any other emoji are not lost: they add up in one neutral "+N".
+export type ChatReactions = {
+  known: { emoji: ReactionEmoji; count: number; mine: boolean }[];
+  other: { count: number; mine: boolean } | null;
+};
+
+export function chatReactions(list: Reaction[] | undefined, myId: string): ChatReactions {
+  const counts = summarise(list, myId);
+  const known = REACTIONS.flatMap(function (emoji) {
+    const found = counts.find((entry) => entry.emoji === emoji);
+    return found ? [{ emoji, count: found.count, mine: found.mine }] : [];
+  });
+
+  let otherCount = 0;
+  let otherMine = false;
+  for (const entry of counts) {
+    if (isChatReaction(entry.emoji)) continue;
+    otherCount += entry.count;
+    otherMine = otherMine || entry.mine;
+  }
+
+  return { known, other: otherCount > 0 ? { count: otherCount, mine: otherMine } : null };
+}
+
+export function isChatReaction(emoji: string | null): emoji is ReactionEmoji {
+  return emoji !== null && (REACTIONS as readonly string[]).includes(emoji);
 }
 
 export function putReaction(map: ReactionMap, reaction: Reaction): ReactionMap {

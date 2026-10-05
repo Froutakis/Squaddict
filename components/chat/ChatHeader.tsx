@@ -1,140 +1,163 @@
 import { Ionicons } from '@expo/vector-icons';
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
-import { GroupMonogram } from './GroupPicker';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Monogram from '../general/Monogram';
+import { FAB_CENTER_Y, FAB_INSET } from '../general/MenuFab';
 import { presenceLabel } from './typing';
-import { paper, typo, radius, space } from '../../theme';
+import { colors, radius, space, textSize, typo } from '../../theme';
+
+const BUTTON = 44;
+const NAME_ROW = 32;
+const FADE = 22;
+// Sun text dark enough for small type on the page (4.5:1).
+const SUN_TEXT = '#8A5300';
 
 type ChatHeaderProps = {
   name: string;
-  withName?: string;
   avatarUrl?: string | null;
   memberCount: number;
   online: number;
+  // "Nikos is typing…", in place of the kicker while it lasts.
+  typing?: string | null;
+  // "Reconnecting…" while the chat is not live; it wins over typing.
+  connection?: string | null;
+  // Where Back goes: "Close chat, back to MVPS".
+  backLabel: string;
   onBack: () => void;
-  // When set, the corner button opens the side rail instead of going back.
-  onMenu?: () => void;
   onSearch: () => void;
   onOpenGroup: () => void;
 };
 
+// The chat reads like another page of Home: no bar, a white back button where
+// the menu button always is, the squad's name and a kicker under it. The
+// messages fade out under it as they scroll up.
 export default function ChatHeader({
   name,
-  withName,
   avatarUrl,
   memberCount,
   online,
+  typing = null,
+  connection = null,
+  backLabel,
   onBack,
-  onMenu,
   onSearch,
   onOpenGroup,
 }: ChatHeaderProps) {
+  const presence = presenceLabel(memberCount, online);
+  const kicker = connection ? `Chat · ${connection}` : typing ? typing : `Chat · ${presence}`;
+
   return (
-    <View style={styles.bar}>
-      {onMenu ? (
-        <Pressable
-          onPress={onMenu}
-          accessibilityRole="button"
-          accessibilityLabel="Open the side rail"
-          style={roundButtonStyle}
-        >
-          <Ionicons name="menu" size={20} color={paper.ink} />
-        </Pressable>
-      ) : (
+    <View style={styles.header}>
+      <View style={styles.row}>
         <Pressable
           onPress={onBack}
           accessibilityRole="button"
-          accessibilityLabel="Back to squads"
-          style={roundButtonStyle}
+          accessibilityLabel={backLabel}
+          hitSlop={4}
+          style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
         >
-          <Ionicons name="chevron-back" size={20} color={paper.ink} />
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
-      )}
 
-      {withName ? (
-        <View style={styles.pair}>
-          <GroupMonogram name={withName} size={30} />
-          <View style={styles.second}>
-            <GroupMonogram name={name} size={30} />
+        <Pressable
+          onPress={onOpenGroup}
+          accessibilityRole="button"
+          accessibilityLabel={`${name}, ${presence}. Open the squad page`}
+          style={({ pressed }) => [styles.squad, pressed && styles.pressed]}
+        >
+          <View style={styles.nameRow}>
+            <Monogram name={name} uri={avatarUrl} size={30} />
+            <Text style={styles.name} numberOfLines={1}>
+              {name}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textSoft} />
           </View>
-        </View>
-      ) : (
-        <GroupMonogram name={name} size={32} uri={avatarUrl} />
-      )}
+          <Text
+            style={[styles.kicker, !!typing && !connection && styles.kickerLive, !!connection && styles.kickerWarn]}
+            numberOfLines={1}
+            accessibilityLiveRegion="polite"
+          >
+            {kicker}
+          </Text>
+        </Pressable>
 
-      <View style={styles.text}>
-        <Text style={styles.title} numberOfLines={1}>
-          {name}
-        </Text>
-        <Text style={styles.subtitle} numberOfLines={1}>
-          {withName ? `with ${withName}` : presenceLabel(memberCount, online)}
-        </Text>
+        <Pressable
+          onPress={onSearch}
+          accessibilityRole="button"
+          accessibilityLabel="Search messages"
+          style={({ pressed }) => [styles.search, pressed && styles.searchPressed]}
+        >
+          <Ionicons name="search" size={22} color={colors.text} />
+        </Pressable>
       </View>
 
-      <Pressable
-        onPress={onSearch}
-        accessibilityRole="button"
-        accessibilityLabel="Search messages"
-        style={roundButtonStyle}
-      >
-        <Ionicons name="search" size={19} color={paper.ink} />
-      </Pressable>
-      <Pressable 
-        onPress={onOpenGroup}
-        accessibilityRole="button"
-        accessibilityLabel="Open group"
-        style={roundButtonStyle}
-      >
-        <Ionicons name="information-circle-outline" size={19} color={paper.ink} />
-      </Pressable>
+      <LinearGradient
+        colors={[colors.bg, `${colors.bg}00`]}
+        style={styles.fade}
+        pointerEvents="none"
+      />
     </View>
   );
 }
 
-function roundButtonStyle({ pressed }: { pressed: boolean }): StyleProp<ViewStyle> {
-  if (pressed) {
-    return [styles.round, styles.pressed];
-  }
-  return styles.round;
-}
-
 const styles = StyleSheet.create({
-  bar: {
+  // Above the list, so the fade lies over the messages.
+  header: { zIndex: 1, backgroundColor: colors.bg },
+  // The back button sits exactly where MenuFab's does on every other screen.
+  row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    paddingHorizontal: space.md,
-    paddingTop: space.sm,
-    paddingBottom: space.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: paper.line,
-    backgroundColor: paper.bg,
+    alignItems: 'flex-start',
+    paddingTop: FAB_CENTER_Y - BUTTON / 2,
+    paddingLeft: space.md,
+    paddingRight: space.sm + 2,
+    paddingBottom: space.xs,
   },
-  round: {
-    width: 32,
-    height: 32,
-    marginLeft: -4,
-    borderRadius: radius.pill,
+  back: {
+    width: BUTTON,
+    height: BUTTON,
+    marginRight: FAB_INSET - space.md - BUTTON,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    shadowColor: colors.ink,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  backPressed: { opacity: 0.7, transform: [{ scale: 0.96 }] },
+  // The name lines up with the back button's middle, as HomeHeader's does.
+  squad: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: BUTTON,
+    paddingTop: (BUTTON - NAME_ROW) / 2,
+    paddingRight: space.xs,
+    borderRadius: radius.sm,
+  },
+  pressed: { opacity: 0.7 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs, height: NAME_ROW },
+  name: { flexShrink: 1, color: colors.text, ...typo.display, fontSize: textSize.heading, letterSpacing: -0.4 },
+  kicker: {
+    marginTop: 1,
+    color: colors.textSoft,
+    ...typo.mono,
+    fontSize: textSize.caption,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  kickerLive: { color: colors.primary },
+  kickerWarn: { color: SUN_TEXT },
+  search: {
+    width: BUTTON,
+    height: BUTTON,
+    borderRadius: BUTTON / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pressed: { backgroundColor: paper.surfaceAlt },
-  pair: { width: 52, height: 30, flexDirection: 'row' },
-  second: { marginLeft: -8 },
-  text: { flex: 1 },
-  title: { color: paper.ink, ...typo.semi, fontSize: 16 },
-  subtitle: {
-    marginTop: 2,
-    color: paper.inkFaint,
-    ...typo.mono,
-    fontSize: 9.5,
-    letterSpacing: 0.9,
-    textTransform: 'uppercase',
-  },
+  searchPressed: { backgroundColor: colors.surfaceAlt },
+  fade: { position: 'absolute', left: 0, right: 0, top: '100%', height: FADE },
 });

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RealtimeChannel, User as AuthUser } from '@supabase/supabase-js';
 import {
   ActivityIndicator,
+  BackHandler,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -9,6 +10,7 @@ import {
   Platform,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -19,11 +21,11 @@ import MessageBubble, { DateSeparator } from '../components/chat/MessageBubble';
 import MessageMenu from '../components/chat/MessageMenu';
 import {
   actionFor,
+  chatReactions,
   dropReaction,
   mergeReactions,
   myReaction,
   putReaction,
-  summarise,
   type ReactionMap,
 } from '../components/chat/reactions';
 import {
@@ -97,12 +99,28 @@ import {
 } from '../services/serviceMedia';
 import { closeGroupChat, sendTyping, startChat } from '../services/serviceRealtime';
 import { getUserById } from '../services/serviceUser';
-import { layout, paper, typo, space } from '../theme';
+import { layout, paper, typo, space, textSize } from '../theme';
 import GroupScreen from './GroupScreen';
 import PlanCard from '../components/chat/PlanCard';
+import ChatEvent, { PlanDraftTicket } from '../components/chat/ChatEvent';
+import { pickChatEvents } from '../components/chat/chatEvents';
+import { useChatEvents } from '../components/chat/useChatEvents';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
-import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
+import { clearRsvp, setRsvp, type MyEvent, type RsvpStatus } from '../services/serviceEvents';
 import { getSuggestions, type PlanSuggestion } from '../services/serviceSuggestions';
+import {
+  clearPhotoReaction,
+  getPhotoReactions,
+  setPhotoReaction,
+  type FeedPhoto,
+} from '../services/servicePhotoFeed';
+import { applyReaction, type PhotoReaction } from '../lib/photoFeed';
+import { keyOf } from '../lib/datetime';
+import PostViewer from '../components/home/PostViewer';
+import { useSignedImages } from '../components/home/useSignedImages';
+
+// Three ways to start an empty chat, one tap each.
+const STARTERS = ["Who's out this week?", 'Drinks Friday?', 'Photos from last time?'];
 
 const CATCH_UP_LIMIT = 300;
 
@@ -116,9 +134,8 @@ type GroupChatScreenProps = {
   onExit?: () => void;
   // Opens the Votes page (votes start only there).
   onOpenVotes: (groupId?: string) => void;
-  // When set, the thread's corner button opens the side rail, the way out of
-  // the chat like everywhere else.
-  onOpenRail?: () => void;
+  // Opens New plan for this squad. Without it the empty chat offers no plan.
+  onNewPlan?: (groupId: string) => void;
 };
 
 export default function GroupChatScreen({
@@ -128,7 +145,7 @@ export default function GroupChatScreen({
   onThreadChange,
   onExit,
   onOpenVotes,
-  onOpenRail,
+  onNewPlan,
 }: GroupChatScreenProps) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [activeId, setActiveId] = useState<string | null>(initialGroupId);
@@ -169,6 +186,16 @@ export default function GroupChatScreen({
   const [openPlan, setOpenPlan] = useState<SheetEvent | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [groupScreen, setGroupScreen] = useState(false);
+  // The parea's plans, votes and memories, shown in the chat as tickets.
+  const chatEvents = useChatEvents(activeId, user.id);
+  const [eventSaving, setEventSaving] = useState<string | null>(null);
+  const [openMemory, setOpenMemory] = useState<FeedPhoto | null>(null);
+  const [memoryReactions, setMemoryReactions] = useState<Record<string, PhotoReaction[]>>({});
+  const photos = useSignedImages();
+  const namesById = useMemo(
+    () => Object.fromEntries(members.map((member) => [member.id, member.name])),
+    [members],
+  );
 
   const namesRef = useRef<Record<string, string>>({});
   const membersRef = useRef<Person[]>([]);
@@ -907,12 +934,53 @@ export default function GroupChatScreen({
     [activeId, hasMore, messages, loadReactionsFor],
   );
 
+  // Tickets only in a chat that has started, and only as far back as the
+  // messages loaded so far.
+  const oldestLoaded = messages.length > 0 ? messages[0].createdAt : null;
+  const eventItems = useMemo(
+    function () {
+      if (!activeId || oldestLoaded === null) {
+        return [];
+      }
+      const now = new Date();
+      return pickChatEvents({
+        groupId: activeId,
+        plans: chatEvents.plans,
+        openVotes: chatEvents.openVotes,
+        decidedVotes: chatEvents.decidedVotes,
+        memories: chatEvents.memories,
+        since: hasMore ? oldestLoaded : null,
+        now,
+        today: keyOf(now),
+      });
+    },
+    [
+      activeId,
+      oldestLoaded,
+      hasMore,
+      chatEvents.plans,
+      chatEvents.openVotes,
+      chatEvents.decidedVotes,
+      chatEvents.memories,
+    ],
+  );
+
   const rows = useMemo(
     function () {
-      return buildRows(messages, outbox, { id: user.id, name: displayName });
+      return buildRows(messages, outbox, { id: user.id, name: displayName }, eventItems);
     },
-    [messages, outbox, user.id, displayName],
+    [messages, outbox, user.id, displayName, eventItems],
   );
+
+  // The memories' first photos, for their tickets.
+  const memoryPaths = eventItems
+    .flatMap((item) => (item.kind === 'memory' ? [item.memory.photo, ...item.memory.more].slice(0, 2) : []))
+    .map((photo) => photo.path)
+    .join('|');
+  const signPhotos = photos.signPaths;
+  useEffect(() => {
+    if (memoryPaths !== '') signPhotos(memoryPaths.split('|'));
+  }, [memoryPaths, signPhotos]);
 
   const invertedRows = useMemo(
     function () {
@@ -968,6 +1036,58 @@ export default function GroupChatScreen({
     }),
   );
 
+  // Back, Android's back button and Esc on the web: a reply or an edit is
+  // let go first, then the chat closes.
+  const backRef = useRef<() => boolean>(() => false);
+  backRef.current = function back() {
+    if (groupScreen) {
+      setGroupScreen(false);
+      return true;
+    }
+    if (editing || replyingTo) {
+      setEditing(null);
+      setReplyingTo(null);
+      return true;
+    }
+    if (activeId !== null || onExit) {
+      closeGroup();
+      return true;
+    }
+    return false;
+  };
+  // Esc that a sheet or the photo viewer is open for is theirs, not ours.
+  const overlayOpenRef = useRef(false);
+  overlayOpenRef.current =
+    menuFor !== null || viewing !== null || searchOpen || openPlan !== null || openMemory !== null;
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', function () {
+      return backRef.current();
+    });
+    return function cleanup() {
+      sub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+      return;
+    }
+    function onKey(event: KeyboardEvent) {
+      // The composer handles its own Esc first (it closes the mention list).
+      if (event.key !== 'Escape' || event.defaultPrevented || overlayOpenRef.current) {
+        return;
+      }
+      if (backRef.current()) {
+        event.preventDefault();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return function cleanup() {
+      window.removeEventListener('keydown', onKey);
+    };
+  }, []);
+
   let keyboardBehavior: 'padding' | undefined = undefined;
   let keyboardOffset = 0;
   if (Platform.OS === 'ios') {
@@ -1018,9 +1138,98 @@ export default function GroupChatScreen({
     }
   }
 
+  // I'm in / Pass on a plan's ticket: shown at once, put back if it fails.
+  async function answerEvent(plan: MyEvent, status: RsvpStatus | null) {
+    if (eventSaving) return;
+    const before = chatEvents.plans;
+    setEventSaving(plan.id);
+    setPlanError(null);
+    chatEvents.setPlans(function (list) {
+      return list.map(function (one) {
+        if (one.id !== plan.id) return one;
+        const others = one.going.filter((person) => person.id !== user.id);
+        return {
+          ...one,
+          myStatus: status ?? undefined,
+          going: status === 'in' ? [...others, { id: user.id, name: displayName, avatarUrl }] : others,
+        };
+      });
+    });
+    try {
+      if (status) await setRsvp(plan.id, status);
+      else await clearRsvp(plan.id);
+    } catch {
+      chatEvents.setPlans(() => before);
+      setPlanError('Could not save your answer. Try again.');
+    } finally {
+      setEventSaving(null);
+    }
+  }
+
+  function openMemoryPost(memory: FeedPhoto) {
+    setOpenMemory(memory);
+    const photoId = memory.photo.id;
+    getPhotoReactions([photoId])
+      .then(function (byPhoto) {
+        setMemoryReactions(function (prev) {
+          return { ...prev, [photoId]: byPhoto[photoId] ?? [] };
+        });
+      })
+      .catch(function () {
+      });
+  }
+
+  async function reactToMemory(memory: FeedPhoto, emoji: string) {
+    const photoId = memory.photo.id;
+    const before = memoryReactions[photoId] ?? [];
+    const after = applyReaction(
+      before,
+      photoId,
+      { userId: user.id, name: displayName, avatarUrl, groupId: memory.group.id, groupName: memory.group.name },
+      emoji,
+    );
+    setMemoryReactions(function (prev) {
+      return { ...prev, [photoId]: after };
+    });
+    try {
+      if (after.length < before.length) await clearPhotoReaction(photoId);
+      else await setPhotoReaction(photoId, memory.group.id, emoji);
+    } catch {
+      setMemoryReactions(function (prev) {
+        return { ...prev, [photoId]: before };
+      });
+      setError('Could not save your reaction. Try again.');
+    }
+  }
+
   function renderRow({ item }: { item: Row }) {
     if (item.kind === 'date') {
-      return <DateSeparator label={item.label} />;
+      return <DateSeparator label={item.label} day={item.day} today={item.today} />;
+    }
+
+    if (item.kind === 'event') {
+      const event = item.event;
+      const thumbs =
+        event.kind === 'memory'
+          ? [event.memory.photo, ...event.memory.more].slice(0, 2).map((photo) => photos.signed[photo.path]?.url)
+          : undefined;
+      return (
+        <ChatEvent
+          item={event}
+          userId={user.id}
+          names={namesById}
+          members={memberCount}
+          thumbs={thumbs}
+          onAnswer={answerEvent}
+          onOpenPlan={function (plan) {
+            setOpenPlan(plan);
+          }}
+          onOpenVotes={function () {
+            onOpenVotes(activeId ?? undefined);
+          }}
+          onOpenMemory={openMemoryPost}
+        />
+      );
     }
 
     const message = item.message;
@@ -1077,7 +1286,8 @@ export default function GroupChatScreen({
             />
           ) : undefined
         }
-        reactions={summarise(reactions[message.id], user.id)}
+        reactions={chatReactions(reactions[message.id], user.id)}
+        highlighted={replyingTo !== null && replyingTo.id === message.id}
         onToggleReaction={
           item.status
             ? undefined
@@ -1089,12 +1299,49 @@ export default function GroupChatScreen({
     );
   }
 
-  function renderEmptyList() {
+  // A new chat: today on the line, a nudge, three openers to send with one
+  // tap, and a plan to make if there is none.
+  function renderEmptyChat(groupId: string) {
     return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>Quiet in here</Text>
-        <Text style={styles.emptyText}>Write the squad's first message.</Text>
-      </View>
+      <ScrollView
+        style={styles.chat}
+        contentContainerStyle={styles.emptyPage}
+        keyboardShouldPersistTaps="handled"
+      >
+        <DateSeparator label="Today" today />
+        <View style={styles.emptyBody}>
+          <Text style={styles.emptyTitle} accessibilityRole="header">
+            Not a word yet.
+          </Text>
+          <Text style={styles.emptyText}>Someone has to go first. Might as well be you.</Text>
+          <View style={styles.starters}>
+            {STARTERS.map(function (starter) {
+              return (
+                <Pressable
+                  key={starter}
+                  onPress={function () {
+                    handleSend(starter);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Send "${starter}"`}
+                  style={function ({ pressed }) {
+                    return [styles.starter, pressed && styles.starterPressed];
+                  }}
+                >
+                  <Text style={styles.starterText}>{starter}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {onNewPlan ? (
+            <PlanDraftTicket
+              onNewPlan={function () {
+                onNewPlan(groupId);
+              }}
+            />
+          ) : null}
+        </View>
+      </ScrollView>
     );
   }
 
@@ -1156,8 +1403,10 @@ export default function GroupChatScreen({
           avatarUrl={activeGroup.avatarUrl}
           memberCount={memberCount}
           online={online}
+          typing={typing}
+          connection={connectionLabel(connection)}
+          backLabel={onExit ? `Close chat, back to ${activeGroup.name}` : 'Back to squads'}
           onBack={closeGroup}
-          onMenu={onOpenRail}
           onSearch={function () {
             setSearchOpen(true);
           }}
@@ -1171,17 +1420,23 @@ export default function GroupChatScreen({
           behavior={keyboardBehavior}
           keyboardVerticalOffset={keyboardOffset}
         >
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          {planError ? <Text style={styles.error}>{planError}</Text> : null}
-
-          {connectionLabel(connection) ? (
-            <Text style={styles.connection}>{connectionLabel(connection)}</Text>
+          {error ? (
+            <Text style={styles.error} accessibilityLiveRegion="polite">
+              {error}
+            </Text>
+          ) : null}
+          {planError ? (
+            <Text style={styles.error} accessibilityLiveRegion="polite">
+              {planError}
+            </Text>
           ) : null}
 
           {loadingChat ? (
             <View style={styles.empty}>
               <ActivityIndicator color={paper.accent} />
             </View>
+          ) : rows.length === 0 ? (
+            error ? <View style={styles.empty} /> : renderEmptyChat(activeGroup.id)
           ) : (
             <FlatList
               inverted
@@ -1193,14 +1448,12 @@ export default function GroupChatScreen({
               onEndReached={loadOlder}
               onEndReachedThreshold={0.5}
               ListFooterComponent={renderOlderSpinner()}
-              ListEmptyComponent={renderEmptyList()}
               renderItem={renderRow}
             />
           )}
 
-          {typing ? <Text style={styles.typing}>{typing}</Text> : null}
-
           <ChatComposer
+            placeholder={`Message ${activeGroup.name}`}
             key={editing ? 'edit-' + editing.id : 'new'}
             initialText={editing ? editing.content : ''}
             editing={editing !== null}
@@ -1288,7 +1541,25 @@ export default function GroupChatScreen({
             onClose={function () {
               setOpenPlan(null);
             }}
-            onChanged={loadPlanCards}
+            onChanged={function () {
+              loadPlanCards();
+              chatEvents.reload();
+            }}
+          />
+
+          <PostViewer
+            item={openMemory}
+            reactions={openMemory ? memoryReactions[openMemory.photo.id] ?? [] : []}
+            userId={user.id}
+            signed={photos.signed}
+            signPaths={photos.signPaths}
+            onImageError={photos.dropSigned}
+            onReact={function (emoji) {
+              if (openMemory) reactToMemory(openMemory, emoji);
+            }}
+            onClose={function () {
+              setOpenMemory(null);
+            }}
           />
         </KeyboardAvoidingView>
       </View>
@@ -1308,49 +1579,47 @@ const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: paper.bg, alignItems: 'center', justifyContent: 'center' },
   screen: { flex: 1, backgroundColor: paper.bg },
   column: { flex: 1, width: '100%', maxWidth: layout.column, alignSelf: 'center' },
-  typing: {
-    paddingHorizontal: space.md,
-    paddingBottom: space.xxs,
-    color: paper.inkFaint,
-    ...typo.regular,
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
 
   chat: { flex: 1 },
+  // Inverted: the bottom padding is the top of the chat, under the header's fade.
   list: {
     flexGrow: 1,
-    paddingHorizontal: space.md,
+    paddingHorizontal: space.md - 2,
     paddingTop: space.md,
-    paddingBottom: space.sm,
+    paddingBottom: space.lg,
   },
 
   olderSpinner: { paddingVertical: space.md, alignItems: 'center' },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: space.lg },
-  emptyTitle: { color: paper.ink, ...typo.display, fontSize: 21 },
+  emptyPage: { flexGrow: 1, paddingHorizontal: space.md, paddingBottom: space.lg },
+  emptyBody: { gap: space.md, paddingTop: 28, paddingHorizontal: 2 },
+  emptyTitle: { color: paper.ink, ...typo.display, fontSize: 28, lineHeight: 30, letterSpacing: -0.8 },
   emptyText: {
+    marginTop: -space.xs,
     color: paper.inkSoft,
     ...typo.regular,
-    fontSize: 14,
-    textAlign: 'center',
+    fontSize: textSize.lead,
+    lineHeight: 22,
   },
+  starters: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs + 2 },
+  starter: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: paper.surface,
+    borderWidth: 1,
+    borderColor: paper.line,
+  },
+  starterPressed: { transform: [{ scale: 0.97 }] },
+  starterText: { color: paper.ink, ...typo.semi, fontSize: 14.5 },
   error: {
     paddingHorizontal: space.md,
     paddingVertical: space.xs,
     color: paper.accent,
     ...typo.medium,
     fontSize: 13,
-    textAlign: 'center',
-  },
-
-  connection: {
-    paddingHorizontal: space.md,
-    paddingVertical: space.xs,
-    backgroundColor: paper.surfaceAlt,
-    color: paper.inkSoft,
-    ...typo.medium,
-    fontSize: 12,
     textAlign: 'center',
   },
 });
