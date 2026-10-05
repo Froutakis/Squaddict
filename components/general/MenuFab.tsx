@@ -8,6 +8,8 @@ const TOP = space.sm;
 export const FAB_INSET = space.md + SIZE + space.sm;
 // Where the button's middle sits, so a screen can line its title up with it.
 export const FAB_CENTER_Y = TOP + SIZE / 2;
+// Where the button ends, so the side rail can start below it.
+export const FAB_BOTTOM = TOP + SIZE;
 
 type MenuFabProps = {
   // Unread messages across every parea.

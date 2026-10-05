@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Linking, Platform, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import type { User } from '@supabase/supabase-js';
@@ -9,11 +9,11 @@ import { colors, radius, space, typo, textSize } from './theme';
 import { joinByInviteCode } from './services/serviceGroup';
 import { inviteCodeFrom } from './lib/invite';
 import LoginScreen from './screens/LoginScreen';
-import HomeScreen, { type RailData } from './screens/HomeScreen';
+import HomeScreen, { type HomeOverlay, type RailData } from './screens/HomeScreen';
 import GroupChatScreen from './screens/GroupChatScreen';
 import ExploreScreen, { EXPLORE_FAB_DROP } from './screens/ExploreScreen';
 import YouScreen from './screens/YouScreen';
-import PareaSidebar, { RAIL_CLOSE_MS } from './components/home/PareaSidebar';
+import PareaSidebar, { RAIL_CLOSE_MS, type RailScreen } from './components/home/PareaSidebar';
 import MenuFab from './components/general/MenuFab';
 import {
   onPushOpened,
@@ -54,6 +54,8 @@ export default function App() {
   const [railOpen, setRailOpen] = useState(false);
   // Parea keeps this up to date; the rail shows it on every screen.
   const [railData, setRailData] = useState<RailData>(NO_RAIL_DATA);
+  // The page open on top of Parea, which the rail marks as the screen you are on.
+  const [homeOverlay, setHomeOverlay] = useState<HomeOverlay>(null);
   const [pendingInvite, setPendingInvite] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Bumped to load Parea afresh, e.g. after joining a new squad.
@@ -142,6 +144,16 @@ export default function App() {
       });
   }, [user?.id, pendingInvite]);
 
+  // Android back leaves the chat, which has no Back button of its own.
+  useEffect(() => {
+    if (!chatTarget) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeChat();
+      return true;
+    });
+    return () => sub.remove();
+  }, [chatTarget]);
+
   useEffect(() => {
     if (!notice) return;
     const hide = setTimeout(() => setNotice(null), NOTICE_MS);
@@ -206,6 +218,18 @@ export default function App() {
     setTimeout(open, RAIL_CLOSE_MS);
   }
 
+  // Going anywhere from the rail leaves the chat, which sits on top of it all.
+  function leaveChat() {
+    if (chatTarget) closeChat();
+  }
+
+  const onParea = screen === 'home' || screen === 'events';
+  // Where you are, as the rail marks it: a page on top wins over the screen under it.
+  const current: RailScreen = chatTarget
+    ? 'chat'
+    : onParea && (homeOverlay === 'votes' || homeOverlay === 'calendar')
+      ? homeOverlay
+      : screen;
   return (
     <View style={styles.app}>
       <View style={styles.body}>
@@ -232,6 +256,7 @@ export default function App() {
             view={screen === 'events' ? 'events' : 'memories'}
             onOpenEvents={() => setScreen('events')}
             onRailData={setRailData}
+            onOverlayChange={setHomeOverlay}
           />
         )}
 
@@ -244,12 +269,15 @@ export default function App() {
               initialGroupId={chatTarget.groupId}
               onExit={closeChat}
               onOpenVotes={openVotes}
+              onOpenRail={() => setRailOpen(true)}
             />
           </View>
         ) : null}
+
       </View>
 
-      {/* The side rail is the only menu, so its button floats over every screen. */}
+      {/* The side rail is the only menu, so its button floats over every screen
+          (the chat has its own, in its header). */}
       {chatTarget ? null : <MenuFab unread={unread} drop={screen === 'explore' ? EXPLORE_FAB_DROP : 0} onPress={() => setRailOpen(true)} />}
 
       <PareaSidebar
@@ -258,49 +286,63 @@ export default function App() {
         activeId={railData.activeId}
         unread={railData.unread}
         me={railData.me}
-        current={screen}
+        current={current}
         onSelectSquad={(id) => {
           setRailOpen(false);
           setSelectGroup({ id, nonce: Date.now() });
+          // In the chat, switching parea switches the chat too.
+          if (chatTarget) setChatTarget({ groupId: id, nonce: Date.now() });
           goHome();
         }}
-        onNewSquad={() => afterRail(() => goHome('squad'))}
+        onNewSquad={() => {
+          leaveChat();
+          afterRail(() => goHome('squad'));
+        }}
         onChat={() => {
           setRailOpen(false);
           if (railData.activeId) setChatTarget({ groupId: railData.activeId, nonce: Date.now() });
         }}
-        onPlan={() => afterRail(() => goHome('plan'))}
+        onPlan={() => {
+          leaveChat();
+          afterRail(() => goHome('plan'));
+        }}
         onHome={() => {
           setRailOpen(false);
+          leaveChat();
           goHome();
           setScreen('home');
           setRailHomeNonce((n) => n + 1);
         }}
         onEvents={() => {
           setRailOpen(false);
+          leaveChat();
           goHome();
           setScreen('events');
           setRailHomeNonce((n) => n + 1);
         }}
         votes={railData.votes}
-        onVotes={() =>
+        onVotes={() => {
+          leaveChat();
           afterRail(() => {
             goHome();
             setVotesNonce((n) => n + 1);
-          })
-        }
+          });
+        }}
         onCalendar={() => {
           setRailOpen(false);
+          leaveChat();
           // A page, not a sheet, so it can open while the rail slides away.
           goHome('calendar');
           setRailHomeNonce((n) => n + 1);
         }}
         onExplore={() => {
           setRailOpen(false);
+          leaveChat();
           setScreen('explore');
         }}
         onYou={() => {
           setRailOpen(false);
+          leaveChat();
           setScreen('you');
         }}
         onClose={() => setRailOpen(false)}

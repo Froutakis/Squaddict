@@ -18,6 +18,8 @@ type ChatHeaderProps = {
   memberCount: number;
   online: number;
   onBack: () => void;
+  // When set, the corner button opens the side rail instead of going back.
+  onMenu?: () => void;
   onSearch: () => void;
   onOpenGroup: () => void;
 };
@@ -29,19 +31,31 @@ export default function ChatHeader({
   memberCount,
   online,
   onBack,
+  onMenu,
   onSearch,
   onOpenGroup,
 }: ChatHeaderProps) {
   return (
     <View style={styles.bar}>
-      <Pressable
-        onPress={onBack}
-        accessibilityRole="button"
-        accessibilityLabel="Back to squads"
-        style={roundButtonStyle}
-      >
-        <Ionicons name="chevron-back" size={20} color={paper.ink} />
-      </Pressable>
+      {onMenu ? (
+        <Pressable
+          onPress={onMenu}
+          accessibilityRole="button"
+          accessibilityLabel="Open the side rail"
+          style={roundButtonStyle}
+        >
+          <Ionicons name="menu" size={20} color={paper.ink} />
+        </Pressable>
+      ) : (
+        <Pressable
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Back to squads"
+          style={roundButtonStyle}
+        >
+          <Ionicons name="chevron-back" size={20} color={paper.ink} />
+        </Pressable>
+      )}
 
       {withName ? (
         <View style={styles.pair}>
