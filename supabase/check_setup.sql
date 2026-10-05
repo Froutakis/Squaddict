@@ -117,7 +117,15 @@ with checks(file, step, what, ok) as (
      not exists (select 1 from pg_policies where tablename = 'events' and policyname = 'members create events')),
   ('plans_by_vote.sql', 15, 'table squad_plan_suggestions', to_regclass('public.squad_plan_suggestions') is not null),
   ('plans_by_vote.sql', 15, 'function suggest_plan',       to_regprocedure('public.suggest_plan(uuid,uuid)') is not null),
-  ('plans_by_vote.sql', 15, 'function parea_suggestions',  to_regprocedure('public.parea_suggestions(uuid)') is not null)
+  ('plans_by_vote.sql', 15, 'function parea_suggestions',  to_regprocedure('public.parea_suggestions(uuid)') is not null),
+  -- chat_cards.sql
+  ('chat_cards.sql', 16, 'votes linked to their chat message',
+     exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'squad_proposals' and column_name = 'message_id')),
+  ('chat_cards.sql', 16, 'trigger squad_proposals_chat_message',
+     exists (select 1 from pg_trigger where tgname = 'squad_proposals_chat_message' and not tgisinternal)),
+  ('chat_cards.sql', 16, 'table chat_on_my_way',          to_regclass('public.chat_on_my_way') is not null),
+  ('chat_cards.sql', 16, 'function on_my_way',            to_regprocedure('public.on_my_way(uuid)') is not null),
+  ('chat_cards.sql', 16, 'function stop_on_my_way',       to_regprocedure('public.stop_on_my_way(uuid)') is not null)
 )
 select step,
        file,

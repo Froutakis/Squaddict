@@ -344,6 +344,39 @@ export async function countDecidedSince(groupId: string, since: Date): Promise<n
   return count ?? 0;
 }
 
+// The votes posted in the parea's chat (chat_cards.sql), by the message that
+// carries each card. Before chat_cards.sql is installed there is no
+// message_id: the chat then shows those messages as plain text.
+export async function getChatVotes(
+  groupId: string,
+  userId: string,
+  messageIds: string[],
+): Promise<Record<string, SquadVote>> {
+  if (messageIds.length === 0) return {};
+
+  const [{ data, error }, members] = await Promise.all([
+    supabase
+      .from("squad_proposals")
+      .select(`${VOTE_FIELDS}, message_id`)
+      .eq("group_id", groupId)
+      .in("message_id", messageIds),
+    memberIds(groupId),
+  ]);
+  if (error) {
+    console.warn("[squaddict] chat votes unavailable:", error.message);
+    return {};
+  }
+
+  const today = keyOf(new Date());
+  const byMessage: Record<string, SquadVote> = {};
+  for (const row of (data ?? []) as any[]) {
+    if (!row.message_id || RETIRED_KINDS.includes(row.kind)) continue;
+    const vote = toVote(row, userId, today, members);
+    if (vote) byMessage[row.message_id] = vote;
+  }
+  return byMessage;
+}
+
 export async function getOpenSquadVote(
   groupId: string,
   targetGroupId: string,

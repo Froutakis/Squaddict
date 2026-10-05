@@ -1,6 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  Image,
+  Keyboard,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import type { LocalImage } from './messageRows';
 import { applyMention, matchMembers, mentionQuery } from './mentions';
 import type { Person } from '../../lib/people';
@@ -19,8 +31,13 @@ type ChatComposerProps = {
   members?: Person[];
   meId?: string;
   attachment?: LocalImage | null;
-  onPickImage?: () => void;
   onClearImage?: () => void;
+  // The + on the left: opens the tray (photo, plan, question) in place of the
+  // keyboard. Focusing the field closes it again (onFocusInput).
+  trayOpen?: boolean;
+  onToggleTray?: () => void;
+  onFocusInput?: () => void;
+  autoFocus?: boolean;
 };
 
 type Dismissed = { at: number; query: string };
@@ -37,9 +54,34 @@ export default function ChatComposer({
   members,
   meId,
   attachment = null,
-  onPickImage,
   onClearImage,
+  trayOpen = false,
+  onToggleTray,
+  onFocusInput,
+  autoFocus = false,
 }: ChatComposerProps) {
+  const inputRef = useRef<TextInput>(null);
+  const turn = useRef(new Animated.Value(trayOpen ? 1 : 0)).current;
+
+  // The + turns into an x while the tray is open.
+  useEffect(() => {
+    Animated.timing(turn, {
+      toValue: trayOpen ? 1 : 0,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: Platform.OS !== 'web',
+    }).start();
+  }, [trayOpen, turn]);
+
+  function toggleTray() {
+    if (!trayOpen) {
+      // The tray takes the keyboard's place, never both at once.
+      inputRef.current?.blur();
+      Keyboard.dismiss();
+    }
+    onToggleTray?.();
+  }
+
   const [text, setText] = useState(initialText);
   const [focused, setFocused] = useState(false);
   const [cursor, setCursor] = useState(initialText.length);
@@ -228,20 +270,31 @@ export default function ChatComposer({
       ) : null}
 
       <View style={[styles.box, focused && styles.boxFocused]}>
-        {onPickImage && !editing ? (
+        {onToggleTray && !editing ? (
           <Pressable
-            onPress={onPickImage}
+            onPress={toggleTray}
             disabled={disabled}
             accessibilityRole="button"
-            accessibilityLabel="Add a photo"
+            accessibilityLabel={trayOpen ? 'Close' : 'More: photo, plan, question'}
+            accessibilityState={{ expanded: trayOpen, disabled }}
             style={function ({ pressed }) {
-              return [styles.attach, pressed && styles.pressed];
+              return [styles.plus, trayOpen && styles.plusOpen, pressed && styles.pressed];
             }}
           >
-            <Ionicons name="image-outline" size={20} color={paper.inkSoft} />
+            <Animated.View
+              style={{
+                transform: [
+                  { rotate: turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) },
+                ],
+              }}
+            >
+              <Ionicons name="add" size={24} color={trayOpen ? paper.onMine : paper.ink} />
+            </Animated.View>
           </Pressable>
         ) : null}
         <TextInput
+          ref={inputRef}
+          autoFocus={autoFocus}
           style={styles.input}
           value={text}
           selection={forcedCursor === null ? undefined : { start: forcedCursor, end: forcedCursor }}
@@ -262,6 +315,7 @@ export default function ChatComposer({
           onKeyPress={handleKeyPress}
           onFocus={function () {
             setFocused(true);
+            onFocusInput?.();
           }}
           onBlur={function () {
             setFocused(false);
@@ -283,7 +337,7 @@ export default function ChatComposer({
         >
           <Ionicons
             name={editing ? "checkmark" : "arrow-up"}
-            size={17}
+            size={19}
             color={canSend ? paper.onMine : paper.inkFaint}
           />
         </Pressable>
@@ -292,7 +346,7 @@ export default function ChatComposer({
   );
 }
 
-const SEND = 36;
+const SEND = 44;
 const FIELD = 44;
 
 const styles = StyleSheet.create({
@@ -324,16 +378,17 @@ const styles = StyleSheet.create({
     ...typo.medium,
     fontSize: 12,
   },
-  attach: {
-    width: SEND,
-    height: SEND,
-    borderRadius: SEND / 2,
+  plus: {
+    width: FIELD,
+    height: FIELD,
+    borderRadius: FIELD / 2,
     backgroundColor: paper.surface,
     borderWidth: 1,
     borderColor: paper.line,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  plusOpen: { backgroundColor: paper.mine, borderColor: paper.mine },
   attachment: {
     flexDirection: 'row',
     alignItems: 'center',

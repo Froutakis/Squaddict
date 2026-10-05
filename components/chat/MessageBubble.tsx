@@ -37,8 +37,9 @@ type MessageBubbleProps = {
   imageWidth?: number;
   imageHeight?: number;
   onOpenImage?: () => void;
-  // A plan suggested to the parea (PlanCard), shown in place of the text.
-  planCard?: ReactNode;
+  // A card in place of the text and without a bubble: a vote, a question, a
+  // suggested plan, someone on their way. Long press still opens the menu.
+  card?: ReactNode;
 };
 
 const PHOTO_MAX_WIDTH = 232;
@@ -67,7 +68,7 @@ export default function MessageBubble({
   imageWidth = 0,
   imageHeight = 0,
   onOpenImage,
-  planCard,
+  card,
 }: MessageBubbleProps) {
   const body = useMemo(
     function () {
@@ -114,9 +115,6 @@ export default function MessageBubble({
   const captionOnly = content.trim().length > 0;
 
   function renderContent(textStyle: any) {
-    if (planCard && !deleted) {
-      return planCard;
-    }
     if (!hasPhoto) {
       return renderText(textStyle);
     }
@@ -143,6 +141,7 @@ export default function MessageBubble({
   }
 
   const bubblePress = !deleted && ((status === 'failed' && onRetry) || onLongPress);
+  const asCard = !!card && !deleted;
 
   const shape = mine
     ? {
@@ -162,7 +161,7 @@ export default function MessageBubble({
         <View style={styles.avatarSpacer} />
       )}
 
-      <View style={[styles.column, mine ? styles.columnMine : styles.columnOther]}>
+      <View style={[styles.column, asCard && styles.columnCard, mine ? styles.columnMine : styles.columnOther]}>
         {!mine && isFirst && senderName ? (
           <Text style={styles.sender} numberOfLines={1}>
             {senderName}
@@ -194,7 +193,20 @@ export default function MessageBubble({
           </View>
         ) : null}
 
-        {deleted ? (
+        {asCard ? (
+          // Not a button itself: the card's own buttons stay reachable. The
+          // menu is a long press anywhere else on the card.
+          <Pressable
+            onLongPress={onLongPress}
+            disabled={!onLongPress}
+            accessible={false}
+            style={function ({ pressed }) {
+              return [status === 'pending' && styles.bubblePending, pressed && styles.cardPressed];
+            }}
+          >
+            {card}
+          </Pressable>
+        ) : deleted ? (
           <View
             style={[styles.bubble, styles.bubbleDeleted, shape]}
             accessibilityLabel="Message deleted"
@@ -301,6 +313,7 @@ const styles = StyleSheet.create({
   rowOther: { justifyContent: 'flex-start' },
   avatarSpacer: { width: AVATAR },
   column: { maxWidth: '80%' },
+  columnCard: { maxWidth: '100%' },
   columnMine: { alignItems: 'flex-end' },
   columnOther: { alignItems: 'flex-start' },
 
@@ -326,6 +339,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   pressed: { opacity: 0.85 },
+  cardPressed: { opacity: 0.92 },
 
   quote: {
     flexDirection: 'row',

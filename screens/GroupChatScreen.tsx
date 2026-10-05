@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RealtimeChannel, User as AuthUser } from '@supabase/supabase-js';
 import {
   ActivityIndicator,
+  BackHandler,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -12,8 +13,10 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import ChatComposer from '../components/chat/ChatComposer';
+import ChatTray, { trayHeight } from '../components/chat/ChatTray';
 import ChatHeader from '../components/chat/ChatHeader';
 import MessageBubble, { DateSeparator } from '../components/chat/MessageBubble';
 import MessageMenu from '../components/chat/MessageMenu';
@@ -93,16 +96,54 @@ import {
   removeImage,
   signImages,
   sweepOutboxImages,
+  takePhoto,
   uploadImage,
+  type PickedImage,
 } from '../services/serviceMedia';
-import { closeGroupChat, sendTyping, startChat } from '../services/serviceRealtime';
+import { closeGroupChat, sendCardsChanged, sendTyping, startChat } from '../services/serviceRealtime';
 import { getUserById } from '../services/serviceUser';
 import { layout, paper, typo, space } from '../theme';
 import GroupScreen from './GroupScreen';
 import PlanCard from '../components/chat/PlanCard';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
-import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
+import {
+  clearRsvp,
+  getMyAnswers,
+  getMyEvents,
+  setRsvp,
+  type MyEvent,
+  type RsvpStatus,
+} from '../services/serviceEvents';
 import { getSuggestions, type PlanSuggestion } from '../services/serviceSuggestions';
+import EventFormSheet from '../components/events/EventFormSheet';
+import NewVoteSheet from '../components/votes/NewVoteSheet';
+import { eventWindow, isHappeningNow, keyOf, parseLocal } from '../lib/datetime';
+import ChatVoteCard from '../components/chat/ChatVoteCard';
+import { castOption, castVote, getChatVotes, type SquadVote } from '../services/serviceVotes';
+import { errorText } from '../lib/postgres';
+import { voteEventToSheet } from '../components/votes/VoteCard';
+import SuggestPlanSheet from '../components/chat/SuggestPlanSheet';
+import { features } from '../lib/features';
+import OnMyWayCard from '../components/chat/OnMyWayCard';
+import ChatEmpty from '../components/chat/ChatEmpty';
+import OnMyWaySheet from '../components/chat/OnMyWaySheet';
+import {
+  getOnMyWay,
+  openLiveMap,
+  stopOnMyWay,
+  type LivePerson,
+  type OnMyWay,
+} from '../services/serviceLiveLocation';
+import { useLiveLocations } from '../components/events/useLiveLocations';
+
+// The text of the messages that carry a card (chat_cards.sql), so the chat
+// knows which ones to read the card for.
+const VOTE_PREFIXES = ['Put to the parea: ', 'Asks the parea: '];
+const ON_MY_WAY_PREFIX = 'On my way to ';
+
+function carriesVote(content: string): boolean {
+  return VOTE_PREFIXES.some((prefix) => content.startsWith(prefix));
+}
 
 const CATCH_UP_LIMIT = 300;
 
@@ -169,6 +210,28 @@ export default function GroupChatScreen({
   const [openPlan, setOpenPlan] = useState<SheetEvent | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [groupScreen, setGroupScreen] = useState(false);
+  // The + tray, in the keyboard's place, and what it opens.
+  const [trayOpen, setTrayOpen] = useState(false);
+  const [planFormOpen, setPlanFormOpen] = useState(false);
+  const [pollOpen, setPollOpen] = useState(false);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  // Votes posted in this chat, by the message that carries each card, and
+  // your answer on the plans the passed ones made.
+  const [chatVotes, setChatVotes] = useState<Record<string, SquadVote>>({});
+  const [answers, setAnswers] = useState<Record<string, RsvpStatus>>({});
+  const [cardSaving, setCardSaving] = useState<string | null>(null);
+  const [justPassed, setJustPassed] = useState<Record<string, boolean>>({});
+  // This parea's plans (for tonight's On my way, and the empty chat), and
+  // the "on my way" cards by their message.
+  const [groupPlans, setGroupPlans] = useState<MyEvent[]>([]);
+  const [onMyWay, setOnMyWay] = useState<Record<string, OnMyWay>>({});
+  const [wayFor, setWayFor] = useState<MyEvent | null>(null);
+  const [watchEventId, setWatchEventId] = useState<string | null>(null);
+  const [watchedPeople, setWatchedPeople] = useState<LivePerson[]>([]);
+  // Text put in the message field for you ("Who's in tonight?"); a new nonce
+  // starts the field again with it.
+  const [prefill, setPrefill] = useState({ text: '', nonce: 0 });
+  const { height: windowHeight } = useWindowDimensions();
 
   const namesRef = useRef<Record<string, string>>({});
   const membersRef = useRef<Person[]>([]);
@@ -184,7 +247,18 @@ export default function GroupChatScreen({
   const meRef = useRef({ id: user.id, name: '' });
   meRef.current = { id: user.id, name: displayName };
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const activeIdRef = useRef<string | null>(activeId);
+  activeIdRef.current = activeId;
+  const reloadCardsRef = useRef<(messageIds: string[]) => void>(function () {
+  });
   const typingSentRef = useRef(0);
+
+  // Text put in the field for you is for this chat and this message only.
+  function dropPrefill() {
+    setPrefill(function (prev) {
+      return prev.text === '' ? prev : { text: '', nonce: prev.nonce };
+    });
+  }
 
   useEffect(() => {
     onThreadChange?.(activeId !== null);
@@ -383,6 +457,13 @@ export default function GroupChatScreen({
       setOnline(0);
       setReactions({});
       setGroupScreen(false);
+      setTrayOpen(false);
+      setChatVotes({});
+      setAnswers({});
+      setJustPassed({});
+      setGroupPlans([]);
+      setOnMyWay({});
+      dropPrefill();
       return;
     }
 
@@ -409,6 +490,12 @@ export default function GroupChatScreen({
     setTypists([]);
     setOnline(0);
     setReactions({});
+    setChatVotes({});
+    setAnswers({});
+    setJustPassed({});
+    setGroupPlans([]);
+    setOnMyWay({});
+    dropPrefill();
     setEditing(null);
     setReplyingTo(null);
     replyOfOutgoingRef.current = {};
@@ -575,6 +662,9 @@ export default function GroupChatScreen({
           onPresence: setOnline,
           onReaction: handleReaction,
           onReactionGone: handleReactionGone,
+          onCards: function (ids) {
+            reloadCardsRef.current(ids);
+          },
         });
         channelRef.current = chat.channel;
         loadReactionsFor(chat.messages.map(function (m) { return m.id; }));
@@ -640,6 +730,20 @@ export default function GroupChatScreen({
       clearInterval(timer);
     };
   }, [typists.length]);
+
+  // Android's back closes the tray before it leaves the chat.
+  useEffect(() => {
+    if (!trayOpen) {
+      return;
+    }
+    const sub = BackHandler.addEventListener('hardwareBackPress', function () {
+      setTrayOpen(false);
+      return true;
+    });
+    return function cleanup() {
+      sub.remove();
+    };
+  }, [trayOpen]);
 
   const deliver = useCallback(
     async function deliver(
@@ -811,9 +915,12 @@ export default function GroupChatScreen({
     [reactions, user.id],
   );
 
-  const choosePhoto = useCallback(async function choose() {
+  // Library or camera: either way the photo waits in the composer to be sent
+  // like any other photo message.
+  const choosePhoto = useCallback(async function choose(from: 'library' | 'camera' = 'library') {
+    setTrayOpen(false);
     try {
-      const picked = await pickImage();
+      const picked: PickedImage | null = from === 'camera' ? await takePhoto() : await pickImage();
       if (!picked) {
         return;
       }
@@ -828,6 +935,7 @@ export default function GroupChatScreen({
 
   const handleComposerSend = useCallback(
     function submit(text: string) {
+      dropPrefill();
       if (editing) {
         const target = editing;
         setEditing(null);
@@ -954,10 +1062,288 @@ export default function GroupChatScreen({
     loadPlanCards();
   }, [suggestionKey, loadPlanCards]);
 
+  // Votes put to the parea from the chat: their messages read "Put to the
+  // parea: …" or "Asks the parea: …". Without chat_cards.sql there are no
+  // cards and those messages stay plain text.
+  const voteKey = messages
+    .filter((message) => message.deletedAt === null && carriesVote(message.content))
+    .map((message) => message.id)
+    .join(',');
+
+  const loadChatVotes = useCallback(
+    async function loadChatVotes(messageIds: string[]) {
+      const forGroup = activeIdRef.current;
+      if (!forGroup || messageIds.length === 0) {
+        return;
+      }
+      const found = await getChatVotes(forGroup, user.id, messageIds);
+      if (activeIdRef.current !== forGroup) {
+        return;
+      }
+      setChatVotes(function (prev) {
+        const next = { ...prev };
+        for (const id of messageIds) {
+          if (found[id]) next[id] = found[id];
+        }
+        return next;
+      });
+
+      const made = Object.values(found)
+        .map((vote) => (vote.target.type === 'plan' && vote.status === 'passed' ? vote.target.event.id : ''))
+        .filter((id) => id !== '');
+      if (made.length === 0) {
+        return;
+      }
+      try {
+        const mine = await getMyAnswers(made);
+        if (activeIdRef.current !== forGroup) {
+          return;
+        }
+        setAnswers(function (prev) {
+          const next = { ...prev };
+          for (const id of made) {
+            if (mine[id]) next[id] = mine[id];
+            else delete next[id];
+          }
+          return next;
+        });
+      } catch {
+      }
+    },
+    [user.id],
+  );
+
+  reloadCardsRef.current = function (ids: string[]) {
+    loadChatVotes(ids.filter((id) => voteKey.includes(id)));
+    loadOnMyWay(ids.filter((id) => wayKey.includes(id)));
+  };
+
+  useEffect(() => {
+    if (voteKey === '') {
+      return;
+    }
+    loadChatVotes(voteKey.split(','));
+  }, [voteKey, loadChatVotes]);
+
+  // The parea's plans you can see: tonight's (On my way) and the next one.
+  const loadGroupPlans = useCallback(
+    async function loadGroupPlans() {
+      const forGroup = activeIdRef.current;
+      if (!forGroup) {
+        return;
+      }
+      try {
+        const mine = await getMyEvents(user.id);
+        if (activeIdRef.current === forGroup) {
+          setGroupPlans(mine.filter((event) => event.groupId === forGroup));
+        }
+      } catch {
+      }
+    },
+    [user.id],
+  );
+
+  useEffect(() => {
+    if (activeId) {
+      loadGroupPlans();
+    }
+  }, [activeId, loadGroupPlans]);
+
+  const wayKey = features.liveLocation
+    ? messages
+        .filter((message) => message.deletedAt === null && message.content.startsWith(ON_MY_WAY_PREFIX))
+        .map((message) => message.id)
+        .join(',')
+    : '';
+
+  const loadOnMyWay = useCallback(async function loadOnMyWay(messageIds: string[]) {
+    const forGroup = activeIdRef.current;
+    if (!forGroup || messageIds.length === 0) {
+      return;
+    }
+    const found = await getOnMyWay(forGroup, messageIds);
+    if (activeIdRef.current !== forGroup) {
+      return;
+    }
+    setOnMyWay(function (prev) {
+      const next = { ...prev };
+      for (const id of messageIds) {
+        if (found[id]) next[id] = found[id];
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (wayKey === '') {
+      return;
+    }
+    loadOnMyWay(wayKey.split(','));
+  }, [wayKey, loadOnMyWay]);
+
+  const today = keyOf(new Date());
+
+  // Still sharing: not stopped, and the plan's night is not over.
+  function wayIsLive(way: OnMyWay): boolean {
+    if (way.stoppedAt) return false;
+    return way.event.date === today || isHappeningNow(way.event.date, way.event.startTime, way.event.endTime);
+  }
+
+  // Your own live "on my way": your spot goes to the plan's map while the
+  // chat is open (Home shares it too once the plan is on).
+  const myWay = Object.values(onMyWay).find((way) => way.userId === user.id && wayIsLive(way)) ?? null;
+  const sharingEventId = features.liveLocation && myWay ? myWay.event.id : undefined;
+  const livePeople = useLiveLocations(sharingEventId, { id: user.id, name: displayName });
+
+  // "See on the map" on someone else's card: watch the plan's map without
+  // sharing your own spot.
+  useEffect(() => {
+    setWatchedPeople([]);
+    if (!features.liveLocation || !watchEventId || watchEventId === sharingEventId || !displayName) {
+      return;
+    }
+    const live = openLiveMap(watchEventId, { id: user.id, name: displayName }, setWatchedPeople);
+    return function cleanup() {
+      live.close();
+    };
+  }, [watchEventId, sharingEventId, user.id, displayName]);
+
+  // Tonight's plan of this parea that you are in on, until it is over.
+  const tonightPlan =
+    groupPlans.find(
+      (event) =>
+        event.date === today &&
+        event.myStatus === 'in' &&
+        eventWindow(event.date, event.startTime, event.endTime).endsAt > new Date(),
+    ) ?? null;
+  const tonightWay = tonightPlan && myWay && myWay.event.id === tonightPlan.id ? myWay : null;
+
+  // The parea's next plan for the empty chat: tonight's you are in on first,
+  // else the next one still ahead.
+  const nextPlan =
+    tonightPlan ??
+    groupPlans.find(
+      (event) => event.date >= today && eventWindow(event.date, event.startTime, event.endTime).endsAt > new Date(),
+    ) ??
+    null;
+
+  // "Who's in tonight?" goes into the field, mentioning whoever has not
+  // answered the plan yet (everyone, without a plan).
+  function askWhosIn() {
+    const answered = new Set((nextPlan?.going ?? []).map((person) => person.id));
+    const ask = nextPlan
+      ? members.filter((member) => member.id !== user.id && !answered.has(member.id))
+      : members.filter((member) => member.id !== user.id);
+    const mentions = ask
+      .slice(0, 6)
+      .map((member) => '@' + member.name)
+      .join(' ');
+    const question = !nextPlan
+      ? "who's free this week?"
+      : nextPlan.date === today
+        ? `who's in for ${nextPlan.title} tonight?`
+        : `who's in for ${nextPlan.title} on ${parseLocal(nextPlan.date).toLocaleDateString('en-US', { weekday: 'long' })}?`;
+    const text = mentions ? `${mentions} ${question}` : question.charAt(0).toUpperCase() + question.slice(1);
+    setEditing(null);
+    setTrayOpen(false);
+    setPrefill(function (prev) {
+      return { text, nonce: prev.nonce + 1 };
+    });
+  }
+
+  // Messages the database posted for you (a vote, a suggestion, on my way)
+  // come in through realtime too; this reads them now, so the card is there
+  // even when the connection is slow.
+  const pullNew = useCallback(
+    async function pullNew() {
+      const forGroup = activeIdRef.current;
+      if (!forGroup) {
+        return;
+      }
+      const latest = messagesRef.current[messagesRef.current.length - 1];
+      try {
+        const page = latest
+          ? await getMessagesAfter(forGroup, latest.createdAt)
+          : await getMessages(forGroup);
+        if (activeIdRef.current !== forGroup) {
+          return;
+        }
+        setMessages(function (prev) {
+          return resolveQuotes(mergeNewMessages(prev, page.messages));
+        });
+      } catch {
+      }
+    },
+    [],
+  );
+
+  // Tells the others' chats to read a card again.
+  function cardsChanged(messageIds: string[]) {
+    const channel = channelRef.current;
+    if (channel) {
+      sendCardsChanged(channel, messageIds);
+    }
+  }
+
+  async function answerVote(messageId: string, vote: SquadVote, choice: { approve: boolean } | { optionId: string }) {
+    if (cardSaving) return;
+    setCardSaving(messageId);
+    setPlanError(null);
+    try {
+      const status =
+        'approve' in choice ? await castVote(vote.id, choice.approve) : await castOption(vote.id, choice.optionId);
+      if (status === 'passed' && vote.status === 'open') {
+        setJustPassed(function (prev) {
+          return { ...prev, [messageId]: true };
+        });
+        // A plan was made: it may be the parea's next one now.
+        loadGroupPlans();
+      }
+      await loadChatVotes([messageId]);
+      cardsChanged([messageId]);
+    } catch (problem) {
+      setPlanError(errorText(problem, 'Could not save your vote. Try again.'));
+      loadChatVotes([messageId]);
+    } finally {
+      setCardSaving(null);
+    }
+  }
+
+  // I'm in / Pass on the plan a vote made. Personal, not a vote.
+  async function answerMadePlan(messageId: string, eventId: string, status: RsvpStatus | null) {
+    if (cardSaving) return;
+    setCardSaving(messageId);
+    setPlanError(null);
+    const before = answers[eventId];
+    setAnswers(function (prev) {
+      const next = { ...prev };
+      if (status) next[eventId] = status;
+      else delete next[eventId];
+      return next;
+    });
+    try {
+      if (status) await setRsvp(eventId, status);
+      else await clearRsvp(eventId);
+      loadGroupPlans();
+    } catch {
+      setAnswers(function (prev) {
+        const next = { ...prev };
+        if (before) next[eventId] = before;
+        else delete next[eventId];
+        return next;
+      });
+      setPlanError('Could not save your answer. Try again.');
+    } finally {
+      setCardSaving(null);
+    }
+  }
+
   let activeGroup: Group | null = null;
+  let activeGroupName = '';
   for (let i = 0; i < groups.length; i++) {
     if (groups[i].id === activeId) {
       activeGroup = groups[i];
+      activeGroupName = groups[i].name;
       break;
     }
   }
@@ -1011,10 +1397,41 @@ export default function GroupChatScreen({
       if (status) await setRsvp(plan.event.id, status);
       else await clearRsvp(plan.event.id);
       await loadPlanCards();
+      loadGroupPlans();
     } catch {
       setPlanError('Could not save your answer. Try again.');
     } finally {
       setPlanSaving(null);
+    }
+  }
+
+  // I'm in / Pass on the next plan, from the empty chat.
+  async function answerNextPlan(plan: MyEvent, status: RsvpStatus | null) {
+    setPlanError(null);
+    setGroupPlans(function (prev) {
+      return prev.map((event) => (event.id === plan.id ? { ...event, myStatus: status ?? undefined } : event));
+    });
+    try {
+      if (status) await setRsvp(plan.id, status);
+      else await clearRsvp(plan.id);
+    } catch {
+      setPlanError('Could not save your answer. Try again.');
+    }
+    loadGroupPlans();
+  }
+
+  async function stopSharing(messageId: string) {
+    if (cardSaving) return;
+    setCardSaving(messageId);
+    setPlanError(null);
+    try {
+      await stopOnMyWay(messageId);
+      await loadOnMyWay([messageId]);
+      cardsChanged([messageId]);
+    } catch (problem) {
+      setPlanError(errorText(problem, 'Could not stop sharing. Try again.'));
+    } finally {
+      setCardSaving(null);
     }
   }
 
@@ -1029,6 +1446,13 @@ export default function GroupChatScreen({
       item.image?.uri ??
       (message.attachment ? signed[message.attachment.path]?.url ?? null : null);
     const plan = planCards[message.id];
+    const vote = chatVotes[message.id];
+    const way = features.liveLocation ? onMyWay[message.id] : undefined;
+    const cardMenu = item.status
+      ? undefined
+      : function () {
+          setMenuFor(message);
+        };
 
     return (
       <MessageBubble
@@ -1066,14 +1490,63 @@ export default function GroupChatScreen({
               }
             : undefined
         }
-        planCard={
-          plan ? (
+        card={
+          way ? (
+            <OnMyWayCard
+              card={way}
+              mine={way.userId === user.id}
+              senderName={message.senderName}
+              live={wayIsLive(way)}
+              busy={cardSaving === message.id}
+              onStop={function () {
+                stopSharing(message.id);
+              }}
+              onOpenMap={function () {
+                setWatchEventId(way.event.id);
+                setOpenPlan({
+                  ...way.event,
+                  groupId: way.groupId,
+                  groupName: activeGroupName,
+                  isMember: true,
+                });
+              }}
+            />
+          ) : vote ? (
+            <ChatVoteCard
+              vote={vote}
+              members={memberCount}
+              people={members}
+              userId={user.id}
+              busy={cardSaving === message.id}
+              going={vote.target.type === 'plan' && vote.target.event.id ? answers[vote.target.event.id] : undefined}
+              justPassed={justPassed[message.id] === true}
+              onVote={function (approve) {
+                answerVote(message.id, vote, { approve });
+              }}
+              onPick={function (optionId) {
+                answerVote(message.id, vote, { optionId });
+              }}
+              onGoing={function (status) {
+                if (vote.target.type === 'plan' && vote.target.event.id) {
+                  answerMadePlan(message.id, vote.target.event.id, status);
+                }
+              }}
+              onLongPress={cardMenu}
+              onOpenPlan={
+                vote.target.type === 'plan' && vote.target.event.id
+                  ? function () {
+                      if (vote.target.type === 'plan') setOpenPlan(voteEventToSheet(vote.target.event));
+                    }
+                  : undefined
+              }
+            />
+          ) : plan ? (
             <PlanCard
               plan={plan}
-              mine={isMine}
               saving={planSaving === plan.event.id}
               onAnswer={(status) => answerPlan(plan, status)}
               onOpen={() => setOpenPlan(plan.event)}
+              onLongPress={cardMenu}
             />
           ) : undefined
         }
@@ -1086,15 +1559,6 @@ export default function GroupChatScreen({
               }
         }
       />
-    );
-  }
-
-  function renderEmptyList() {
-    return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>Quiet in here</Text>
-        <Text style={styles.emptyText}>Write the squad's first message.</Text>
-      </View>
     );
   }
 
@@ -1182,9 +1646,42 @@ export default function GroupChatScreen({
             <View style={styles.empty}>
               <ActivityIndicator color={paper.accent} />
             </View>
+          ) : rows.length === 0 ? (
+            <ChatEmpty
+              plan={nextPlan}
+              meId={user.id}
+              compact={windowHeight < 720}
+              onOnMyWay={
+                features.liveLocation && tonightPlan
+                  ? function () {
+                      setWayFor(tonightPlan);
+                    }
+                  : undefined
+              }
+              onOpenPlan={function (plan) {
+                setOpenPlan(plan);
+              }}
+              onAnswer={answerNextPlan}
+              onAsk={askWhosIn}
+              onProposePlan={function () {
+                setTrayOpen(false);
+                setPlanFormOpen(true);
+              }}
+              onAskParea={function () {
+                setTrayOpen(false);
+                setPollOpen(true);
+              }}
+              onSharePhoto={function () {
+                setTrayOpen(true);
+              }}
+            />
           ) : (
             <FlatList
               inverted
+              keyboardShouldPersistTaps="handled"
+              onScrollBeginDrag={function () {
+                setTrayOpen(false);
+              }}
               data={invertedRows}
               keyExtractor={function (item) {
                 return item.id;
@@ -1193,7 +1690,6 @@ export default function GroupChatScreen({
               onEndReached={loadOlder}
               onEndReachedThreshold={0.5}
               ListFooterComponent={renderOlderSpinner()}
-              ListEmptyComponent={renderEmptyList()}
               renderItem={renderRow}
             />
           )}
@@ -1201,8 +1697,9 @@ export default function GroupChatScreen({
           {typing ? <Text style={styles.typing}>{typing}</Text> : null}
 
           <ChatComposer
-            key={editing ? 'edit-' + editing.id : 'new'}
-            initialText={editing ? editing.content : ''}
+            key={editing ? 'edit-' + editing.id : 'new-' + prefill.nonce}
+            initialText={editing ? editing.content : prefill.text}
+            autoFocus={!editing && prefill.text !== ''}
             editing={editing !== null}
             replyTo={replyingTo ? quoteOf(replyingTo) : null}
             onCancel={function () {
@@ -1211,23 +1708,97 @@ export default function GroupChatScreen({
             }}
             onSend={handleComposerSend}
             onTyping={handleTypingActivity}
+            placeholder="Message the parea"
             members={members}
             meId={user.id}
             attachment={pendingImage}
-            onPickImage={choosePhoto}
             onClearImage={function () {
               if (pendingImage) {
                 discardImage(pendingImage.uri);
               }
               setPendingImage(null);
             }}
+            trayOpen={trayOpen}
+            onToggleTray={function () {
+              setTrayOpen(function (open) {
+                return !open;
+              });
+            }}
+            onFocusInput={function () {
+              setTrayOpen(false);
+            }}
             disabled={!activeId}
           />
+
+          {trayOpen ? (
+            <ChatTray
+              height={trayHeight(windowHeight)}
+              compact={windowHeight < 720}
+              tonight={
+                tonightPlan
+                  ? {
+                      title: tonightPlan.title,
+                      kicker: tonightPlan.startTime ? `Tonight · ${tonightPlan.startTime}` : 'Tonight',
+                    }
+                  : null
+              }
+              sharing={tonightWay !== null}
+              onOnMyWay={
+                features.liveLocation && tonightPlan
+                  ? function () {
+                      setTrayOpen(false);
+                      if (tonightWay?.messageId) {
+                        stopSharing(tonightWay.messageId);
+                      } else {
+                        setWayFor(tonightPlan);
+                      }
+                    }
+                  : undefined
+              }
+              onOpenTonight={
+                tonightPlan
+                  ? function () {
+                      setTrayOpen(false);
+                      setOpenPlan(tonightPlan);
+                    }
+                  : undefined
+              }
+              onCamera={function () {
+                choosePhoto('camera');
+              }}
+              onLibrary={function () {
+                choosePhoto('library');
+              }}
+              onProposePlan={function () {
+                setTrayOpen(false);
+                setPlanFormOpen(true);
+              }}
+              onAskParea={function () {
+                setTrayOpen(false);
+                setPollOpen(true);
+              }}
+              onSuggestPlan={
+                features.explore
+                  ? function () {
+                      setTrayOpen(false);
+                      setSuggestOpen(true);
+                    }
+                  : undefined
+              }
+            />
+          ) : null}
 
           <MessageMenu
             message={menuFor}
             myEmoji={menuFor ? myReaction(reactions[menuFor.id], user.id) : null}
-            canEdit={menuFor ? menuFor.senderId === user.id : false}
+            canEdit={
+              menuFor
+                ? menuFor.senderId === user.id &&
+                  !chatVotes[menuFor.id] &&
+                  !planCards[menuFor.id] &&
+                  !onMyWay[menuFor.id]
+                : false
+            }
             onReact={function (target, emoji) {
               setMenuFor(null);
               toggleReaction(target.id, emoji);
@@ -1242,6 +1813,7 @@ export default function GroupChatScreen({
             }}
             onEdit={function (target) {
               setMenuFor(null);
+              dropPrefill();
               setEditing(target);
             }}
             onDelete={function (target) {
@@ -1285,10 +1857,81 @@ export default function GroupChatScreen({
           <EventSheet
             event={openPlan}
             currentUserId={user.id}
+            livePeople={
+              openPlan && openPlan.id === sharingEventId
+                ? livePeople
+                : openPlan && openPlan.id === watchEventId
+                  ? watchedPeople
+                  : undefined
+            }
             onClose={function () {
               setOpenPlan(null);
+              setWatchEventId(null);
             }}
-            onChanged={loadPlanCards}
+            onChanged={function () {
+              loadPlanCards();
+              loadGroupPlans();
+            }}
+          />
+
+          <EventFormSheet
+            visible={planFormOpen}
+            groups={groups}
+            defaultGroupId={activeGroup.id}
+            defaultDate={keyOf(new Date())}
+            onClose={function () {
+              setPlanFormOpen(false);
+            }}
+            onSaved={function () {
+              // The vote's card in the chat is the confirmation.
+              setPlanFormOpen(false);
+              pullNew();
+            }}
+            onOpenVotes={onOpenVotes}
+          />
+
+          {features.liveLocation ? (
+            <OnMyWaySheet
+              plan={wayFor}
+              onClose={function () {
+                setWayFor(null);
+              }}
+              onShared={function () {
+                setWayFor(null);
+                pullNew();
+              }}
+            />
+          ) : null}
+
+          {features.explore ? (
+            <SuggestPlanSheet
+              visible={suggestOpen}
+              groupId={activeGroup.id}
+              groupName={activeGroup.name}
+              suggestedIds={Object.values(planCards).map((one) => one.event.id)}
+              onClose={function () {
+                setSuggestOpen(false);
+              }}
+              onSuggested={function () {
+                setSuggestOpen(false);
+                pullNew();
+                loadPlanCards();
+              }}
+            />
+          ) : null}
+
+          <NewVoteSheet
+            visible={pollOpen}
+            group={activeGroup}
+            userId={user.id}
+            initialStep="poll"
+            onClose={function () {
+              setPollOpen(false);
+            }}
+            onStarted={function () {
+              setPollOpen(false);
+              pullNew();
+            }}
           />
         </KeyboardAvoidingView>
       </View>
@@ -1328,13 +1971,6 @@ const styles = StyleSheet.create({
   olderSpinner: { paddingVertical: space.md, alignItems: 'center' },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: space.lg },
-  emptyTitle: { color: paper.ink, ...typo.display, fontSize: 21 },
-  emptyText: {
-    color: paper.inkSoft,
-    ...typo.regular,
-    fontSize: 14,
-    textAlign: 'center',
-  },
   error: {
     paddingHorizontal: space.md,
     paddingVertical: space.xs,

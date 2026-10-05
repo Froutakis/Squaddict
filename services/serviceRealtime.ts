@@ -4,6 +4,10 @@ import { getMessages } from './serviceChat';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 const TYPING_EVENT = 'typing';
+// A card in the chat changed (a vote, a question, someone on their way): the
+// others read it again. Ballots have no group to filter realtime rows on, so
+// the one who answered tells the chat.
+const CARDS_EVENT = 'cards';
 
 export type ChatHandlers = {
   onNewMessage: (message: any) => void;
@@ -13,6 +17,7 @@ export type ChatHandlers = {
   onPresence?: (online: number) => void;
   onReaction?: (row: any) => void;
   onReactionGone?: (row: any) => void;
+  onCards?: (messageIds: string[]) => void;
 };
 
 export function openGroupChat(
@@ -62,6 +67,15 @@ export function openGroupChat(
       }
       handlers.onTyping?.({ id: payload.id, name: payload.name ?? '' });
     })
+    .on('broadcast', { event: CARDS_EVENT }, function (message) {
+      const payload = message.payload as { messageIds?: unknown } | undefined;
+      const ids = Array.isArray(payload?.messageIds)
+        ? payload.messageIds.filter((id): id is string => typeof id === 'string')
+        : [];
+      if (ids.length > 0) {
+        handlers.onCards?.(ids);
+      }
+    })
     .on('presence', { event: 'sync' }, function () {
       handlers.onPresence?.(Object.keys(channel.presenceState()).length);
     })
@@ -79,6 +93,13 @@ export function openGroupChat(
 export function sendTyping(channel: RealtimeChannel, me: Person): void {
   channel
     .send({ type: 'broadcast', event: TYPING_EVENT, payload: { id: me.id, name: me.name } })
+    .catch(function () {
+    });
+}
+
+export function sendCardsChanged(channel: RealtimeChannel, messageIds: string[]): void {
+  channel
+    .send({ type: 'broadcast', event: CARDS_EVENT, payload: { messageIds } })
     .catch(function () {
     });
 }

@@ -258,6 +258,25 @@ export async function clearRsvp(eventId: string): Promise<void> {
     if (error) throw error;
 }
 
+// Your own answers on some plans, e.g. the ones votes in the chat made.
+export async function getMyAnswers(eventIds: string[]): Promise<Record<string, RsvpStatus>> {
+    if (eventIds.length === 0) return {};
+    const user = await requireUser();
+
+    const { data, error } = await supabase
+        .from("event_attendees")
+        .select("event_id, status")
+        .eq("user_id", user.id)
+        .in("event_id", eventIds);
+    if (error) throw error;
+
+    const answers: Record<string, RsvpStatus> = {};
+    for (const row of (data ?? []) as { event_id: string; status: string }[]) {
+        if (row.status === "in" || row.status === "out") answers[row.event_id] = row.status;
+    }
+    return answers;
+}
+
 export async function getAttendees(eventId: string): Promise<Attendee[]> {
     const { data, error } = await supabase
         .from("event_attendees")
