@@ -1,23 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  Animated,
-  Easing,
-  Image,
-  Keyboard,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { LocalImage } from './messageRows';
 import { applyMention, matchMembers, mentionQuery } from './mentions';
 import type { Person } from '../../lib/people';
 import { GroupMonogram } from './GroupPicker';
-import { paper, typo, radius, space } from '../../theme';
+import { colors, paper, typo, radius, space } from '../../theme';
 
 type ChatComposerProps = {
   onSend: (text: string) => void;
@@ -180,8 +169,52 @@ export default function ChatComposer({
     }
   }
 
+  // What the next message is about, above the tear: an edit, a reply, a photo.
+  const banners: ReactElement[] = [];
+  if (editing) {
+    banners.push(
+      <Banner
+        key="edit"
+        icon="pencil"
+        kicker="Editing your message"
+        body={initialText}
+        closeLabel="Cancel edit"
+        onClose={onCancel}
+      />,
+    );
+  } else if (replyTo) {
+    banners.push(
+      <Banner
+        key="reply"
+        icon="arrow-undo"
+        kicker={`Replying to ${replyTo.senderName || 'someone'}`}
+        body={replyTo.deleted ? 'Message deleted' : replyTo.content}
+        closeLabel="Cancel reply"
+        onClose={onCancel}
+      />,
+    );
+  }
+  if (attachment) {
+    banners.push(
+      <View key="photo" style={styles.banner}>
+        <View style={styles.bannerText}>
+          <View style={styles.photoRow}>
+            <Image source={{ uri: attachment.uri }} style={styles.thumb} />
+            <Text style={styles.photoLabel} numberOfLines={1}>
+              Photo ready to send
+            </Text>
+          </View>
+        </View>
+        <CloseButton label="Remove photo" onPress={onClearImage} />
+      </View>,
+    );
+  }
+
   return (
     <View style={styles.bar}>
+      {/* The messages fade out into the composer. */}
+      <LinearGradient colors={[`${paper.bg}00`, paper.bg]} style={styles.fade} pointerEvents="none" />
+
       {picking ? (
         <View style={styles.picker}>
           <ScrollView
@@ -201,12 +234,13 @@ export default function ChatComposer({
                   style={function ({ pressed }) {
                     return [
                       styles.suggestion,
+                      index > 0 && styles.suggestionDivider,
                       index === highlighted && styles.suggestionActive,
                       pressed && styles.pressed,
                     ];
                   }}
                 >
-                  <GroupMonogram name={member.name} uri={member.avatarUrl} size={24} />
+                  <GroupMonogram name={member.name} uri={member.avatarUrl} size={28} />
                   <Text style={styles.suggestionName} numberOfLines={1}>
                     {member.name}
                   </Text>
@@ -217,232 +251,276 @@ export default function ChatComposer({
         </View>
       ) : null}
 
-      {editing ? (
-        <View style={styles.editBanner}>
-          <Ionicons name="pencil" size={13} color={paper.accent} />
-          <Text style={styles.editLabel}>Editing message</Text>
-          <Pressable
-            onPress={onCancel}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel edit"
-            hitSlop={8}
-          >
-            <Ionicons name="close" size={16} color={paper.inkSoft} />
-          </Pressable>
-        </View>
-      ) : replyTo ? (
-        <View style={styles.editBanner}>
-          <Ionicons name="arrow-undo" size={13} color={paper.accent} />
-          <View style={styles.replyText}>
-            <Text style={styles.editLabel} numberOfLines={1}>
-              Replying to {replyTo.senderName || 'someone'}
-            </Text>
-            <Text style={styles.replyBody} numberOfLines={1}>
-              {replyTo.deleted ? 'Message deleted' : replyTo.content}
-            </Text>
-          </View>
-          <Pressable
-            onPress={onCancel}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel reply"
-            hitSlop={8}
-          >
-            <Ionicons name="close" size={16} color={paper.inkSoft} />
-          </Pressable>
-        </View>
-      ) : null}
+      {/* A white ticket: what it is about above a tear, the field below. */}
+      <View style={[styles.ticket, focused && styles.ticketFocused]}>
+        <View style={styles.ticketInner}>
+          {banners.length > 0 ? (
+            <>
+              {banners}
+              <Tear />
+            </>
+          ) : null}
 
-      {attachment ? (
-        <View style={styles.attachment}>
-          <Image source={{ uri: attachment.uri }} style={styles.thumb} />
-          <Text style={styles.attachmentLabel} numberOfLines={1}>
-            Photo ready to send
-          </Text>
-          <Pressable
-            onPress={onClearImage}
-            accessibilityRole="button"
-            accessibilityLabel="Remove photo"
-            hitSlop={8}
-          >
-            <Ionicons name="close" size={16} color={paper.inkSoft} />
-          </Pressable>
-        </View>
-      ) : null}
-
-      <View style={[styles.box, focused && styles.boxFocused]}>
-        {onToggleTray && !editing ? (
-          <Pressable
-            onPress={toggleTray}
-            disabled={disabled}
-            accessibilityRole="button"
-            accessibilityLabel={trayOpen ? 'Close' : 'More: photo, plan, question'}
-            accessibilityState={{ expanded: trayOpen, disabled }}
-            style={function ({ pressed }) {
-              return [styles.plus, trayOpen && styles.plusOpen, pressed && styles.pressed];
-            }}
-          >
-            <Animated.View
-              style={{
-                transform: [
-                  { rotate: turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) },
-                ],
+          <View style={styles.box}>
+            {onPickImage && !editing ? (
+              <Pressable
+                onPress={onPickImage}
+                disabled={disabled}
+                accessibilityRole="button"
+                accessibilityLabel="Add a photo"
+                style={function ({ pressed }) {
+                  return [styles.attach, pressed && styles.attachPressed];
+                }}
+              >
+                <Ionicons name="image-outline" size={22} color={paper.inkSoft} />
+              </Pressable>
+            ) : null}
+            <TextInput
+              style={[styles.input, (editing || !onPickImage) && styles.inputAlone]}
+              value={text}
+              selection={forcedCursor === null ? undefined : { start: forcedCursor, end: forcedCursor }}
+              onChangeText={function (next) {
+                setText(next);
+                const moved = next.length - text.length;
+                setCursor(function (prev) {
+                  return Math.max(0, Math.min(next.length, prev + moved));
+                });
+                if (next.length > text.length) {
+                  onTyping?.();
+                }
               }}
-            >
-              <Ionicons name="add" size={24} color={trayOpen ? paper.onMine : paper.ink} />
-            </Animated.View>
-          </Pressable>
-        ) : null}
-        <TextInput
-          ref={inputRef}
-          autoFocus={autoFocus}
-          style={styles.input}
-          value={text}
-          selection={forcedCursor === null ? undefined : { start: forcedCursor, end: forcedCursor }}
-          onChangeText={function (next) {
-            setText(next);
-            const moved = next.length - text.length;
-            setCursor(function (prev) {
-              return Math.max(0, Math.min(next.length, prev + moved));
-            });
-            if (next.length > text.length) {
-              onTyping?.();
-            }
-          }}
-          onSelectionChange={function (event) {
-            setCursor(event.nativeEvent.selection.start);
-            setForcedCursor(null);
-          }}
-          onKeyPress={handleKeyPress}
-          onFocus={function () {
-            setFocused(true);
-            onFocusInput?.();
-          }}
-          onBlur={function () {
-            setFocused(false);
-          }}
-          placeholder={placeholder}
-          placeholderTextColor={paper.inkFaint}
-          editable={!disabled}
-          multiline
-        />
+              onSelectionChange={function (event) {
+                setCursor(event.nativeEvent.selection.start);
+                setForcedCursor(null);
+              }}
+              onKeyPress={handleKeyPress}
+              onFocus={function () {
+                setFocused(true);
+              }}
+              onBlur={function () {
+                setFocused(false);
+              }}
+              placeholder={placeholder}
+              placeholderTextColor={paper.inkSoft}
+              accessibilityLabel={placeholder}
+              editable={!disabled}
+              multiline
+              // The web's textarea starts two rows tall; one, like the phones.
+              numberOfLines={Platform.OS === 'web' ? 1 : undefined}
+            />
 
-        <Pressable
-          onPress={handleSend}
-          disabled={!canSend}
-          accessibilityRole="button"
-          accessibilityLabel={editing ? "Save edit" : "Send"}
-          style={function ({ pressed }) {
-            return [styles.send, canSend ? styles.sendReady : styles.sendIdle, pressed && canSend && styles.pressed];
-          }}
-        >
-          <Ionicons
-            name={editing ? "checkmark" : "arrow-up"}
-            size={19}
-            color={canSend ? paper.onMine : paper.inkFaint}
-          />
-        </Pressable>
+            <Pressable
+              onPress={handleSend}
+              disabled={!canSend}
+              accessibilityRole="button"
+              accessibilityLabel={editing ? "Save edit" : "Send"}
+              accessibilityState={{ disabled: !canSend }}
+              style={styles.sendTarget}
+            >
+              {function ({ pressed }) {
+                return (
+                  <View style={[styles.send, canSend ? styles.sendReady : styles.sendIdle, pressed && canSend && styles.pressed]}>
+                    <Ionicons
+                      name={editing ? "checkmark" : "arrow-up"}
+                      size={18}
+                      color={canSend ? paper.onMine : paper.inkSoft}
+                    />
+                  </View>
+                );
+              }}
+            </Pressable>
+          </View>
+        </View>
       </View>
     </View>
   );
 }
 
-const SEND = 44;
-const FIELD = 44;
+function Banner({
+  icon,
+  kicker,
+  body,
+  closeLabel,
+  onClose,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  kicker: string;
+  body: string;
+  closeLabel: string;
+  onClose?: () => void;
+}) {
+  return (
+    <View style={styles.banner}>
+      <View style={styles.bannerText}>
+        <View style={styles.kickerRow}>
+          <Ionicons name={icon} size={13} color={paper.accent} />
+          <Text style={styles.kicker} numberOfLines={1}>
+            {kicker}
+          </Text>
+        </View>
+        <Text style={styles.bannerBody} numberOfLines={1}>
+          {body}
+        </Text>
+      </View>
+      <CloseButton label={closeLabel} onPress={onClose} />
+    </View>
+  );
+}
+
+function CloseButton({ label, onPress }: { label: string; onPress?: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={function ({ pressed }) {
+        return [styles.close, pressed && styles.pressed];
+      }}
+    >
+      <Ionicons name="close" size={18} color={paper.inkSoft} />
+    </Pressable>
+  );
+}
+
+// The tear across the ticket, a half notch cut on each side.
+function Tear() {
+  return (
+    <View style={styles.tear} pointerEvents="none">
+      <View style={[styles.notch, styles.notchLeft]} />
+      <View style={styles.tearDashes}>
+        {Array.from({ length: TEAR_DASHES }, (_, i) => (
+          <View key={i} style={styles.tearDash} />
+        ))}
+      </View>
+      <View style={[styles.notch, styles.notchRight]} />
+    </View>
+  );
+}
+
+const TARGET = 44;
+const SEND = 36;
+const NOTCH = 14;
+const TEAR_DASHES = 60;
 
 const styles = StyleSheet.create({
   bar: {
-    paddingHorizontal: space.md,
-    paddingTop: space.sm,
-    paddingBottom: space.md,
+    paddingHorizontal: space.sm + 2,
+    paddingTop: space.xs,
+    paddingBottom: space.sm,
     backgroundColor: paper.bg,
   },
+  fade: { position: 'absolute', left: 0, right: 0, bottom: '100%', height: 18 },
+  ticket: {
+    borderRadius: 22,
+    backgroundColor: paper.surface,
+    borderWidth: 1,
+    borderColor: paper.line,
+    shadowColor: paper.ink,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.07,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  ticketFocused: { borderColor: colors.borderStrong },
+  ticketInner: { borderRadius: 21, overflow: 'hidden' },
   box: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: space.xs + 2,
+    gap: 2,
   },
-  boxFocused: {},
-  editBanner: {
+
+  banner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,
-    marginBottom: space.xs,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: paper.accentSoft,
-    borderRadius: radius.md,
+    paddingLeft: 14,
+    paddingTop: 2,
   },
-  editLabel: {
-    flex: 1,
+  bannerText: { flex: 1, minWidth: 0, gap: 1 },
+  kickerRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  kicker: {
+    flexShrink: 1,
     color: paper.accent,
-    ...typo.medium,
-    fontSize: 12,
+    ...typo.mono,
+    fontSize: 10.5,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
-  plus: {
-    width: FIELD,
-    height: FIELD,
-    borderRadius: FIELD / 2,
-    backgroundColor: paper.surface,
+  bannerBody: { color: paper.inkSoft, ...typo.regular, fontSize: 14, lineHeight: 19 },
+  photoRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  thumb: { width: 34, height: 34, borderRadius: 8, backgroundColor: paper.surfaceAlt },
+  photoLabel: { flexShrink: 1, color: paper.ink, ...typo.semi, fontSize: 14 },
+  close: { width: TARGET, height: TARGET, alignItems: 'center', justifyContent: 'center' },
+
+  tear: { height: NOTCH, flexDirection: 'row', alignItems: 'center' },
+  notch: {
+    position: 'absolute',
+    top: 0,
+    width: NOTCH,
+    height: NOTCH,
+    borderRadius: NOTCH / 2,
+    backgroundColor: paper.bg,
     borderWidth: 1,
     borderColor: paper.line,
+  },
+  notchLeft: { left: -NOTCH / 2 - 1 },
+  notchRight: { right: -NOTCH / 2 - 1 },
+  tearDashes: { flex: 1, flexDirection: 'row', gap: 4, height: 2, marginHorizontal: NOTCH, overflow: 'hidden' },
+  tearDash: { width: 5, height: 2, borderRadius: 1, backgroundColor: colors.borderStrong },
+
+  attach: {
+    width: TARGET,
+    height: TARGET,
+    borderRadius: TARGET / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  plusOpen: { backgroundColor: paper.mine, borderColor: paper.mine },
-  attachment: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    marginBottom: space.xs,
-    padding: 6,
-    backgroundColor: paper.surface,
-    borderWidth: 1,
-    borderColor: paper.line,
-    borderRadius: radius.md,
-  },
-  thumb: { width: 34, height: 34, borderRadius: radius.sm, backgroundColor: paper.surfaceAlt },
-  attachmentLabel: { flex: 1, color: paper.inkSoft, ...typo.medium, fontSize: 12 },
+  attachPressed: { backgroundColor: paper.surfaceAlt },
   picker: {
-    marginBottom: space.xs,
+    marginBottom: space.xs + 2,
     backgroundColor: paper.surface,
     borderWidth: 1,
     borderColor: paper.line,
-    borderRadius: radius.md,
+    borderRadius: radius.md + 2,
     overflow: 'hidden',
+    shadowColor: paper.ink,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    elevation: 6,
   },
-  pickerScroll: { maxHeight: 4 * 40 },
+  pickerScroll: { maxHeight: 4 * TARGET },
   suggestion: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    minHeight: TARGET,
+    paddingHorizontal: 14,
   },
+  suggestionDivider: { borderTopWidth: 1, borderTopColor: paper.line },
   suggestionActive: { backgroundColor: paper.accentSoft },
   suggestionName: {
     flex: 1,
     color: paper.ink,
-    ...typo.medium,
-    fontSize: 14,
+    ...typo.semi,
+    fontSize: 15,
   },
-  replyText: { flex: 1 },
-  replyBody: { color: paper.inkSoft, ...typo.regular, fontSize: 11 },
   input: {
     flex: 1,
-    maxHeight: 120,
-    minHeight: FIELD,
-    paddingTop: 12,
-    paddingBottom: 12,
-    paddingHorizontal: 15,
-    backgroundColor: paper.surface,
-    borderWidth: 1,
-    borderColor: paper.line,
-    borderRadius: FIELD / 2,
+    minWidth: 0,
+    maxHeight: 112,
+    minHeight: TARGET,
+    paddingTop: 11,
+    paddingBottom: 11,
+    paddingHorizontal: 4,
     color: paper.ink,
     ...typo.regular,
-    fontSize: 14.5,
-    lineHeight: 20,
-  },
+    fontSize: 16,
+    lineHeight: 22,
+    outlineStyle: 'none',
+  } as any,
+  inputAlone: { paddingLeft: 14 },
+  sendTarget: { width: TARGET, height: TARGET, alignItems: 'center', justifyContent: 'center' },
   send: {
     width: SEND,
     height: SEND,

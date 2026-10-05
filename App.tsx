@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, BackHandler, Linking, Platform, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import type { User } from '@supabase/supabase-js';
@@ -11,6 +11,7 @@ import { inviteCodeFrom } from './lib/invite';
 import LoginScreen from './screens/LoginScreen';
 import HomeScreen, { type HomeOverlay, type RailData } from './screens/HomeScreen';
 import GroupChatScreen from './screens/GroupChatScreen';
+import ChatSlide from './components/chat/ChatSlide';
 import ExploreScreen, { EXPLORE_FAB_DROP } from './screens/ExploreScreen';
 import YouScreen from './screens/YouScreen';
 import PareaSidebar, { RAIL_CLOSE_MS, type RailScreen } from './components/home/PareaSidebar';
@@ -144,16 +145,6 @@ export default function App() {
       });
   }, [user?.id, pendingInvite]);
 
-  // Android back leaves the chat, which has no Back button of its own.
-  useEffect(() => {
-    if (!chatTarget) return;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      closeChat();
-      return true;
-    });
-    return () => sub.remove();
-  }, [chatTarget]);
-
   useEffect(() => {
     if (!notice) return;
     const hide = setTimeout(() => setNotice(null), NOTICE_MS);
@@ -255,24 +246,31 @@ export default function App() {
           />
         )}
 
-        {/* A squad's chat opens on top of Parea, which stays put underneath. */}
+        {/* A squad's chat slides in on top of Parea, which stays put underneath.
+            Its back button (and Android's, and Esc) closes it again. */}
         {chatTarget ? (
-          <View style={styles.overlay}>
-            <GroupChatScreen
-              key={`chat-${chatTarget.nonce}`}
-              user={user}
-              initialGroupId={chatTarget.groupId}
-              onExit={closeChat}
-              onOpenVotes={openVotes}
-              onOpenRail={() => setRailOpen(true)}
-            />
-          </View>
+          <ChatSlide onClosed={closeChat}>
+            {(close) => (
+              <GroupChatScreen
+                key={`chat-${chatTarget.nonce}`}
+                user={user}
+                initialGroupId={chatTarget.groupId}
+                onExit={close}
+                onOpenVotes={openVotes}
+                onNewPlan={(groupId) => {
+                  closeChat();
+                  setSelectGroup({ id: groupId, nonce: Date.now() });
+                  goHome('plan');
+                }}
+              />
+            )}
+          </ChatSlide>
         ) : null}
 
       </View>
 
       {/* The side rail is the only menu, so its button floats over every screen
-          (the chat has its own, in its header). */}
+          (the chat has a back button in its place). */}
       {chatTarget ? null : <MenuFab unread={unread} drop={screen === 'explore' ? EXPLORE_FAB_DROP : 0} onPress={() => setRailOpen(true)} />}
 
       <PareaSidebar
@@ -354,7 +352,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', gap: 8 },
   app: { flex: 1, backgroundColor: colors.bg },
   body: { flex: 1 },
-  overlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.bg },
   notice: {
     position: 'absolute',
     left: space.md,

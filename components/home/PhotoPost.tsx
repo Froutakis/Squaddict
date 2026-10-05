@@ -1,4 +1,4 @@
-import { useRef, type ComponentProps, type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   Animated,
@@ -18,9 +18,9 @@ import {
   tallyReactions,
   type FeedReason,
   type PhotoReaction,
-  type ReactionEmoji,
 } from '../../lib/photoFeed';
 import Monogram from '../general/Monogram';
+import { REACTION_ICONS, REACTION_NAMES } from '../general/reactionIcons';
 import { tagLabel, type EventTag } from '../../lib/tags';
 import { colors, radius, shadow, space, textSize, tint, typo } from '../../theme';
 
@@ -31,24 +31,6 @@ const SHOTS_HEIGHT = 196;
 const SHOWN_REACTIONS = 3;
 const NOTCH = 16;
 const DASHES = 40;
-
-type IconName = ComponentProps<typeof Ionicons>['name'];
-
-// The reactions are kept as emoji; on the post they are drawn as line icons,
-// filled in once they are yours.
-export const REACTION_ICONS: Record<ReactionEmoji, [IconName, IconName]> = {
-  '🔥': ['flame-outline', 'flame'],
-  '😂': ['happy-outline', 'happy'],
-  '😍': ['heart-outline', 'heart'],
-  '🍻': ['beer-outline', 'beer'],
-};
-
-export const REACTION_NAMES: Record<ReactionEmoji, string> = {
-  '🔥': 'fire',
-  '😂': 'laugh',
-  '😍': 'heart',
-  '🍻': 'cheers',
-};
 
 type PhotoPostProps = {
   item: FeedPhoto;

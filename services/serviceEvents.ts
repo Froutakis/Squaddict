@@ -22,6 +22,7 @@ type EventRow = {
   lng: number | null;
   place_label: string | null;
   tags: string[] | null;
+  created_at?: string | null;
 };
 
 type AttendeeRow = {
@@ -61,6 +62,8 @@ export type GroupEvent = {
   lng?: number;
   placeLabel?: string;
   tags: EventTag[];
+  // When the plan was made: where it shows in the chat.
+  createdAt?: string;
 };
 
 export type NewEvent = Omit<
@@ -113,6 +116,7 @@ function toEvent(r: EventRow): GroupEvent {
     lng: r.lng ?? undefined,
     placeLabel: r.place_label ?? undefined,
     tags: toEventTags(r.tags),
+    createdAt: r.created_at ?? undefined,
   };
 }
 

@@ -27,7 +27,8 @@ import {
 import { parseDateKey } from '../../lib/datetime';
 import type { SignedMap } from '../chat/media';
 import Monogram from '../general/Monogram';
-import { REACTION_ICONS, REACTION_NAMES, whyLabel } from './PhotoPost';
+import { REACTION_ICONS, REACTION_NAMES } from '../general/reactionIcons';
+import { whyLabel } from './PhotoPost';
 import { shortPlace } from './LineTicket';
 import { colors, layout, radius, space, textSize, tint, typo } from '../../theme';
 

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { searchMessages, type SearchHit } from '../../services/serviceChat';
 import { highlightParts, isSearchable, snippet } from './search';
+import { FAB_CENTER_Y } from '../general/MenuFab';
 import { layout, paper, typo, radius, space } from '../../theme';
 
 const DEBOUNCE_MS = 250;
@@ -80,27 +81,42 @@ export default function SearchOverlay({ groupId, visible, onClose }: SearchOverl
     <Modal transparent visible animationType="fade" onRequestClose={onClose}>
       {/* Clear of the notch and the status bar on an iPhone. */}
       <SafeAreaView style={styles.screen}>
+        {/* The chat's header: the white button where the menu button is, here
+            to close the search, and the field beside it. */}
         <View style={styles.barWrap}>
-          <View style={styles.bar}>
-            <Ionicons name="search" size={16} color={paper.inkFaint} />
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close search, back to the chat"
+            hitSlop={4}
+            style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
+          >
+            <Ionicons name="chevron-back" size={22} color={paper.ink} />
+          </Pressable>
+          <View style={[styles.bar, term.length === 0 && styles.barEmpty]}>
+            <Ionicons name="search" size={18} color={paper.inkSoft} />
             <TextInput
               style={styles.input}
               value={term}
               onChangeText={setTerm}
               placeholder="Search this squad"
-              placeholderTextColor={paper.inkFaint}
+              placeholderTextColor={paper.inkSoft}
               autoCorrect={false}
               autoFocus
               accessibilityLabel="Search messages"
             />
-            <Pressable
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel="Close search"
-              hitSlop={8}
-            >
-              <Ionicons name="close" size={18} color={paper.inkSoft} />
-            </Pressable>
+            {term.length > 0 ? (
+              <Pressable
+                onPress={function () {
+                  setTerm('');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+                style={styles.clear}
+              >
+                <Ionicons name="close-circle" size={18} color={paper.inkSoft} />
+              </Pressable>
+            ) : null}
           </View>
         </View>
 
@@ -145,16 +161,39 @@ function Hit({ hit, term }: { hit: SearchHit; term: string }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: paper.bg },
   // The side gaps live on a wrapper: a 100% wide bar with margins ran into the screen's edges.
-  barWrap: { marginTop: space.xl, paddingHorizontal: space.md },
-  bar: {
+  barWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    width: '100%',
+    paddingTop: FAB_CENTER_Y - 22,
+    paddingLeft: space.md,
+    paddingRight: space.sm + 2,
+  },
+  back: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: paper.line,
+    backgroundColor: paper.surface,
+    shadowColor: paper.ink,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  backPressed: { opacity: 0.7, transform: [{ scale: 0.96 }] },
+  bar: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
     maxWidth: layout.column,
-    alignSelf: 'center',
-    paddingHorizontal: 14,
-    height: 42,
+    paddingLeft: 14,
+    height: 44,
     backgroundColor: paper.surface,
     borderWidth: 1,
     borderColor: paper.line,
@@ -162,11 +201,14 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    minWidth: 0,
     color: paper.ink,
     ...typo.regular,
-    fontSize: 14,
+    fontSize: 16,
     outlineStyle: 'none',
   } as any,
+  barEmpty: { paddingRight: 14 },
+  clear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   results: { flex: 1 },
   resultsInner: {
     width: '100%',
