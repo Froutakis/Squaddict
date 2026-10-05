@@ -22,7 +22,6 @@ type EventRow = {
   lng: number | null;
   place_label: string | null;
   tags: string[] | null;
-  cover_url?: string | null;
 };
 
 type AttendeeRow = {
@@ -62,7 +61,6 @@ export type GroupEvent = {
   lng?: number;
   placeLabel?: string;
   tags: EventTag[];
-  coverUrl?: string | null;
 };
 
 export type NewEvent = Omit<
@@ -115,7 +113,6 @@ function toEvent(r: EventRow): GroupEvent {
     lng: r.lng ?? undefined,
     placeLabel: r.place_label ?? undefined,
     tags: toEventTags(r.tags),
-    coverUrl: r.cover_url ?? null,
   };
 }
 
@@ -161,7 +158,6 @@ function toColumns(input: NewEvent) {
   if (input.lng !== undefined) columns.lng = input.lng;
   if (input.placeLabel !== undefined) columns.place_label = input.placeLabel || null;
   if (input.tags !== undefined) columns.tags = input.tags;
-  if (input.coverUrl !== undefined) columns.cover_url = input.coverUrl;
 
   return columns;
 }
@@ -217,11 +213,6 @@ export async function getMyEvents(userId: string): Promise<MyEvent[]> {
         const foreignIn = !groupIds.includes(r.group_id) && event.myStatus === "in";
         return { ...event, withGroupIds: foreignIn ? groupIds : [] };
     });
-}
-
-export async function setEventCover(eventId: string, coverUrl: string | null): Promise<void> {
-    const { error } = await supabase.from("events").update({ cover_url: coverUrl }).eq("id", eventId);
-    if (error) throw error;
 }
 
 export async function deleteEvent(eventId: string): Promise<void> {

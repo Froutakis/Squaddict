@@ -27,7 +27,6 @@ export type FeedEvent = {
   goingCount: number;
   myStatus?: RsvpStatus;
   isMember: boolean;
-  coverUrl?: string | null;
 };
 
 export type FeedGroup = {
@@ -78,7 +77,7 @@ export function distanceKm(a: Coords, b: Coords): number {
 }
 
 const FEED_FIELDS =
-  "id, title, date, start_time, end_time, location, lat, lng, place_label, tags, group_id, cover_url, " +
+  "id, title, date, start_time, end_time, location, lat, lng, place_label, tags, group_id, " +
   "groups!events_group_id_fkey(name, handle, bio, avatar_url, member_count, parea_follower_count), event_attendees(user_id, status)";
 
 function score(event: FeedEvent, radiusKm: number, tags: EventTag[]): number {
@@ -112,7 +111,6 @@ function toFeedEvent(r: any, userId: string, isMember: boolean, center: Coords |
     goingCount: answers.filter((a) => a.status === "in").length,
     myStatus: mine === "in" || mine === "out" ? mine : undefined,
     isMember,
-    coverUrl: r.cover_url ?? null,
   };
 }
 
@@ -326,7 +324,6 @@ export async function getPareaGoing(): Promise<PareaGoing[]> {
         description: r.description ?? undefined,
         lat: r.lat ?? undefined,
         lng: r.lng ?? undefined,
-        coverUrl: r.cover_url ?? null,
         createdBy: "",
         isPublic: true,
         tags: [],

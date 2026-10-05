@@ -21,9 +21,6 @@ import {
 const BUCKET = "chat";
 const AVATAR_BUCKET = "avatars";
 const AVATAR_SIZE = 512;
-const COVER_BUCKET = "event-covers";
-const COVER_WIDTH = 1280;
-const COVER_ASPECT = 16 / 9;
 
 export type PickedImage = {
   uri: string;
@@ -216,68 +213,6 @@ export async function removeSquadImage(url: string | null): Promise<void> {
   } catch (problem) {
     console.error("[squaddict] η εικόνα της παρέας δεν σβήστηκε:", problem);
   }
-}
-
-// Centre crop to 16:9 and cap the width, for event covers.
-export async function wideImage(picked: PickedImage): Promise<PickedImage> {
-  const tall = picked.width / picked.height < COVER_ASPECT;
-  const width = tall ? picked.width : Math.round(picked.height * COVER_ASPECT);
-  const height = tall ? Math.round(picked.width / COVER_ASPECT) : picked.height;
-  const finalWidth = Math.min(width, COVER_WIDTH);
-
-  try {
-    const context = ImageManipulator.ImageManipulator.manipulate(picked.uri);
-    context.crop({
-      originX: Math.round((picked.width - width) / 2),
-      originY: Math.round((picked.height - height) / 2),
-      width,
-      height,
-    });
-    if (width > COVER_WIDTH) {
-      context.resize({ width: COVER_WIDTH, height: Math.round(COVER_WIDTH / COVER_ASPECT) });
-    }
-
-    const rendered = await context.renderAsync();
-    const saved = await rendered.saveAsync({
-      format: ImageManipulator.SaveFormat.JPEG,
-      compress: 0.8,
-    });
-
-    return {
-      uri: saved.uri,
-      width: saved.width ?? finalWidth,
-      height: saved.height ?? Math.round(finalWidth / COVER_ASPECT),
-    };
-  } catch (problem) {
-    console.error("[squaddict] η εικόνα δεν διαβάστηκε:", problem);
-    throw new Error("That photo could not be read. Try another one.");
-  }
-}
-
-export async function uploadEventCover(
-  groupId: string,
-  eventId: string,
-  image: PickedImage,
-): Promise<string> {
-  const bytes = await readBytes(image.uri);
-  const path = `${groupId}/${eventId}/${Date.now()}.jpg`;
-
-  const { error } = await supabase.storage.from(COVER_BUCKET).upload(path, bytes, {
-    contentType: "image/jpeg",
-  });
-  if (error) throw error;
-
-  return supabase.storage.from(COVER_BUCKET).getPublicUrl(path).data.publicUrl;
-}
-
-export async function removeEventCover(url: string): Promise<void> {
-  const marker = `/object/public/${COVER_BUCKET}/`;
-  const at = url.indexOf(marker);
-  if (at === -1) return;
-
-  const path = decodeURIComponent(url.slice(at + marker.length).split("?")[0]);
-  const { error } = await supabase.storage.from(COVER_BUCKET).remove([path]);
-  if (error) throw error;
 }
 
 export async function uploadAvatar(userId: string, image: PickedImage): Promise<string> {

@@ -56,7 +56,6 @@ export async function getSuggestions(groupId: string): Promise<PlanSuggestion[]>
         description: r.description ?? undefined,
         lat: r.lat ?? undefined,
         lng: r.lng ?? undefined,
-        coverUrl: r.cover_url ?? null,
         createdBy: "",
         isPublic: true,
         tags: [],

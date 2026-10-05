@@ -181,7 +181,6 @@ export default function PublicProfile({
                 myStatus: next.myStatus,
                 going: [],
                 goingCount: next.goingCount,
-                coverUrl: next.coverUrl,
               }}
               action="rsvp"
               saving={savingId === next.id}

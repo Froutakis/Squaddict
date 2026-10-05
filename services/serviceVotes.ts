@@ -1,9 +1,7 @@
 import { supabase } from "./supabaseClient";
 import { GROUP_FIELDS, toGroup, type Group } from "./serviceGroup";
-import { removeEventCover, uploadEventCover, type PickedImage } from "./serviceMedia";
 import type { NewEvent } from "./serviceEvents";
 import { keyOf } from "../lib/datetime";
-import { newId } from "../lib/ids";
 import { effectiveStatus, inviteExpiry, type VoteKind, type VoteStatus } from "../lib/squadVote";
 
 export type { VoteKind, VoteStatus };
@@ -25,7 +23,6 @@ export type VoteEvent = {
   placeLabel?: string;
   lat?: number;
   lng?: number;
-  coverUrl: string | null;
   isPublic: boolean;
 };
 
@@ -62,7 +59,6 @@ export type VotePayload = {
   lng?: number | null;
   is_public?: boolean;
   tags?: string[];
-  cover_url?: string | null;
   event_id?: string;
   question?: string;
   name?: string;
@@ -108,7 +104,7 @@ const INVITES_SHOWN = 10;
 const VOTE_FIELDS = `id, group_id, kind, status, payload, proposed_by, target_user_id, created_at, closed_at,
   squad:groups!squad_proposals_group_id_fkey(name),
   target_group:groups!squad_proposals_target_group_id_fkey(${GROUP_FIELDS}),
-  target_event:events!squad_proposals_target_event_id_fkey(id, group_id, title, date, start_time, location, place_label, lat, lng, cover_url, is_public, host:groups!events_group_id_fkey(name)),
+  target_event:events!squad_proposals_target_event_id_fkey(id, group_id, title, date, start_time, location, place_label, lat, lng, is_public, host:groups!events_group_id_fkey(name)),
   target_user:profiles!squad_proposals_target_user_id_fkey(id, display_name, avatar_url),
   proposer:profiles!squad_proposals_proposed_by_fkey(display_name),
   options:squad_proposal_options!squad_proposal_options_proposal_id_fkey(id, label, position),
@@ -130,7 +126,6 @@ function draftEvent(row: any, payload: VotePayload): VoteEvent {
     placeLabel: payload.place_label ?? undefined,
     lat: payload.lat ?? undefined,
     lng: payload.lng ?? undefined,
-    coverUrl: payload.cover_url ?? null,
     isPublic: payload.is_public ?? false,
   };
 }
@@ -412,35 +407,21 @@ export async function propose(
 }
 
 // "New plan": the draft goes to the parea's vote, and the plan is made when
-// more than half say yes (at once in a parea of one). The cover is uploaded
-// first, to the parea's folder, so the plan has it the moment it passes; a
-// cover left behind by a vote that failed to open is removed again.
-export async function proposePlan(
-  groupId: string,
-  input: NewEvent,
-  cover: PickedImage | null,
-): Promise<VoteStatus> {
-  const coverUrl = cover ? await uploadEventCover(groupId, `plan-${newId()}`, cover) : null;
-
-  try {
-    return await propose(groupId, "plan", null, {
-      title: input.title,
-      date: input.date,
-      start_time: input.startTime || null,
-      end_time: input.endTime || null,
-      location: input.location || null,
-      description: input.description || null,
-      place_label: input.placeLabel || null,
-      lat: input.lat ?? null,
-      lng: input.lng ?? null,
-      is_public: input.isPublic ?? false,
-      tags: input.tags ?? [],
-      cover_url: coverUrl,
-    });
-  } catch (problem) {
-    if (coverUrl) await removeEventCover(coverUrl).catch(() => {});
-    throw problem;
-  }
+// more than half say yes (at once in a parea of one).
+export async function proposePlan(groupId: string, input: NewEvent): Promise<VoteStatus> {
+  return propose(groupId, "plan", null, {
+    title: input.title,
+    date: input.date,
+    start_time: input.startTime || null,
+    end_time: input.endTime || null,
+    location: input.location || null,
+    description: input.description || null,
+    place_label: input.placeLabel || null,
+    lat: input.lat ?? null,
+    lng: input.lng ?? null,
+    is_public: input.isPublic ?? false,
+    tags: input.tags ?? [],
+  });
 }
 
 export async function castVote(proposalId: string, approve: boolean): Promise<VoteStatus> {

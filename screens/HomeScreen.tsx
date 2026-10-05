@@ -687,7 +687,6 @@ export default function HomeScreen({
 
   // A photo from the feed opens its night in the story viewer.
   function coverFor(event: MyEvent): string | null {
-    if (event.coverUrl) return event.coverUrl;
     const photo = coverPhotos[event.id];
     return photo ? signed[photo.path]?.url ?? null : null;
   }
@@ -893,7 +892,7 @@ export default function HomeScreen({
                 <EventCard
                   key={one.event.id}
                   event={{
-                    ...toCardData(one.event, one.event.coverUrl),
+                    ...toCardData(one.event),
                     groupName: `${one.suggesterName.split(' ')[0] || one.suggesterName} suggests · ${one.event.groupName}`,
                     goingCount: one.goingCount,
                   }}
@@ -918,7 +917,7 @@ export default function HomeScreen({
                 <EventCard
                   key={plan.event.id}
                   event={{
-                    ...toCardData(plan.event, plan.event.coverUrl),
+                    ...toCardData(plan.event),
                     goingCount: plan.goingCount,
                     friendsGoing: plan.friends,
                   }}

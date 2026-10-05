@@ -443,7 +443,6 @@ function asMyEvent(plan: FeedEvent): MyEvent {
     tags: plan.tags,
     isPublic: true,
     createdBy: '',
-    coverUrl: plan.coverUrl ?? null,
     myStatus: plan.myStatus,
     going: [],
   };

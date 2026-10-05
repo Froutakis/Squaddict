@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { SquadVote, VoteEvent } from '../../services/serviceVotes';
 import type { SheetEvent } from '../events/EventSheet';
 import {
@@ -77,7 +76,6 @@ export default function VoteCard({
   onOpen,
   onStale,
 }: VoteCardProps) {
-  const [coverFailed, setCoverFailed] = useState(false);
   // One tap: the phone's share sheet with the link (copied where there is none).
   const { share: shareLink, sharing, notice } = useInviteShare(vote, onStale);
   const open = vote.status === 'open';
@@ -91,7 +89,6 @@ export default function VoteCard({
   // The member a remove vote is about sees it, but does not vote on it.
   const aboutMe = target.type === 'user' && target.user.id === userId;
   const deciding = membersWhoVote(vote.kind, members);
-  const cover = event && !coverFailed ? event.coverUrl : null;
   const where = event ? placeLines(event.location, event.placeLabel).primary : '';
   const opensTarget = onOpen !== undefined && (target.type === 'squad' || (target.type === 'plan' && target.created));
 
@@ -112,9 +109,7 @@ export default function VoteCard({
   const asked = event ? `${by} ${mine ? 'want' : 'wants'} to throw a plan` : `${by} asked`;
   const meta = open ? `${asked} · ${progress}` : `${outcome} · ${asked}`;
 
-  const thumb = cover ? (
-    <Image source={{ uri: cover }} style={styles.cover} onError={() => setCoverFailed(true)} />
-  ) : target.type === 'squad' || target.type === 'plan' || target.type === 'user' ? (
+  const thumb = target.type === 'squad' || target.type === 'plan' || target.type === 'user' ? (
     <Monogram
       name={vote.targetName}
       uri={target.type === 'squad' ? target.group.avatarUrl : target.type === 'user' ? target.user.avatarUrl : null}
@@ -290,7 +285,6 @@ const styles = StyleSheet.create({
   },
   decided: { opacity: 0.6 },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  cover: { width: THUMB, height: THUMB, borderRadius: radius.sm, backgroundColor: colors.surfaceAlt },
   icon: {
     width: THUMB,
     height: THUMB,
