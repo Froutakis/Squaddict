@@ -65,14 +65,9 @@ export function IdeaTicket({
   onPropose: () => void;
   onLater: () => void;
 }) {
-  const question = voteQuestion(idea.kind, idea.kind === 'attend' ? idea.title : idea.name);
+  const question = voteQuestion(idea.kind, idea.name);
   const place = shortPlace(idea.place);
-  const line =
-    idea.kind === 'attend'
-      ? [idea.host, idea.startTime, place, `${idea.going} going`].filter(Boolean).join(' · ')
-      : place
-        ? `You were both at ${place}`
-        : 'You were out the same night';
+  const line = place ? `You were both at ${place}` : 'You were out the same night';
 
   return (
     <View style={styles.memo}>
@@ -122,12 +117,13 @@ export function IdeaTicket({
   );
 }
 
-export type QuickStep = 'poll' | 'invite' | 'attend' | 'follow';
+// 'plan' opens the plan form instead of New vote.
+export type QuickStep = 'poll' | 'invite' | 'plan' | 'follow';
 
 const QUICK: { step: QuickStep; icon: keyof typeof Ionicons.glyphMap; title: string; rule: string }[] = [
   { step: 'poll', icon: 'help-circle-outline', title: 'Ask the parea', rule: 'Most picks win' },
   { step: 'invite', icon: 'person-add-outline', title: 'Invite a friend', rule: 'Link works once' },
-  { step: 'attend', icon: 'calendar-outline', title: 'Go to a plan', rule: 'A public plan' },
+  { step: 'plan', icon: 'calendar-outline', title: 'Throw a plan', rule: 'Most say yes' },
   { step: 'follow', icon: 'compass-outline', title: 'Follow a parea', rule: 'See their nights' },
 ];
 

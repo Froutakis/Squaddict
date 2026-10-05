@@ -1,13 +1,13 @@
-// What a squad decides together goes to a vote: following other squads, going
-// to their public plans, a question of its own, who is in, and its name, photo
-// and public memories. The database applies the same rules (resolve_proposal);
-// this copy is for what the screen says.
+// What a squad decides together goes to a vote: following other squads, a new
+// plan, a question of its own, who is in, and its name, photo and public
+// memories. Going to a plan is not one of them: each member answers that.
+// The database applies the same rules (resolve_proposal); this copy is for
+// what the screen says.
 
 export type VoteKind =
   | 'follow'
   | 'unfollow'
-  | 'attend'
-  | 'unattend'
+  | 'plan'
   | 'poll'
   | 'invite'
   | 'remove'
@@ -39,11 +39,10 @@ export function voteButtonLabel(kind: VoteKind, myVote: boolean | null, yes: num
   const tally = voteTally(yes, members);
   const voted = myVote === true;
   if (kind === 'unfollow') return voted ? `Unfollow vote · ${tally}` : `Vote to unfollow · ${tally}`;
-  if (kind === 'unattend') return voted ? `Skip vote · ${tally}` : `Vote to skip · ${tally}`;
   return voted ? `Vote open · ${tally}` : `Vote yes · ${tally}`;
 }
 
-// targetName is what the vote is about: the squad, plan or member, the friend
+// targetName is what the vote is about: the squad, the plan's title, the member, the friend
 // to invite, the new name, the question itself, the squad (for a photo), or
 // 'public' / 'private' (for the memories).
 export function voteQuestion(kind: VoteKind, targetName: string): string {
@@ -52,10 +51,8 @@ export function voteQuestion(kind: VoteKind, targetName: string): string {
       return `Follow ${targetName}?`;
     case 'unfollow':
       return `Unfollow ${targetName}?`;
-    case 'attend':
-      return `Go to ${targetName}?`;
-    case 'unattend':
-      return `Skip ${targetName}?`;
+    case 'plan':
+      return targetName;
     case 'poll':
       return targetName;
     case 'invite':
@@ -141,67 +138,8 @@ export function effectiveStatus(status: VoteStatus, eventDate: string | null, to
   return status;
 }
 
-export type SquadRef = { id: string; name: string; memberCount: number };
-export type OpenPlanVote = { kind: VoteKind; myVote: boolean | null; yes: number };
-
-export type PlanStance =
-  // Answer in / out yourself. `via` names the squad of yours that is going
-  // (null on your own squad's plan); `skipLabel` is set when the acting squad
-  // is the one going, so it can vote to skip.
-  | { kind: 'rsvp'; via: string | null; skipLabel: string | null; skipWaiting: boolean }
-  | { kind: 'propose'; label: string }
-  | { kind: 'vote'; label: string; waiting: boolean }
-  | { kind: 'no-squad'; text: string };
-
-export const NO_SQUAD_TEXT = 'Join a squad to go to public plans';
-
-// What a member can do on a plan: answer it (their squad's own plan, or one a
-// squad of theirs is going to), or put it to the acting squad's vote.
-export function planStance(input: {
-  hostGroupId: string;
-  myGroups: SquadRef[];
-  acting: SquadRef | null;
-  goingGroupIds: string[];
-  // The acting squad's open vote on this plan, of either kind.
-  vote: OpenPlanVote | null;
-}): PlanStance {
-  const { hostGroupId, myGroups, acting, goingGroupIds, vote } = input;
-
-  if (myGroups.some((group) => group.id === hostGroupId)) {
-    return { kind: 'rsvp', via: null, skipLabel: null, skipWaiting: false };
-  }
-
-  const going = myGroups.filter((group) => goingGroupIds.includes(group.id));
-  if (going.length > 0) {
-    const actingGoing = acting !== null && going.some((group) => group.id === acting.id);
-    if (!acting || !actingGoing) {
-      return { kind: 'rsvp', via: going[0].name, skipLabel: null, skipWaiting: false };
-    }
-
-    const skip = vote && vote.kind === 'unattend' ? vote : null;
-    return {
-      kind: 'rsvp',
-      via: acting.name,
-      skipLabel: skip ? voteButtonLabel('unattend', skip.myVote, skip.yes, acting.memberCount) : 'Vote to skip',
-      skipWaiting: skip?.myVote === true,
-    };
-  }
-
-  if (!acting) return { kind: 'no-squad', text: NO_SQUAD_TEXT };
-
-  if (vote && vote.kind === 'attend') {
-    return {
-      kind: 'vote',
-      label: voteButtonLabel('attend', vote.myVote, vote.yes, acting.memberCount),
-      waiting: vote.myVote === true,
-    };
-  }
-
-  return { kind: 'propose', label: `Go with ${acting.name}?` };
-}
-
-// A squad's plans in Home and its calendar: the ones it hosts and the public
-// plans of other squads it voted to go to.
+// A squad's plans in Home and its calendar: the ones it hosts, and the public
+// plans of other pareas you said you're in to (withGroupIds, see getMyEvents).
 export function isSquadPlan(event: { groupId: string; withGroupIds?: string[] }, squadId: string): boolean {
   return event.groupId === squadId || (event.withGroupIds ?? []).includes(squadId);
 }

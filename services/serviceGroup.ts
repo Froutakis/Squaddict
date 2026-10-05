@@ -209,6 +209,15 @@ export async function getMembers(groupId: string) {
   return data;
 }
 
+// Everyone who shares a parea with you (memberships are only readable within
+// your own pareas), for "From your pareas" on a plan.
+export async function getSquadmateIds(userId: string): Promise<string[]> {
+  const { data, error } = await supabase.from("group_members").select("user_id").neq("user_id", userId);
+  if (error) throw error;
+
+  return [...new Set(((data ?? []) as { user_id: string }[]).map((row) => row.user_id))];
+}
+
 export async function getGroupById(groupId: string): Promise<Group | null> {
   const { data, error } = await supabase
     .from("groups")

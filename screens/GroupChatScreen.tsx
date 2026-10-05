@@ -99,6 +99,10 @@ import { closeGroupChat, sendTyping, startChat } from '../services/serviceRealti
 import { getUserById } from '../services/serviceUser';
 import { layout, paper, typo, space } from '../theme';
 import GroupScreen from './GroupScreen';
+import PlanCard from '../components/chat/PlanCard';
+import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
+import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
+import { getSuggestions, type PlanSuggestion } from '../services/serviceSuggestions';
 
 const CATCH_UP_LIMIT = 300;
 
@@ -112,6 +116,9 @@ type GroupChatScreenProps = {
   onExit?: () => void;
   // Opens the Votes page (votes start only there).
   onOpenVotes: (groupId?: string) => void;
+  // When set, the thread's corner button opens the side rail, the way out of
+  // the chat like everywhere else.
+  onOpenRail?: () => void;
 };
 
 export default function GroupChatScreen({
@@ -121,6 +128,7 @@ export default function GroupChatScreen({
   onThreadChange,
   onExit,
   onOpenVotes,
+  onOpenRail,
 }: GroupChatScreenProps) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [activeId, setActiveId] = useState<string | null>(initialGroupId);
@@ -154,6 +162,11 @@ export default function GroupChatScreen({
   const [typists, setTypists] = useState<Typist[]>([]);
   const [online, setOnline] = useState(0);
   const [reactions, setReactions] = useState<ReactionMap>({});
+  // Plans suggested in this chat, by the message that carries each card.
+  const [planCards, setPlanCards] = useState<Record<string, PlanSuggestion>>({});
+  const [planSaving, setPlanSaving] = useState<string | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [openPlan, setOpenPlan] = useState<SheetEvent | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [groupScreen, setGroupScreen] = useState(false);
 
@@ -908,6 +921,39 @@ export default function GroupChatScreen({
     [rows],
   );
 
+  // A suggested plan's message reads "Suggests: …" (suggest_plan): when one
+  // comes in, the cards are read again. Without plans_by_vote.sql there are
+  // none and those messages stay plain text.
+  const suggestionKey = messages
+    .filter((message) => message.content.startsWith('Suggests: '))
+    .map((message) => message.id)
+    .join(',');
+
+  const loadPlanCards = useCallback(
+    async function loadPlanCards() {
+      if (!activeId) {
+        setPlanCards({});
+        return;
+      }
+      const forGroup = activeId;
+      const list = await getSuggestions(forGroup);
+      const byMessage: Record<string, PlanSuggestion> = {};
+      for (const one of list) {
+        if (one.messageId) byMessage[one.messageId] = one;
+      }
+      setPlanCards(byMessage);
+    },
+    [activeId],
+  );
+
+  useEffect(() => {
+    if (suggestionKey === '') {
+      setPlanCards({});
+      return;
+    }
+    loadPlanCards();
+  }, [suggestionKey, loadPlanCards]);
+
   let activeGroup: Group | null = null;
   for (let i = 0; i < groups.length; i++) {
     if (groups[i].id === activeId) {
@@ -956,6 +1002,22 @@ export default function GroupChatScreen({
     );
   }
 
+  // Answering a suggested plan right in the chat. Personal, not a vote.
+  async function answerPlan(plan: PlanSuggestion, status: RsvpStatus | null) {
+    if (planSaving) return;
+    setPlanSaving(plan.event.id);
+    setPlanError(null);
+    try {
+      if (status) await setRsvp(plan.event.id, status);
+      else await clearRsvp(plan.event.id);
+      await loadPlanCards();
+    } catch {
+      setPlanError('Could not save your answer. Try again.');
+    } finally {
+      setPlanSaving(null);
+    }
+  }
+
   function renderRow({ item }: { item: Row }) {
     if (item.kind === 'date') {
       return <DateSeparator label={item.label} />;
@@ -966,6 +1028,7 @@ export default function GroupChatScreen({
     const photoUri =
       item.image?.uri ??
       (message.attachment ? signed[message.attachment.path]?.url ?? null : null);
+    const plan = planCards[message.id];
 
     return (
       <MessageBubble
@@ -1002,6 +1065,17 @@ export default function GroupChatScreen({
                 setViewing(photoUri);
               }
             : undefined
+        }
+        planCard={
+          plan ? (
+            <PlanCard
+              plan={plan}
+              mine={isMine}
+              saving={planSaving === plan.event.id}
+              onAnswer={(status) => answerPlan(plan, status)}
+              onOpen={() => setOpenPlan(plan.event)}
+            />
+          ) : undefined
         }
         reactions={summarise(reactions[message.id], user.id)}
         onToggleReaction={
@@ -1083,6 +1157,7 @@ export default function GroupChatScreen({
           memberCount={memberCount}
           online={online}
           onBack={closeGroup}
+          onMenu={onOpenRail}
           onSearch={function () {
             setSearchOpen(true);
           }}
@@ -1097,6 +1172,7 @@ export default function GroupChatScreen({
           keyboardVerticalOffset={keyboardOffset}
         >
           {error ? <Text style={styles.error}>{error}</Text> : null}
+          {planError ? <Text style={styles.error}>{planError}</Text> : null}
 
           {connectionLabel(connection) ? (
             <Text style={styles.connection}>{connectionLabel(connection)}</Text>
@@ -1204,6 +1280,15 @@ export default function GroupChatScreen({
             onClose={function () {
               setSearchOpen(false);
             }}
+          />
+
+          <EventSheet
+            event={openPlan}
+            currentUserId={user.id}
+            onClose={function () {
+              setOpenPlan(null);
+            }}
+            onChanged={loadPlanCards}
           />
         </KeyboardAvoidingView>
       </View>

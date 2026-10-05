@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { MyEvent, RsvpStatus } from '../../services/serviceEvents';
 import { addDays, eventWindow, keyOf, parseLocal, startOfWeek } from '../../lib/datetime';
@@ -20,7 +20,9 @@ type PlanLineProps = {
   onAddPhoto: (plan: MyEvent) => void;
   onThrowPlan: () => void;
   // Where the NOW row sits inside the line, so Home can open on it.
-  onNowLayout?: (y: number) => void;
+  // The NOW row, so the page can measure where it sits; onNowLayout says when it moved.
+  nowRef?: RefObject<View | null>;
+  onNowLayout?: () => void;
   // A problem saving an answer, a check-in or a photo; shown under NOW.
   error?: string | null;
 };
@@ -41,6 +43,7 @@ export default function PlanLine({
   onCheckIn,
   onAddPhoto,
   onThrowPlan,
+  nowRef,
   onNowLayout,
   error = null,
 }: PlanLineProps) {
@@ -209,7 +212,7 @@ export default function PlanLine({
     <View>
       {rows}
 
-      <View onLayout={(event) => onNowLayout?.(event.nativeEvent.layout.y)}>
+      <View ref={nowRef} collapsable={false} onLayout={() => onNowLayout?.()}>
         <TimelineRow solid node={<TodayNode note={toGo > 0 ? `${toGo} to go` : undefined} />}>
           <View style={styles.now} accessible accessibilityLabel={`Now, ${clock(now)}`}>
             <Text style={styles.nowText}>NOW · {clock(now)}</Text>

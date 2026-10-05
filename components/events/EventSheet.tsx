@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Attendee, RsvpStatus } from '../../services/serviceEvents';
 import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/serviceEvents';
 import { colors, solidFor, typo, radius, space, textSize } from '../../theme';
@@ -12,9 +12,13 @@ import AttendeeSheet from './AttendeeSheet';
 import EventPhotos from './EventPhotos';
 import Map from '../general/Map';
 import type { LivePerson } from '../../services/serviceLiveLocation';
-import { getGoingSquads, type GoingSquad } from '../../services/serviceVotes';
-import { useSquadPlans } from './useSquadPlans';
-import Monogram from '../general/Monogram';
+import { getGroupsForUser, getSquadmateIds, type Group } from '../../services/serviceGroup';
+import { getActingGroupId } from '../../services/serviceUser';
+import { suggestPlan } from '../../services/serviceSuggestions';
+import { pickActing } from '../../lib/acting';
+import { errorText } from '../../lib/postgres';
+import AttendeeStack from './Attendee';
+import { friendsLine } from './EventCard';
 
 export type SheetEvent = {
   id: string;
@@ -41,8 +45,6 @@ type EventSheetProps = {
   onChanged: () => void | Promise<void>;
   onEdit?: (event: SheetEvent) => void;
   onPhotosChanged?: () => void;
-  // Votes start only on the Votes page: the sheet closes and that opens.
-  onOpenVotes: (groupId?: string) => void;
 };
 
 export default function EventSheet({
@@ -53,26 +55,19 @@ export default function EventSheet({
   onChanged,
   onEdit,
   onPhotosChanged,
-  onOpenVotes,
 }: EventSheetProps) {
   const [roster, setRoster] = useState(false);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [goingSquads, setGoingSquads] = useState<GoingSquad[]>([]);
-  const squad = useSquadPlans(
-    currentUserId,
-    event?.groupId ? [{ id: event.id, groupId: event.groupId }] : [],
-    (groupId) => {
-      onClose();
-      onOpenVotes(groupId);
-    },
-  );
-  const stance = event?.groupId
-    ? squad.stanceFor({ id: event.id, groupId: event.groupId })
-    : { kind: 'rsvp' as const, via: null, skipLabel: null, skipWaiting: false };
-  const canAnswer = stance !== null && stance.kind === 'rsvp';
+  // Your pareas, the one you act as, and everyone in them: for "From your
+  // pareas" and "Suggest to my parea".
+  const [myGroups, setMyGroups] = useState<Group[]>([]);
+  const [actingId, setActingId] = useState<string | null>(null);
+  const [mates, setMates] = useState<Set<string>>(new Set());
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestNote, setSuggestNote] = useState<string | null>(null);
 
   const place = placeLines(event?.location, event?.placeLabel);
 
@@ -82,18 +77,13 @@ export default function EventSheet({
 
     let cancelled = false;
     setConfirming(false);
-    setGoingSquads([]);
+    setSuggestNote(null);
 
     async function load() {
       setError(null);
       try {
-        const [rows, squads] = await Promise.all([
-          getAttendees(open!.id),
-          getGoingSquads(open!.id).catch(() => [] as GoingSquad[]),
-        ]);
-        if (cancelled) return;
-        setAttendees(rows);
-        setGoingSquads(squads);
+        const rows = await getAttendees(open!.id);
+        if (!cancelled) setAttendees(rows);
       }
       catch {
         if (!cancelled) setError('Could not load who is coming.');
@@ -103,6 +93,24 @@ export default function EventSheet({
     load();
     return () => { cancelled = true; };
   }, [event?.id]);
+
+  // Who you hang out with: read once per person, quietly (it only adds lines).
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      getGroupsForUser(currentUserId),
+      getActingGroupId(currentUserId).catch(() => null),
+      getSquadmateIds(currentUserId).catch(() => [] as string[]),
+    ])
+      .then(([groups, acting, ids]) => {
+        if (cancelled) return;
+        setMyGroups(groups);
+        setActingId(acting);
+        setMates(new Set(ids));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [currentUserId]);
 
   async function handleRsvp(status: RsvpStatus | null) {
     if (!event) return;
@@ -124,15 +132,24 @@ export default function EventSheet({
     }
   }
 
-  // Says yes to the acting squad's vote to go, or to skip; with none open to
-  // answer, the Votes page.
-  async function handleSquad(which: 'go' | 'skip') {
-    if (!event?.groupId) return;
-    const plan = { id: event.id, groupId: event.groupId };
-    const ok = which === 'go' ? await squad.act(plan) : await squad.skip(plan);
-    if (!ok) return;
-    setGoingSquads(await getGoingSquads(event.id).catch(() => goingSquads));
-    await onChanged();
+  // Posts the plan as a card in the parea's chat. Not a vote: everyone there
+  // answers it on their own.
+  async function handleSuggest(to: Group) {
+    if (!event || suggesting) return;
+
+    setSuggesting(true);
+    setSuggestNote(null);
+    setError(null);
+    try {
+      const posted = await suggestPlan(to.id, event.id);
+      setSuggestNote(posted ? `Suggested in ${to.name}'s chat.` : `Already suggested in ${to.name}.`);
+    }
+    catch (problem) {
+      setError(errorText(problem, 'Could not suggest it. Try again.'));
+    }
+    finally {
+      setSuggesting(false);
+    }
   }
 
   async function handleDelete() {
@@ -157,7 +174,19 @@ export default function EventSheet({
 
   const myStatus = attendees.find((a) => a.id === currentUserId)?.status;
   const isOwner = event?.createdBy !== undefined && event.createdBy === currentUserId;
-  const started = event !== null && event.date <= keyOf(new Date());
+  const today = keyOf(new Date());
+  const started = event !== null && event.date <= today;
+
+  // Another parea's plan: who from your pareas said I'm in.
+  const hostIsMine = event?.groupId !== undefined && myGroups.some((group) => group.id === event.groupId);
+  const fromPareas = hostIsMine ? [] : going.filter((person) => person.id !== currentUserId && mates.has(person.id));
+
+  // A public plan still ahead can go to a parea of yours that isn't hosting
+  // it: the one you act as, or else your first one.
+  const canSuggestTo = event?.isPublic === true && event.date >= today
+    ? myGroups.filter((group) => group.id !== event.groupId)
+    : [];
+  const suggestTo = pickActing(canSuggestTo, actingId);
 
   return (
     <Modal
@@ -242,14 +271,7 @@ export default function EventSheet({
                 {place.secondary ? (
                   <Text style={styles.whereSub} numberOfLines={2}>{place.secondary}</Text>
                 ) : null}
-                {stance && stance.kind === 'rsvp' && stance.via ? (
-                  <View style={styles.via}>
-                    <Text style={styles.viaText} numberOfLines={1}>{stance.via} is going</Text>
-                  </View>
-                ) : null}
-
                 <View style={styles.actions}>
-                  {canAnswer ? (<>
                   <Pressable
                     onPress={() => handleRsvp(myStatus === 'in' ? null : 'in')}
                     disabled={saving}
@@ -289,28 +311,6 @@ export default function EventSheet({
                       color="#FFFFFF"
                     />
                   </Pressable>
-                  </>) : null}
-                  {stance && stance.kind !== 'rsvp' ? (
-                    stance.kind === 'no-squad' ? (
-                      <Text style={styles.squadNote}>{stance.text}</Text>
-                    ) : (
-                      <Pressable
-                        onPress={() => handleSquad('go')}
-                        disabled={squad.busyId !== null}
-                        accessibilityRole="button"
-                        accessibilityLabel={stance.label}
-                        accessibilityHint={stance.kind === 'propose' || stance.waiting ? 'Opens Votes' : undefined}
-                        style={({ pressed }) => [styles.squadButton, pressed && styles.pressed]}
-                      >
-                        <Ionicons
-                          name={stance.kind === 'propose' ? 'people-outline' : stance.waiting ? 'time-outline' : 'thumbs-up-outline'}
-                          size={17}
-                          color="#FFFFFF"
-                        />
-                        <Text style={styles.squadButtonText} numberOfLines={1}>{stance.label}</Text>
-                      </Pressable>
-                    )
-                  ) : null}
 
                   <Pressable
                     onPress={() => setRoster(true)}
@@ -330,39 +330,48 @@ export default function EventSheet({
 
               <View style={styles.gap} pointerEvents="none" />
 
-              <View style={styles.body}>
+              {/* The part under the map scrolls when it is taller than the room left,
+                  so photos and Edit/Delete are never cut off on a short phone. */}
+              <ScrollView
+                style={styles.bodyScroll}
+                contentContainerStyle={styles.body}
+                bounces={false}
+                showsVerticalScrollIndicator={false}
+              >
                 {event.description ? (
                   <Text style={styles.description}>{event.description}</Text>
                 ) : null}
 
                 {error ? <Text style={styles.error}>{error}</Text> : null}
-                {squad.error ? <Text style={styles.error}>{squad.error}</Text> : null}
 
-                {goingSquads.length > 0 ? (
-                  <View style={styles.squads}>
-                    <Text style={styles.squadsTitle}>SQUADS GOING</Text>
+                {fromPareas.length > 0 ? (
+                  <View style={styles.squads} accessible accessibilityLabel={`From your pareas: ${friendsLine(fromPareas)}`}>
+                    <Text style={styles.squadsTitle}>FROM YOUR PAREAS</Text>
                     <View style={styles.squadsRow}>
-                      {goingSquads.map((one) => (
-                        <View key={one.id} style={styles.squadChip}>
-                          <Monogram name={one.name} uri={one.avatarUrl} size={22} />
-                          <Text style={styles.squadName} numberOfLines={1}>{one.name}</Text>
-                        </View>
-                      ))}
+                      <AttendeeStack people={fromPareas} size={22} max={4} />
+                      <Text style={styles.squadName} numberOfLines={2}>{friendsLine(fromPareas)}</Text>
                     </View>
                   </View>
                 ) : null}
 
-                {stance && stance.kind === 'rsvp' && stance.skipLabel ? (
+                {suggestTo ? (
                   <Pressable
-                    onPress={() => handleSquad('skip')}
-                    disabled={squad.busyId !== null}
+                    onPress={() => handleSuggest(suggestTo)}
+                    disabled={suggesting}
                     accessibilityRole="button"
-                    accessibilityLabel={stance.skipLabel}
-                    accessibilityHint={stance.skipWaiting || stance.skipLabel === 'Vote to skip' ? 'Opens Votes' : undefined}
-                    style={({ pressed }) => [styles.skip, pressed && styles.pressed]}
+                    accessibilityLabel={`Suggest to ${suggestTo.name}`}
+                    accessibilityHint="Posts this plan in the parea's chat. Everyone answers on their own"
+                    accessibilityState={{ disabled: suggesting }}
+                    style={({ pressed }) => [styles.suggest, (pressed || suggesting) && styles.pressed]}
                   >
-                    <Text style={styles.skipText}>{stance.skipLabel}</Text>
+                    <Ionicons name="paper-plane-outline" size={17} color={colors.text} />
+                    <Text style={styles.suggestText} numberOfLines={1}>
+                      {suggesting ? 'Suggesting…' : `Suggest to ${suggestTo.name}`}
+                    </Text>
                   </Pressable>
+                ) : null}
+                {suggestNote ? (
+                  <Text style={styles.suggestNote} accessibilityLiveRegion="polite">{suggestNote}</Text>
                 ) : null}
 
                 {started && event.groupId ? (
@@ -428,7 +437,7 @@ export default function EventSheet({
                     </View>
                   )
                 ) : null}
-              </View>
+              </ScrollView>
             </>
           ) : null}
         </View>
@@ -521,11 +530,13 @@ const styles = StyleSheet.create({
   where: { marginTop: 3, color: 'rgba(255,255,255,0.78)', ...typo.medium, fontSize: textSize.base },
   whereSub: { color: 'rgba(255,255,255,0.5)', ...typo.medium, fontSize: textSize.small, lineHeight: 17 },
 
+  bodyScroll: { flexGrow: 0, flexShrink: 1 },
   body: {
     gap: space.sm,
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
-    paddingBottom: space.lg,
+    // Clear of the iPhone home indicator.
+    paddingBottom: space.xl,
   },
   photos: {
     padding: space.md,
@@ -564,40 +575,22 @@ const styles = StyleSheet.create({
   cancelText: { color: colors.textSoft, ...typo.semi, fontSize: textSize.base },
   dangerBtn: { borderColor: colors.danger, backgroundColor: colors.danger },
   dangerText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.base },
-  via: {
-    alignSelf: 'flex-start',
-    marginTop: space.xs,
-    paddingHorizontal: space.sm,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-  },
-  viaText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.caption },
-  squadButton: {
-    flexShrink: 1,
-    height: 42,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.xs,
-    paddingHorizontal: space.md,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
-  },
-  squadButtonText: { flexShrink: 1, color: '#FFFFFF', ...typo.semi, fontSize: textSize.base },
-  squadNote: { alignSelf: 'center', color: 'rgba(255,255,255,0.78)', ...typo.medium, fontSize: textSize.small },
   squads: { gap: space.xs, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.surface },
   squadsTitle: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption, letterSpacing: 1.2 },
-  squadsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
-  squadChip: { flexDirection: 'row', alignItems: 'center', gap: space.xxs, maxWidth: '100%' },
-  squadName: { color: colors.text, ...typo.semi, fontSize: textSize.small },
-  skip: {
-    alignSelf: 'center',
-    minHeight: 36,
+  squadsRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  squadName: { flexShrink: 1, color: colors.text, ...typo.semi, fontSize: textSize.small },
+  suggest: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: space.xs,
     paddingHorizontal: space.md,
     borderRadius: radius.pill,
     borderWidth: 1.5,
     borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
-  skipText: { color: colors.textSoft, ...typo.semi, fontSize: textSize.small },
+  suggestText: { flexShrink: 1, color: colors.text, ...typo.semi, fontSize: textSize.base },
+  suggestNote: { color: colors.success, ...typo.medium, fontSize: textSize.small, textAlign: 'center' },
 });

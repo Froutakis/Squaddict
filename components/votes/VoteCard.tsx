@@ -49,7 +49,8 @@ export function voteEventToSheet(event: VoteEvent): SheetEvent {
     placeLabel: event.placeLabel,
     lat: event.lat,
     lng: event.lng,
-    isMember: false,
+    // A plan vote's plan is made in the parea that voted.
+    isMember: true,
   };
 }
 
@@ -84,7 +85,7 @@ export default function VoteCard({
   const by = mine ? 'You' : vote.proposerName ?? 'Someone';
   const question = voteQuestion(vote.kind, vote.targetName);
   const target = vote.target;
-  const event = target.type === 'event' ? target.event : null;
+  const event = target.type === 'plan' ? target.event : null;
   const poll = target.type === 'poll' ? target : null;
   const link = target.type === 'invite' ? target.link : null;
   // The member a remove vote is about sees it, but does not vote on it.
@@ -92,7 +93,7 @@ export default function VoteCard({
   const deciding = membersWhoVote(vote.kind, members);
   const cover = event && !coverFailed ? event.coverUrl : null;
   const where = event ? placeLines(event.location, event.placeLabel).primary : '';
-  const opensTarget = onOpen !== undefined && (target.type === 'squad' || target.type === 'event');
+  const opensTarget = onOpen !== undefined && (target.type === 'squad' || (target.type === 'plan' && target.created));
 
   // An unused link lasts a week.
   const expiry = link && !link.usedAt ? inviteExpiry(link.createdAt) : null;
@@ -108,11 +109,12 @@ export default function VoteCard({
           : expiry?.expired
             ? 'Invite expired'
             : outcomeLabel(vote.status);
-  const meta = open ? `${by} asked · ${progress}` : `${outcome} · ${by} asked`;
+  const asked = event ? `${by} ${mine ? 'want' : 'wants'} to throw a plan` : `${by} asked`;
+  const meta = open ? `${asked} · ${progress}` : `${outcome} · ${asked}`;
 
   const thumb = cover ? (
     <Image source={{ uri: cover }} style={styles.cover} onError={() => setCoverFailed(true)} />
-  ) : target.type === 'squad' || target.type === 'event' || target.type === 'user' ? (
+  ) : target.type === 'squad' || target.type === 'plan' || target.type === 'user' ? (
     <Monogram
       name={vote.targetName}
       uri={target.type === 'squad' ? target.group.avatarUrl : target.type === 'user' ? target.user.avatarUrl : null}

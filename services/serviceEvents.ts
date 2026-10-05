@@ -94,7 +94,8 @@ export type MyEvent = GroupEvent & {
   groupName: string;
   myStatus?: RsvpStatus;
   going: Person[];
-  // Your squads that voted to go to this plan (another squad's public plan).
+  // On another parea's public plan you said you're in to: your pareas, so it
+  // shows on each of their lines (it is your night, whichever you look at).
   withGroupIds?: string[];
 };
 
@@ -165,22 +166,8 @@ function toColumns(input: NewEvent) {
   return columns;
 }
 
-export async function createEvent(groupId: string, input: NewEvent): Promise<GroupEvent> {
-    const user = await requireUser();
-
-    const { data, error } = await supabase
-        .from("events")
-        .insert({
-            ...toColumns(input),
-            group_id: groupId,
-            created_by: user.id,
-        })
-        .select()
-        .single();
-    if (error) throw error;
-
-    return toEvent(data as EventRow);
-}
+// New plans are not inserted from the app: they go to the parea's vote
+// (proposePlan in serviceVotes) and the database makes them when it passes.
 
 export async function updateEvent(eventId: string, input: NewEvent): Promise<GroupEvent> {
     const user = await requireUser();
@@ -210,21 +197,7 @@ export async function getMyEvents(userId: string): Promise<MyEvent[]> {
     if (aErr) throw aErr;
 
     const groupIds = (memberships ?? []).map((m) => m.group_id);
-
-    // Other squads' public plans your squads voted to go to.
-    const withByEvent: Record<string, string[]> = {};
-    if (groupIds.length > 0) {
-        const { data: goingRows, error: gErr } = await supabase
-            .from("squad_event_going")
-            .select("group_id, event_id")
-            .in("group_id", groupIds);
-        if (gErr) throw gErr;
-        for (const row of (goingRows ?? []) as { group_id: string; event_id: string }[]) {
-            (withByEvent[row.event_id] ??= []).push(row.group_id);
-        }
-    }
-
-    const eventIds = [...new Set([...(answered ?? []).map((a) => a.event_id), ...Object.keys(withByEvent)])];
+    const eventIds = [...new Set((answered ?? []).map((a) => a.event_id))];
     if (groupIds.length === 0 && eventIds.length === 0) return [];
 
     const filters: string[] = [];
@@ -239,10 +212,11 @@ export async function getMyEvents(userId: string): Promise<MyEvent[]> {
         .order("start_time", { ascending: true, nullsFirst: true });
     if (error) throw error;
 
-    return (data as EventRowWithJoins[]).map((r) => ({
-        ...toMyEvent(r, userId),
-        withGroupIds: withByEvent[r.id] ?? [],
-    }));
+    return (data as EventRowWithJoins[]).map((r) => {
+        const event = toMyEvent(r, userId);
+        const foreignIn = !groupIds.includes(r.group_id) && event.myStatus === "in";
+        return { ...event, withGroupIds: foreignIn ? groupIds : [] };
+    });
 }
 
 export async function setEventCover(eventId: string, coverUrl: string | null): Promise<void> {

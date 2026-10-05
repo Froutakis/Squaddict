@@ -1,42 +1,26 @@
 import { getFollowing } from "./serviceFollow";
-import { getFeed } from "./serviceFeed";
 import { getCrossings } from "./serviceCrossed";
-import { getSquadGoingPlans } from "./serviceVotes";
 import { features } from "../lib/features";
 
-// Things worth putting to a squad's vote, for a quiet Votes page: a public
-// plan of a parea it follows, and a parea it keeps crossing on nights out.
-// Built from what the app already reads; nothing here writes. Every part
-// fails quietly: no ideas is a fine answer.
+// Things worth putting to a squad's vote, for a quiet Votes page: a parea it
+// keeps crossing on nights out. (Going to another parea's plan is not a vote
+// any more: each member answers it.) Built from what the app already reads;
+// nothing here writes. Every part fails quietly: no ideas is a fine answer.
 
-export type VoteIdea =
-  | {
-      kind: "attend";
-      // Stable per plan, for "Not now".
-      id: string;
-      targetId: string;
-      title: string;
-      host: string;
-      date: string;
-      startTime?: string;
-      place: string | null;
-      going: number;
-      why: string;
-    }
-  | {
-      kind: "follow";
-      id: string;
-      targetId: string;
-      name: string;
-      avatarUrl: string | null;
-      // The last night you crossed them.
-      date: string;
-      place: string | null;
-      times: number;
-      why: string;
-    };
+export type VoteIdea = {
+  kind: "follow";
+  // Stable per parea, for "Not now".
+  id: string;
+  targetId: string;
+  name: string;
+  avatarUrl: string | null;
+  // The last night you crossed them.
+  date: string;
+  place: string | null;
+  times: number;
+  why: string;
+};
 
-const PLAN_IDEAS = 2;
 const FOLLOW_IDEAS = 1;
 
 function crossedWhy(times: number): string {
@@ -50,31 +34,7 @@ export async function getVoteIdeas(groupId: string): Promise<VoteIdea[]> {
   const following = await getFollowing(groupId).catch(() => []);
   const followed = new Set(following.map((one) => one.id));
 
-  const [feed, going, crossings] = await Promise.all([
-    following.length > 0
-      ? getFeed({ groupIds: [...followed] }).catch(() => null)
-      : Promise.resolve(null),
-    getSquadGoingPlans(groupId).catch(() => []),
-    features.squadFollows ? getCrossings(groupId) : Promise.resolve([]),
-  ]);
-
-  const already = new Set(going.map((plan) => plan.id));
-  const plans: VoteIdea[] = (feed?.events ?? [])
-    .filter((plan) => plan.groupId !== groupId && !already.has(plan.id))
-    .sort((a, b) => (a.date + (a.startTime ?? "")).localeCompare(b.date + (b.startTime ?? "")))
-    .slice(0, PLAN_IDEAS)
-    .map((plan) => ({
-      kind: "attend",
-      id: `attend:${plan.id}`,
-      targetId: plan.id,
-      title: plan.title,
-      host: plan.groupName,
-      date: plan.date,
-      startTime: plan.startTime,
-      place: plan.placeLabel || plan.location || null,
-      going: plan.goingCount,
-      why: "A parea you follow",
-    }));
+  const crossings = features.squadFollows ? await getCrossings(groupId).catch(() => []) : [];
 
   // One row per crossing night: keep each parea once, at its latest night.
   const seen = new Set<string>();
@@ -98,5 +58,5 @@ export async function getVoteIdeas(groupId: string): Promise<VoteIdea[]> {
       why: crossedWhy(one.times),
     }));
 
-  return [...plans, ...follows];
+  return follows;
 }

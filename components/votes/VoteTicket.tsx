@@ -41,6 +41,12 @@ function askerOf(vote: SquadVote, userId: string): string {
   return firstName(vote.proposerName ?? '') || 'Someone';
 }
 
+// "Nikos wants to throw a plan", "You want to throw a plan".
+function plannerLine(vote: SquadVote, userId: string): string {
+  const who = askerOf(vote, userId);
+  return `${who} ${who === 'You' ? 'want' : 'wants'} to throw a plan`;
+}
+
 function firstName(name: string): string {
   return name.trim().split(/\s+/)[0] ?? '';
 }
@@ -280,16 +286,19 @@ export function VoteTicket({ vote, members, people, userId, busy = false, onYes,
   const mine = vote.proposedBy === userId;
   const question = voteQuestion(vote.kind, vote.targetName);
   const target = vote.target;
-  const event = target.type === 'event' ? target.event : null;
+  const event = target.type === 'plan' ? target.event : null;
   const aboutMe = target.type === 'user' && target.user.id === userId;
   const deciding = membersWhoVote(vote.kind, members);
-  const kicker = `${askerOf(vote, userId)} asked · ${dayOf(vote.createdAt)}`.toUpperCase();
-  const opensTarget = target.type === 'squad' || target.type === 'event';
+  const kicker = (
+    target.type === 'plan' ? plannerLine(vote, userId) : `${askerOf(vote, userId)} asked · ${dayOf(vote.createdAt)}`
+  ).toUpperCase();
+  // A plan opens once the vote made it.
+  const opensTarget = target.type === 'squad' || (target.type === 'plan' && target.created);
   const faces = people.length > 0 ? ` ${facesSummary(vote, people, userId)}.` : '';
 
   const head = (lineText: string) => (
     <>
-      <Text style={styles.kick} numberOfLines={1}>
+      <Text style={styles.kick} numberOfLines={target.type === 'plan' ? 2 : 1}>
         {kicker}
       </Text>
       <Text style={styles.ttl} numberOfLines={3}>
@@ -451,7 +460,9 @@ export function VoteRow({ vote, userId, waiting, onPress }: { vote: SquadVote; u
   const sub =
     vote.target.type === 'user'
       ? `${by} asked · ${aboutMe ? "you don't vote" : `${vote.targetName} doesn't vote`}`
-      : `${by} asked · ${softDay(vote.createdAt)}`;
+      : vote.target.type === 'plan'
+        ? `${plannerLine(vote, userId)} · ${formatDateTime(vote.target.event.date, vote.target.event.startTime)}`
+        : `${by} asked · ${softDay(vote.createdAt)}`;
   const said = aboutMe ? 'about you' : poll ? 'picked' : vote.myVote ? 'you: yes' : 'you: no';
 
   return (
@@ -587,7 +598,7 @@ function outcomeOf(vote: SquadVote, by: string): string {
   const squad = vote.squadName;
   const target = vote.target;
   if (vote.status === 'cancelled') return `${by} cancelled it`;
-  if (vote.status === 'expired') return target.type === 'event' ? 'The plan went by first' : 'It ran out of time';
+  if (vote.status === 'expired') return target.type === 'plan' ? 'The day went by first' : 'It ran out of time';
 
   if (target.type === 'poll') {
     if (vote.status === 'rejected') return 'A tie decides nothing';
@@ -606,10 +617,8 @@ function outcomeOf(vote: SquadVote, by: string): string {
       return passed ? `${squad} follows them now` : 'Not following them';
     case 'unfollow':
       return passed ? 'Not following them any more' : 'Still following them';
-    case 'attend':
-      return passed ? `${squad} is going` : 'Not going';
-    case 'unattend':
-      return passed ? 'Not going any more' : 'Still going';
+    case 'plan':
+      return passed ? `On ${squad}'s plans now` : 'Not this time';
     case 'remove':
       return passed ? `${name} is out` : `${name} stays`;
     case 'rename':
@@ -637,10 +646,8 @@ export function decidedLine(vote: SquadVote): string {
       return `followed ${name}`;
     case 'unfollow':
       return `unfollowed ${name}`;
-    case 'attend':
-      return `going to ${name}`;
-    case 'unattend':
-      return `skipped ${name}`;
+    case 'plan':
+      return `planned ${name}`;
     case 'invite':
       return `invited ${name}`;
     case 'remove':

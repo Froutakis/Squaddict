@@ -109,7 +109,15 @@ with checks(file, step, what, ok) as (
   ('squad_votes.sql', 14, 'function can_answer_event', to_regprocedure('public.can_answer_event(uuid)') is not null),
   ('squad_votes.sql', 14, 'policy answer plans i can go to',
      exists (select 1 from pg_policies where tablename = 'event_attendees' and policyname = 'answer plans i can go to')),
-  ('squad_votes.sql', 14, 'old follow-vote tables dropped', to_regclass('public.squad_follow_proposals') is null)
+  ('squad_votes.sql', 14, 'old follow-vote tables dropped', to_regclass('public.squad_follow_proposals') is null),
+  -- plans_by_vote.sql
+  ('plans_by_vote.sql', 15, 'votes on plans (kind plan)',
+     exists (select 1 from pg_constraint where conname = 'squad_proposals_kind' and pg_get_constraintdef(oid) ilike '%''plan''%')),
+  ('plans_by_vote.sql', 15, 'plans only through a vote (no direct insert)',
+     not exists (select 1 from pg_policies where tablename = 'events' and policyname = 'members create events')),
+  ('plans_by_vote.sql', 15, 'table squad_plan_suggestions', to_regclass('public.squad_plan_suggestions') is not null),
+  ('plans_by_vote.sql', 15, 'function suggest_plan',       to_regprocedure('public.suggest_plan(uuid,uuid)') is not null),
+  ('plans_by_vote.sql', 15, 'function parea_suggestions',  to_regprocedure('public.parea_suggestions(uuid)') is not null)
 )
 select step,
        file,

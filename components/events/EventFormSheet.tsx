@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { Group } from '../../services/serviceGroup';
 import {
-  createEvent,
   setEventCover,
   updateEvent,
   type MyEvent,
   type NewEvent,
 } from '../../services/serviceEvents';
+import { proposePlan, type VoteStatus } from '../../services/serviceVotes';
+import { errorText } from '../../lib/postgres';
+import { membersWhoVote, votesNeeded } from '../../lib/squadVote';
 import {
   pickImage,
   removeEventCover,
@@ -40,6 +42,8 @@ type EventFormSheetProps = {
   draft?: MyEvent | null;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
+  // After a new plan went to the vote: "See the vote" opens Votes there.
+  onOpenVotes?: (groupId: string) => void;
 };
 
 function placeOf(event?: MyEvent | null): Place | null {
@@ -61,6 +65,7 @@ export default function EventFormSheet({
   draft = null,
   onClose,
   onSaved,
+  onOpenVotes,
 }: EventFormSheetProps) {
   const [title, setTitle] = useState('');
   const [eventDate, setEventDate] = useState('');
@@ -78,6 +83,8 @@ export default function EventFormSheet({
   const [pendingCover, setPendingCover] = useState<PickedImage | null>(null);
   const [askingCover, setAskingCover] = useState(false);
   const [preparingCover, setPreparingCover] = useState(false);
+  // A new plan that went to the vote: where it went, and how it stands.
+  const [sent, setSent] = useState<{ groupId: string; status: VoteStatus } | null>(null);
 
   useEffect(
     function () {
@@ -98,6 +105,7 @@ export default function EventFormSheet({
       setCoverUrl(event?.coverUrl ?? null);
       setPendingCover(null);
       setAskingCover(false);
+      setSent(null);
     },
     [visible, defaultDate, event?.id, draft?.id],
   );
@@ -107,6 +115,12 @@ export default function EventFormSheet({
   const placeRequired = isPublic || !editing || hadPlace;
 
   const coverPreview = pendingCover?.uri ?? coverUrl;
+
+  // A new plan is the parea's call: "3 of 5 decide".
+  const chosenGroup = groups.find((group) => group.id === targetGroup) ?? null;
+  const deciding = membersWhoVote('plan', chosenGroup?.memberCount ?? 1);
+  const needed = votesNeeded(deciding);
+  const sentGroup = sent ? groups.find((group) => group.id === sent.groupId) ?? null : null;
 
   async function chooseCover(source: PhotoSource) {
     setAskingCover(false);
@@ -171,8 +185,22 @@ export default function EventFormSheet({
     setSaving(true);
     setFormError(null);
 
+    // A new plan goes to the parea's vote; the database makes it when it passes.
+    if (!event) {
+      try {
+        const status = await proposePlan(targetGroup!, input, pendingCover);
+        setSent({ groupId: targetGroup!, status });
+        await onSaved();
+      } catch (problem) {
+        setFormError(errorText(problem, 'Could not put it to the vote. Try again.'));
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     try {
-      const saved = event ? await updateEvent(event.id, input) : await createEvent(targetGroup!, input);
+      const saved = await updateEvent(event.id, input);
 
       try {
         await saveCover(saved.id, saved.groupId);
@@ -183,10 +211,29 @@ export default function EventFormSheet({
       await onSaved();
       onClose();
     } catch {
-      setFormError(editing ? 'Could not save the changes. Try again.' : 'Could not post the plan. Try again.');
+      setFormError('Could not save the changes. Try again.');
     } finally {
       setSaving(false);
     }
+  }
+
+  // After New plan: it went to the vote (or, in a parea of one, it is on).
+  function renderSent() {
+    const name = sentGroup?.name ?? 'your parea';
+    const passed = sent?.status === 'passed';
+    return (
+      <View style={styles.sent} accessibilityLiveRegion="polite">
+        <View style={styles.sentIcon}>
+          <Ionicons name={passed ? 'checkmark' : 'people-outline'} size={26} color={colors.success} />
+        </View>
+        <Text style={styles.sentTitle}>{passed ? "It's on" : `Sent to ${name}`}</Text>
+        <Text style={styles.sentBody}>
+          {passed
+            ? `${name} said yes, so "${title.trim()}" is on your plans now.`
+            : `"${title.trim()}" is up for a vote in ${name}. It's on when ${needed} of ${deciding} say yes. Your yes is in.`}
+        </Text>
+      </View>
+    );
   }
 
   return (
@@ -198,207 +245,242 @@ export default function EventFormSheet({
         if (!saving) onClose();
       }}
     >
-      <Pressable
-        style={styles.backdrop}
-        onPress={function () {
-          if (!saving) onClose();
-        }}
-      >
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.head}>
-            <View style={styles.topRow}>
+      {/* On iOS the keyboard would cover the fields; the sheet rises above it. */}
+      <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Pressable
+          style={styles.backdrop}
+          onPress={function () {
+            if (!saving) onClose();
+          }}
+        >
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.head}>
+              <View style={styles.topRow}>
+                <Pressable
+                  onPress={onClose}
+                  disabled={saving}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel"
+                >
+                  <Text style={styles.cancel}>Cancel</Text>
+                </Pressable>
+
+                <Text style={styles.sheetTitle}>{editing ? 'Edit plan' : sent ? 'Plan sent' : 'New plan'}</Text>
+
+                <Text style={[styles.cancel, styles.ghost]} accessibilityElementsHidden>Cancel</Text>
+              </View>
+            </View>
+
+            {sent ? renderSent() : (
+            <ScrollView
+              style={styles.scroll}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.form}
+            >
               <Pressable
-                onPress={onClose}
-                disabled={saving}
-                hitSlop={8}
+                onPress={() => setAskingCover(true)}
+                disabled={saving || preparingCover}
                 accessibilityRole="button"
-                accessibilityLabel="Cancel"
+                accessibilityLabel={coverPreview ? 'Change the cover photo' : 'Add a cover photo'}
+                style={({ pressed }) => [
+                  styles.cover,
+                  !coverPreview && styles.coverEmpty,
+                  pressed && styles.pressed,
+                ]}
               >
-                <Text style={styles.cancel}>Cancel</Text>
+                {coverPreview ? (
+                  <>
+                    <Image source={{ uri: coverPreview }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                    <LinearGradient
+                      colors={['rgba(12,25,38,0)', 'rgba(12,25,38,0.6)']}
+                      style={StyleSheet.absoluteFill}
+                      pointerEvents="none"
+                    />
+                    <View style={styles.coverBadge}>
+                      <Ionicons name="image-outline" size={14} color="#FFFFFF" />
+                      <Text style={styles.coverBadgeText}>Change cover</Text>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons
+                      name={preparingCover ? 'hourglass-outline' : 'image-outline'}
+                      size={24}
+                      color={colors.textSoft}
+                    />
+                    <Text style={styles.coverTitle}>
+                      {preparingCover ? 'Getting it ready…' : 'Add a cover photo'}
+                    </Text>
+                    <Text style={styles.coverBody}>The spot, the poster, the vibe. It goes behind the ticket.</Text>
+                  </>
+                )}
               </Pressable>
 
-              <Text style={styles.sheetTitle}>{editing ? 'Edit plan' : 'New plan'}</Text>
+              <View>
+                <Label>Calling it</Label>
+                <TextInput
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder=""
+                  placeholderTextColor={colors.textFaint}
+                  editable={!saving}
+                  selectionColor={colors.primary}
+                  accessibilityLabel="Plan title"
+                  style={styles.titleInput}
+                />
+                <View style={styles.underline} />
+              </View>
 
-              <Text style={[styles.cancel, styles.ghost]} accessibilityElementsHidden>Cancel</Text>
-            </View>
-          </View>
+              <View>
+                <Label>With which parea</Label>
+                <GroupBar
+                  groups={groups}
+                  activeId={targetGroup}
+                  onSelect={setTargetGroup}
+                  showAll={false}
+                />
+              </View>
 
-          <ScrollView
-            style={styles.scroll}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.form}
-          >
-            <Pressable
-              onPress={() => setAskingCover(true)}
-              disabled={saving || preparingCover}
-              accessibilityRole="button"
-              accessibilityLabel={coverPreview ? 'Change the cover photo' : 'Add a cover photo'}
-              style={({ pressed }) => [
-                styles.cover,
-                !coverPreview && styles.coverEmpty,
-                pressed && styles.pressed,
-              ]}
-            >
-              {coverPreview ? (
-                <>
-                  <Image source={{ uri: coverPreview }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-                  <LinearGradient
-                    colors={['rgba(12,25,38,0)', 'rgba(12,25,38,0.6)']}
-                    style={StyleSheet.absoluteFill}
-                    pointerEvents="none"
+              <View style={styles.section}>
+                <Label>When</Label>
+                <View style={styles.row}>
+                  <DateField value={eventDate} onChange={setEventDate} style={styles.dateColumn}/>
+                  <AuthField
+                    value={startTime}
+                    onChangeText={setStartTime}
+                    placeholder="Start"
+                    mono
+                    loading={saving}
+                    style={styles.timeColumn}
                   />
-                  <View style={styles.coverBadge}>
-                    <Ionicons name="image-outline" size={14} color="#FFFFFF" />
-                    <Text style={styles.coverBadgeText}>Change cover</Text>
+                  <AuthField
+                    value={endTime}
+                    onChangeText={setEndTime}
+                    placeholder="End"
+                    mono
+                    loading={saving}
+                    style={styles.timeColumn}
+                  />
                   </View>
+              </View>
+
+              <View style={styles.section}>
+                <Label>Spot</Label>
+                <PlaceField place={place} onChange={setPlace} loading={saving} />
+                <AuthField
+                  icon="pricetag-outline"
+                  value={nickname}
+                  onChangeText={setNickname}
+                  placeholder="Give the spot a nickname"
+                  loading={saving}
+                />
+              </View>
+
+              <View>
+                <Label>What kind of night</Label>
+                <View style={styles.tagRow}>
+                  {EVENT_TAGS.map(function (tag) {
+                    return (
+                      <Chip
+                        key={tag}
+                        label={tagLabel(tag)}
+                        active={tags.includes(tag)}
+                        onPress={() => toggleTag(tag)}
+                      />
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View>
+                <Label>Note</Label>
+                <TextInput
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Booking a table this time. Bring cash for the split."
+                  placeholderTextColor={colors.textFaint}
+                  editable={!saving}
+                  selectionColor={colors.primary}
+                  accessibilityLabel="Note"
+                  multiline
+                  style={styles.note}
+                />
+              </View>
+
+              <View style={styles.publicRow}>
+                <Ionicons name="globe-outline" size={22} color={colors.textSoft} />
+                <View style={styles.publicText}>
+                  <Text style={styles.publicTitle}>Open to Squaddict</Text>
+                  <Text style={styles.publicBody}>
+                    Anyone nearby can find this plan and ask to come, and its photos show up for other pareas after. Off means your squad only.
+                  </Text>
+                </View>
+                <Switch
+                  value={isPublic}
+                  onValueChange={setIsPublic}
+                  disabled={saving}
+                  trackColor={{ false: colors.border, true: colors.success }}
+                  thumbColor={colors.surface}
+                />
+              </View>
+            </ScrollView>
+            )}
+
+            <PhotoSourceSheet
+              visible={askingCover}
+              title="Cover photo"
+              onClose={() => setAskingCover(false)}
+              onPick={chooseCover}
+              onRemove={coverPreview ? dropCover : undefined}
+            />
+
+            <View style={styles.actionBar}>
+              {sent ? (
+                <>
+                  <Button title="Done" onPress={onClose} />
+                  {sent.status === 'open' && onOpenVotes ? (
+                    <Pressable
+                      onPress={() => {
+                        const groupId = sent.groupId;
+                        onClose();
+                        onOpenVotes(groupId);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="See the vote"
+                      style={({ pressed }) => [styles.seeVote, pressed && styles.pressed]}
+                    >
+                      <Text style={styles.seeVoteText}>See the vote</Text>
+                    </Pressable>
+                  ) : null}
                 </>
               ) : (
                 <>
-                  <Ionicons
-                    name={preparingCover ? 'hourglass-outline' : 'image-outline'}
-                    size={24}
-                    color={colors.textSoft}
+                  {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+                  {!editing && chosenGroup ? (
+                    <Text style={styles.voteNote}>
+                      {deciding === 1
+                        ? `It's just you in ${chosenGroup.name}, so it goes straight on.`
+                        : `Goes to a vote in ${chosenGroup.name}: ${needed} of ${deciding} decide. Your yes counts.`}
+                    </Text>
+                  ) : null}
+                  <Button
+                    title={editing ? 'Save changes' : 'Put to the parea'}
+                    onPress={handleSave}
+                    loading={saving}
                   />
-                  <Text style={styles.coverTitle}>
-                    {preparingCover ? 'Getting it ready…' : 'Add a cover photo'}
-                  </Text>
-                  <Text style={styles.coverBody}>The spot, the poster, the vibe. It goes behind the ticket.</Text>
                 </>
               )}
-            </Pressable>
-
-            <View>
-              <Label>Calling it</Label>
-              <TextInput
-                value={title}
-                onChangeText={setTitle}
-                placeholder=""
-                placeholderTextColor={colors.textFaint}
-                editable={!saving}
-                selectionColor={colors.primary}
-                accessibilityLabel="Plan title"
-                style={styles.titleInput}
-              />
-              <View style={styles.underline} />
             </View>
-
-            <View>
-              <Label>With which parea</Label>
-              <GroupBar
-                groups={groups}
-                activeId={targetGroup}
-                onSelect={setTargetGroup}
-                showAll={false}
-              />
-            </View>
-
-            <View style={styles.section}>
-              <Label>When</Label>
-              <View style={styles.row}>
-                <DateField value={eventDate} onChange={setEventDate} style={styles.dateColumn}/>
-                <AuthField
-                  value={startTime}
-                  onChangeText={setStartTime}
-                  placeholder="Start"
-                  mono
-                  loading={saving}
-                  style={styles.timeColumn}
-                />
-                <AuthField
-                  value={endTime}
-                  onChangeText={setEndTime}
-                  placeholder="End"
-                  mono
-                  loading={saving}
-                  style={styles.timeColumn}
-                />
-                </View>
-            </View>
-
-            <View style={styles.section}>
-              <Label>Spot</Label>
-              <PlaceField place={place} onChange={setPlace} loading={saving} />
-              <AuthField
-                icon="pricetag-outline"
-                value={nickname}
-                onChangeText={setNickname}
-                placeholder="Give the spot a nickname"
-                loading={saving}
-              />
-            </View>
-
-            <View>
-              <Label>What kind of night</Label>
-              <View style={styles.tagRow}>
-                {EVENT_TAGS.map(function (tag) {
-                  return (
-                    <Chip
-                      key={tag}
-                      label={tagLabel(tag)}
-                      active={tags.includes(tag)}
-                      onPress={() => toggleTag(tag)}
-                    />
-                  );
-                })}
-              </View>
-            </View>
-
-            <View>
-              <Label>Note</Label>
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Booking a table this time. Bring cash for the split."
-                placeholderTextColor={colors.textFaint}
-                editable={!saving}
-                selectionColor={colors.primary}
-                accessibilityLabel="Note"
-                multiline
-                style={styles.note}
-              />
-            </View>
-
-            <View style={styles.publicRow}>
-              <Ionicons name="globe-outline" size={22} color={colors.textSoft} />
-              <View style={styles.publicText}>
-                <Text style={styles.publicTitle}>Open to Squaddict</Text>
-                <Text style={styles.publicBody}>
-                  Anyone nearby can find this plan and ask to come, and its photos show up for other pareas after. Off means your squad only.
-                </Text>
-              </View>
-              <Switch
-                value={isPublic}
-                onValueChange={setIsPublic}
-                disabled={saving}
-                trackColor={{ false: colors.border, true: colors.success }}
-                thumbColor={colors.surface}
-              />
-            </View>
-          </ScrollView>
-
-          <PhotoSourceSheet
-            visible={askingCover}
-            title="Cover photo"
-            onClose={() => setAskingCover(false)}
-            onPick={chooseCover}
-            onRemove={coverPreview ? dropCover : undefined}
-          />
-
-          <View style={styles.actionBar}>
-            {formError ? <Text style={styles.formError}>{formError}</Text> : null}
-            <Button
-              title={editing ? 'Save changes' : 'Post plan'}
-              onPress={handleSave}
-              loading={saving}
-            />
-          </View>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  keyboard: { flex: 1 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
     maxHeight: '90%',
@@ -504,4 +586,19 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   formError: { color: colors.danger, ...typo.medium, fontSize: 13 },
+  voteNote: { color: colors.textSoft, ...typo.medium, fontSize: textSize.small, textAlign: 'center' },
+  seeVote: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: space.md },
+  seeVoteText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
+
+  sent: { alignItems: 'center', gap: space.sm, paddingHorizontal: space.lg, paddingVertical: space.xl },
+  sentIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bg,
+  },
+  sentTitle: { color: colors.text, ...typo.display, fontSize: 21, letterSpacing: -0.3, textAlign: 'center' },
+  sentBody: { color: colors.textSoft, ...typo.medium, fontSize: 14.5, lineHeight: 21, textAlign: 'center' },
 });

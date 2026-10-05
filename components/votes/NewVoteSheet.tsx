@@ -15,11 +15,9 @@ import {
 } from 'react-native';
 import { getMemberProfiles, searchGroups, type Group } from '../../services/serviceGroup';
 import { getFollowing } from '../../services/serviceFollow';
-import { getFeed } from '../../services/serviceFeed';
 import { pickImage, removeSquadImage, uploadSquadImage } from '../../services/serviceMedia';
-import { getSquadGoingPlans, propose, type VoteKind, type VoteStatus } from '../../services/serviceVotes';
+import { propose, type VoteKind, type VoteStatus } from '../../services/serviceVotes';
 import { errorText, UNIQUE_VIOLATION } from '../../lib/postgres';
-import { formatDateTime } from '../../lib/datetime';
 import { features } from '../../lib/features';
 import { membersWhoVote, votesNeeded } from '../../lib/squadVote';
 import type { Person } from '../../lib/people';
@@ -29,9 +27,10 @@ import { PollPreview } from './VoteTicket';
 import { fieldStyles } from '../../fieldStyles';
 import { brand, colors, radius, space, textSize, typo } from '../../theme';
 
-export type Step = 'menu' | VoteKind;
+// A plan is put to the vote from the plan form, not from a step here.
+export type Step = 'menu' | Exclude<VoteKind, 'plan'>;
 
-// A row to pick in the list steps: a squad, a plan or a member.
+// A row to pick in the list steps: a squad or a member.
 type Choice = { id: string; title: string; detail?: string; avatarUrl?: string | null; square?: boolean };
 
 const NAME_MAX = 40;
@@ -51,11 +50,21 @@ type NewVoteSheetProps = {
   // Opens straight on one kind (a quick start on Votes); Back still leads to
   // every kind.
   initialStep?: Step;
+  // "Throw a plan": closes this and opens the plan form.
+  onNewPlan?: () => void;
 };
 
 // "What do we decide?": every vote starts here, and only here. One small step
 // per kind of decision, then it goes to the parea.
-export default function NewVoteSheet({ visible, group, userId, onClose, onStarted, initialStep = 'menu' }: NewVoteSheetProps) {
+export default function NewVoteSheet({
+  visible,
+  group,
+  userId,
+  onClose,
+  onStarted,
+  initialStep = 'menu',
+  onNewPlan,
+}: NewVoteSheetProps) {
   const [step, setStep] = useState<Step>('menu');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,10 +131,10 @@ export default function NewVoteSheet({ visible, group, userId, onClose, onStarte
   // What the list steps show. Searching ones wait for typing to settle.
   useEffect(() => {
     if (!visible) return;
-    if (step !== 'follow' && step !== 'unfollow' && step !== 'attend' && step !== 'unattend' && step !== 'remove') return;
+    if (step !== 'follow' && step !== 'unfollow' && step !== 'remove') return;
 
     let cancelled = false;
-    const wait = step === 'follow' || step === 'attend' ? SEARCH_DELAY_MS : 0;
+    const wait = step === 'follow' ? SEARCH_DELAY_MS : 0;
 
     const timer = setTimeout(async function () {
       setLoadingChoices(true);
@@ -164,34 +173,6 @@ export default function NewVoteSheet({ visible, group, userId, onClose, onStarte
     if (kind === 'unfollow') {
       const following = await getFollowing(group.id);
       return following.map((one) => ({ id: one.id, title: one.name, detail: `@${one.handle}`, avatarUrl: one.avatarUrl }));
-    }
-
-    if (kind === 'attend') {
-      const [feed, going] = await Promise.all([
-        getFeed(term === '' ? {} : { search: term }),
-        getSquadGoingPlans(group.id).catch(() => []),
-      ]);
-      const already = new Set(going.map((plan) => plan.id));
-      return feed.events
-        .filter((plan) => plan.groupId !== group.id && !already.has(plan.id))
-        .map((plan) => ({
-          id: plan.id,
-          title: plan.title,
-          detail: `${plan.groupName} · ${formatDateTime(plan.date, plan.startTime)}`,
-          avatarUrl: plan.coverUrl ?? null,
-          square: true,
-        }));
-    }
-
-    if (kind === 'unattend') {
-      const going = await getSquadGoingPlans(group.id);
-      return going.map((plan) => ({
-        id: plan.id,
-        title: plan.title,
-        detail: `${plan.groupName} · ${formatDateTime(plan.date, plan.startTime)}`,
-        avatarUrl: plan.coverUrl,
-        square: true,
-      }));
     }
 
     const people: Person[] = await getMemberProfiles(group.id);
@@ -283,7 +264,7 @@ export default function NewVoteSheet({ visible, group, userId, onClose, onStarte
   const pareas = 'Other pareas';
   const itself = `${group.name} itself`;
   const menu: {
-    step: Step;
+    step: Step | 'plan';
     icon: keyof typeof Ionicons.glyphMap;
     title: string;
     detail: string;
@@ -293,8 +274,9 @@ export default function NewVoteSheet({ visible, group, userId, onClose, onStarte
     { step: 'poll', icon: 'help-circle-outline', title: 'Ask the parea', detail: 'A question with 2 to 4 choices', section: '' },
     { step: 'invite', icon: 'person-add-outline', title: 'Invite someone', detail: 'If it passes, you get a link that works once', section: whoIn },
     { step: 'remove', icon: 'person-remove-outline', title: 'Remove a member', detail: "They see it, they don't vote", section: whoIn, red: true },
-    { step: 'attend', icon: 'calendar-outline', title: 'Go to a plan', detail: "Another parea's public plan", section: plans },
-    { step: 'unattend', icon: 'calendar-clear-outline', title: 'Skip a plan', detail: 'One your parea said yes to', section: plans },
+    ...(onNewPlan
+      ? [{ step: 'plan' as const, icon: 'calendar-outline' as const, title: 'Throw a plan', detail: "It's on when most say yes", section: plans }]
+      : []),
     ...(features.squadFollows
       ? [
           { step: 'follow' as const, icon: 'compass-outline' as const, title: 'Follow a parea', detail: 'See their nights and plans', section: pareas },
@@ -460,7 +442,7 @@ export default function NewVoteSheet({ visible, group, userId, onClose, onStarte
                   {section.items.map((item, index) => (
                     <Pressable
                       key={item.step}
-                      onPress={() => open(item.step)}
+                      onPress={() => (item.step === 'plan' ? onNewPlan?.() : open(item.step))}
                       accessibilityRole="button"
                       accessibilityLabel={item.title}
                       accessibilityHint={item.detail}
@@ -598,10 +580,6 @@ export default function NewVoteSheet({ visible, group, userId, onClose, onStarte
         return renderChoices('Search pareas', query.trim() === '' ? 'Type a name or @handle.' : 'No parea found.');
       case 'unfollow':
         return renderChoices(null, `${group.name} follows nobody yet.`);
-      case 'attend':
-        return renderChoices('Search plans', 'No upcoming public plans found.');
-      case 'unattend':
-        return renderChoices(null, `${group.name} is not going to any plan right now.`);
       case 'remove':
         return renderChoices(null, 'Nobody else is in the parea yet.');
     }

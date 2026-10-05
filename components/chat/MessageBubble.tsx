@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ReplyQuote } from '../../services/serviceChat';
 import { bubbleSize } from './media';
@@ -37,6 +37,8 @@ type MessageBubbleProps = {
   imageWidth?: number;
   imageHeight?: number;
   onOpenImage?: () => void;
+  // A plan suggested to the parea (PlanCard), shown in place of the text.
+  planCard?: ReactNode;
 };
 
 const PHOTO_MAX_WIDTH = 232;
@@ -65,6 +67,7 @@ export default function MessageBubble({
   imageWidth = 0,
   imageHeight = 0,
   onOpenImage,
+  planCard,
 }: MessageBubbleProps) {
   const body = useMemo(
     function () {
@@ -111,6 +114,9 @@ export default function MessageBubble({
   const captionOnly = content.trim().length > 0;
 
   function renderContent(textStyle: any) {
+    if (planCard && !deleted) {
+      return planCard;
+    }
     if (!hasPhoto) {
       return renderText(textStyle);
     }

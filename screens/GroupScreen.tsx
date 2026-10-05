@@ -34,8 +34,6 @@ import { clearRsvp, setRsvp, type RsvpStatus } from '../services/serviceEvents';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import PublicProfile from '../components/group/PublicProfile';
 import RsvpButtons from '../components/events/RsvpButtons';
-import SquadGoStub from '../components/events/SquadGoStub';
-import { useSquadPlans } from '../components/events/useSquadPlans';
 import { voteEventToSheet } from '../components/votes/VoteCard';
 import { FAB_CENTER_Y, FAB_INSET } from '../components/general/MenuFab';
 import { features } from '../lib/features';
@@ -56,7 +54,7 @@ const ALL_TABS = [
 const TABS = ALL_TABS.filter((option) => option.value !== 'following' || features.squadFollows);
 
 // The votes the Following tab answers in place; the rest live on the Votes page.
-const FOLLOWING_TAB_KINDS = ['follow', 'unfollow', 'attend', 'unattend'];
+const FOLLOWING_TAB_KINDS = ['follow', 'unfollow'];
 
 type GroupScreenProps = {
   group: Group;
@@ -104,11 +102,6 @@ export default function GroupScreen({
     following: null,
     followers: null,
   });
-  const squadPlans = useSquadPlans(
-    userId,
-    plans.map((plan) => ({ id: plan.id, groupId: plan.groupId })),
-    onOpenVotes,
-  );
 
   useEffect(() => {
     setCurrent(group);
@@ -320,7 +313,6 @@ export default function GroupScreen({
       currentUserId={userId}
       onClose={() => setOpenPlan(null)}
       onChanged={async () => setPlans(await getGroupPublicEvents(group.id))}
-      onOpenVotes={onOpenVotes}
     />
   );
 
@@ -350,7 +342,7 @@ export default function GroupScreen({
           group={current}
           plans={plans}
           savingId={savingId}
-          error={error ?? squadPlans.error}
+          error={error}
           followAction={
             features.squadFollows ? (
               <FollowButton group={current} userId={userId} onOpenVotes={onOpenVotes} />
@@ -360,19 +352,13 @@ export default function GroupScreen({
           onAnswer={answer}
           onOpenPlan={openSheet}
           stubFor={(plan) => (
-            <SquadGoStub
-              stance={squadPlans.stanceFor(plan)}
-              busy={squadPlans.busyId === plan.id}
-              onAct={() => squadPlans.act(plan)}
-            >
-              <RsvpButtons
-                status={plan.myStatus}
-                saving={savingId === plan.id}
-                onChange={(status) => answer(plan, status)}
-                compact
-                stretch
-              />
-            </SquadGoStub>
+            <RsvpButtons
+              status={plan.myStatus}
+              saving={savingId === plan.id}
+              onChange={(status) => answer(plan, status)}
+              compact
+              stretch
+            />
           )}
         />
         {sheet}

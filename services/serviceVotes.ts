@@ -1,11 +1,19 @@
 import { supabase } from "./supabaseClient";
 import { GROUP_FIELDS, toGroup, type Group } from "./serviceGroup";
+import { removeEventCover, uploadEventCover, type PickedImage } from "./serviceMedia";
+import type { NewEvent } from "./serviceEvents";
 import { keyOf } from "../lib/datetime";
+import { newId } from "../lib/ids";
 import { effectiveStatus, inviteExpiry, type VoteKind, type VoteStatus } from "../lib/squadVote";
 
 export type { VoteKind, VoteStatus };
 
-// The public plan a vote is about.
+// Kinds the app no longer shows: going to (or skipping) a plan was a vote
+// once. Old rows stay in the database and are left out here.
+const RETIRED_KINDS = ["attend", "unattend"];
+
+// A plan a vote is about: the draft of a 'plan' vote (id is the event's once
+// it passed, "" before).
 export type VoteEvent = {
   id: string;
   groupId: string;
@@ -32,14 +40,30 @@ export type InviteLink = { code: string; usedByName: string | null; usedAt: stri
 
 export type VoteTarget =
   | { type: "squad"; group: Group }
-  | { type: "event"; event: VoteEvent }
+  // A new plan: made in the parea when the vote passes (created).
+  | { type: "plan"; event: VoteEvent; created: boolean }
   | { type: "user"; user: VoteUser }
   | { type: "poll"; options: VoteOption[]; myOption: string | null; winnerId: string | null }
   | { type: "setting" }
   | { type: "invite"; link: InviteLink | null };
 
-// What a vote needs to say and apply (squad_proposals.payload).
+// What a vote needs to say and apply (squad_proposals.payload). A plan vote
+// carries the draft in the events table's column names, and event_id once
+// it passed.
 export type VotePayload = {
+  title?: string;
+  date?: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  location?: string | null;
+  description?: string | null;
+  place_label?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  is_public?: boolean;
+  tags?: string[];
+  cover_url?: string | null;
+  event_id?: string;
   question?: string;
   name?: string;
   url?: string;
@@ -76,8 +100,6 @@ export type SquadVote = {
   closedAt: string | null;
 };
 
-export type GoingSquad = { id: string; name: string; avatarUrl: string | null };
-
 const DECIDED_SHOWN = 5;
 const INVITES_SHOWN = 10;
 
@@ -93,25 +115,23 @@ const VOTE_FIELDS = `id, group_id, kind, status, payload, proposed_by, target_us
   invite:squad_invite_links!squad_invite_links_proposal_id_fkey(code, used_at, created_at, joined:profiles!squad_invite_links_used_by_fkey(display_name)),
   ballots:squad_ballots!squad_ballots_proposal_id_fkey(user_id, approve, option_id)`;
 
-const EVENT_FIELDS =
-  "id, group_id, title, date, start_time, location, place_label, lat, lng, cover_url, is_public, host:groups!events_group_id_fkey(name)";
-
 type BallotRow = { user_id: string; approve: boolean | null; option_id: string | null };
 
-function toVoteEvent(row: any): VoteEvent {
+// The plan a 'plan' vote would make (or made), from its draft.
+function draftEvent(row: any, payload: VotePayload): VoteEvent {
   return {
-    id: row.id,
+    id: payload.event_id ?? "",
     groupId: row.group_id,
-    groupName: row.host?.name ?? "Squad",
-    title: row.title,
-    date: row.date,
-    startTime: row.start_time?.slice(0, 5) ?? undefined,
-    location: row.location ?? undefined,
-    placeLabel: row.place_label ?? undefined,
-    lat: row.lat ?? undefined,
-    lng: row.lng ?? undefined,
-    coverUrl: row.cover_url ?? null,
-    isPublic: row.is_public ?? false,
+    groupName: row.squad?.name ?? "Squad",
+    title: payload.title ?? "A plan",
+    date: payload.date ?? "",
+    startTime: payload.start_time?.slice(0, 5) ?? undefined,
+    location: payload.location ?? undefined,
+    placeLabel: payload.place_label ?? undefined,
+    lat: payload.lat ?? undefined,
+    lng: payload.lng ?? undefined,
+    coverUrl: payload.cover_url ?? null,
+    isPublic: payload.is_public ?? false,
   };
 }
 
@@ -125,9 +145,8 @@ function toTarget(row: any, payload: VotePayload, ballots: BallotRow[], userId: 
     case "follow":
     case "unfollow":
       return row.target_group ? { type: "squad", group: toGroup(row.target_group) } : null;
-    case "attend":
-    case "unattend":
-      return row.target_event ? { type: "event", event: toVoteEvent(row.target_event) } : null;
+    case "plan":
+      return { type: "plan", event: draftEvent(row, payload), created: !!payload.event_id };
     case "remove":
       return {
         type: "user",
@@ -178,7 +197,7 @@ function toLink(row: any): InviteLink {
 
 function nameOf(kind: VoteKind, target: VoteTarget, payload: VotePayload, squadName: string): string {
   if (target.type === "squad") return target.group.name;
-  if (target.type === "event") return target.event.title;
+  if (target.type === "plan") return target.event.title;
   if (target.type === "user") return target.user.name ?? "a former member";
   if (kind === "poll") return payload.question ?? "A question";
   if (kind === "invite" || kind === "rename") return payload.name ?? "";
@@ -207,7 +226,7 @@ function toVote(row: any, userId: string, today: string, members: Set<string> | 
     target,
     targetName: nameOf(row.kind, target, payload, squadName),
     payload,
-    status: effectiveStatus(row.status, target.type === "event" ? target.event.date : null, today),
+    status: effectiveStatus(row.status, target.type === "plan" ? target.event.date || null : null, today),
     proposedBy: row.proposed_by ?? null,
     proposerName: row.proposer?.display_name ?? null,
     yes: ballots.filter((ballot) => ballot.approve === true).length,
@@ -223,6 +242,7 @@ function toVote(row: any, userId: string, today: string, members: Set<string> | 
 function toVotes(rows: any[] | null, userId: string, members: Set<string> | null): SquadVote[] {
   const today = keyOf(new Date());
   return (rows ?? [])
+    .filter((row) => !RETIRED_KINDS.includes(row.kind))
     .map((row) => toVote(row, userId, today, members))
     .filter((vote): vote is SquadVote => vote !== null);
 }
@@ -349,38 +369,12 @@ export async function getOpenSquadVote(
   return data ? toVotes([data], userId, members)[0] ?? null : null;
 }
 
-// The squad's open votes on these plans, by event id.
-export async function getOpenEventVotes(
-  groupId: string,
-  eventIds: string[],
-  userId: string,
-): Promise<Record<string, SquadVote>> {
-  if (eventIds.length === 0) return {};
-
-  const [{ data, error }, members] = await Promise.all([
-    supabase
-      .from("squad_proposals")
-      .select(VOTE_FIELDS)
-      .eq("group_id", groupId)
-      .eq("status", "open")
-      .in("target_event_id", eventIds),
-    memberIds(groupId),
-  ]);
-  if (error) throw error;
-
-  const byEvent: Record<string, SquadVote> = {};
-  for (const vote of toVotes(data, userId, members)) {
-    if (vote.status === "open" && vote.target.type === "event") byEvent[vote.target.event.id] = vote;
-  }
-  return byEvent;
-}
-
 // Per squad, how many open votes the member has not answered yet.
 export async function getPendingVoteCounts(userId: string): Promise<Record<string, number>> {
   const { data, error } = await supabase
     .from("squad_proposals")
     .select(
-      "group_id, target_user_id, target_event:events!squad_proposals_target_event_id_fkey(date), ballots:squad_ballots!squad_ballots_proposal_id_fkey(user_id)",
+      "group_id, kind, payload, target_user_id, ballots:squad_ballots!squad_ballots_proposal_id_fkey(user_id)",
     )
     .eq("status", "open");
   if (error) throw error;
@@ -388,7 +382,9 @@ export async function getPendingVoteCounts(userId: string): Promise<Record<strin
   const today = keyOf(new Date());
   const counts: Record<string, number> = {};
   for (const row of (data ?? []) as any[]) {
-    if (effectiveStatus("open", row.target_event?.date ?? null, today) !== "open") continue;
+    if (RETIRED_KINDS.includes(row.kind)) continue;
+    const planDate = row.kind === "plan" ? row.payload?.date ?? null : null;
+    if (effectiveStatus("open", planDate, today) !== "open") continue;
     // Nobody votes on their own removal.
     if (row.target_user_id === userId) continue;
     const voted = (row.ballots ?? []).some((ballot: any) => ballot.user_id === userId);
@@ -413,6 +409,38 @@ export async function propose(
   if (error) throw error;
 
   return (data as any).status as VoteStatus;
+}
+
+// "New plan": the draft goes to the parea's vote, and the plan is made when
+// more than half say yes (at once in a parea of one). The cover is uploaded
+// first, to the parea's folder, so the plan has it the moment it passes; a
+// cover left behind by a vote that failed to open is removed again.
+export async function proposePlan(
+  groupId: string,
+  input: NewEvent,
+  cover: PickedImage | null,
+): Promise<VoteStatus> {
+  const coverUrl = cover ? await uploadEventCover(groupId, `plan-${newId()}`, cover) : null;
+
+  try {
+    return await propose(groupId, "plan", null, {
+      title: input.title,
+      date: input.date,
+      start_time: input.startTime || null,
+      end_time: input.endTime || null,
+      location: input.location || null,
+      description: input.description || null,
+      place_label: input.placeLabel || null,
+      lat: input.lat ?? null,
+      lng: input.lng ?? null,
+      is_public: input.isPublic ?? false,
+      tags: input.tags ?? [],
+      cover_url: coverUrl,
+    });
+  } catch (problem) {
+    if (coverUrl) await removeEventCover(coverUrl).catch(() => {});
+    throw problem;
+  }
 }
 
 export async function castVote(proposalId: string, approve: boolean): Promise<VoteStatus> {
@@ -451,52 +479,4 @@ export async function getVoteLink(proposalId: string): Promise<InviteLink | null
   if (!data) return null;
 
   return toLink(data);
-}
-
-// Plans this squad voted to go to that are still ahead: what it can vote to skip.
-export async function getSquadGoingPlans(groupId: string): Promise<VoteEvent[]> {
-  const { data, error } = await supabase
-    .from("squad_event_going")
-    .select(`event:events!squad_event_going_event_id_fkey(${EVENT_FIELDS})`)
-    .eq("group_id", groupId);
-  if (error) throw error;
-
-  const today = keyOf(new Date());
-  return ((data ?? []) as any[])
-    .map((row) => single(row.event))
-    .filter((event) => event && event.date >= today)
-    .map(toVoteEvent)
-    .sort((a, b) => (a.date + (a.startTime ?? "")).localeCompare(b.date + (b.startTime ?? "")));
-}
-
-// Which of your squads are going to each of these plans.
-export async function getMyGoing(groupIds: string[], eventIds: string[]): Promise<Record<string, string[]>> {
-  if (groupIds.length === 0 || eventIds.length === 0) return {};
-
-  const { data, error } = await supabase
-    .from("squad_event_going")
-    .select("group_id, event_id")
-    .in("group_id", groupIds)
-    .in("event_id", eventIds);
-  if (error) throw error;
-
-  const byEvent: Record<string, string[]> = {};
-  for (const row of (data ?? []) as { group_id: string; event_id: string }[]) {
-    (byEvent[row.event_id] ??= []).push(row.group_id);
-  }
-  return byEvent;
-}
-
-// Every squad going to a plan, first to decide first.
-export async function getGoingSquads(eventId: string): Promise<GoingSquad[]> {
-  const { data, error } = await supabase
-    .from("squad_event_going")
-    .select("created_at, group:groups(id, name, avatar_url)")
-    .eq("event_id", eventId)
-    .order("created_at", { ascending: true });
-  if (error) throw error;
-
-  return ((data ?? []) as any[])
-    .filter((row) => row.group)
-    .map((row) => ({ id: row.group.id, name: row.group.name, avatarUrl: row.group.avatar_url ?? null }));
 }

@@ -57,6 +57,8 @@ type VotesScreenProps = {
   onOpenRail: () => void;
   onOpenSquad: (group: Group) => void;
   onOpenEvent: (event: VoteEvent) => void;
+  // "Throw a plan": the plan form, whose plan goes to this parea's vote.
+  onNewPlan: () => void;
   // A vote was cast, cancelled or decided: badges and plans may have moved.
   onChanged: () => void;
 };
@@ -74,6 +76,7 @@ function notNowKey(groupId: string): string {
 // What the page says right after a vote went in.
 function startedNotice(kind: VoteKind, status: VoteStatus, needed: number, members: number): string {
   if (status === 'passed') {
+    if (kind === 'plan') return "Passed on the spot. It's on your plans.";
     return kind === 'invite' ? 'Passed on the spot. Share the invite below.' : 'Passed on the spot.';
   }
   if (status === 'rejected') return 'That vote was decided already.';
@@ -100,6 +103,7 @@ export default function VotesScreen({
   onOpenRail,
   onOpenSquad,
   onOpenEvent,
+  onNewPlan,
   onChanged,
 }: VotesScreenProps) {
   const [open, setOpen] = useState<SquadVote[]>([]);
@@ -201,7 +205,7 @@ export default function VotesScreen({
 
   function openTarget(vote: SquadVote) {
     if (vote.target.type === 'squad') onOpenSquad(vote.target.group);
-    else if (vote.target.type === 'event') onOpenEvent(vote.target.event);
+    else if (vote.target.type === 'plan' && vote.target.created) onOpenEvent(vote.target.event);
   }
 
   function compose(step: Step) {
@@ -227,13 +231,9 @@ export default function VotesScreen({
     writeJson(notNowKey(group.id), next);
   }
 
-  // Ideas already on the table (an open vote on the same plan or parea) or
-  // put away with Not now are left out.
-  const onTable = new Set(
-    open.map((vote) =>
-      vote.target.type === 'event' ? vote.target.event.id : vote.target.type === 'squad' ? vote.target.group.id : vote.id,
-    ),
-  );
+  // Ideas already on the table (an open vote on the same parea) or put away
+  // with Not now are left out.
+  const onTable = new Set(open.map((vote) => (vote.target.type === 'squad' ? vote.target.group.id : vote.id)));
   const shownIdeas = ideas.filter((idea) => !hidden.includes(idea.id) && !onTable.has(idea.targetId));
 
   const waiting = open.filter((vote) => waitsOnMe(vote, userId));
@@ -323,20 +323,12 @@ export default function VotesScreen({
     }
 
     if (shownIdeas.length > 0) {
-      const plans = shownIdeas.some((idea) => idea.kind === 'attend');
-      const crossed = shownIdeas.some((idea) => idea.kind === 'follow');
       rows.push(
         <TimelineRow key="ideas" node={<GroupNode hollow />}>
           <GroupTitle
             kicker="Worth a vote"
             title={shownIdeas.length === 1 ? '1 idea' : `${shownIdeas.length} ideas`}
-            meta={
-              plans && crossed
-                ? 'From the pareas you follow and cross'
-                : plans
-                  ? 'From the pareas you follow'
-                  : 'From the pareas you crossed'
-            }
+            meta="From the pareas you crossed"
           />
         </TimelineRow>,
       );
@@ -354,7 +346,10 @@ export default function VotesScreen({
       rows.push(
         <TimelineRow key="start" node={<GroupNode hollow />}>
           <GroupTitle kicker="Start one" title="One tap, then it goes out" />
-          <QuickStarts onStart={(step: QuickStep) => compose(step)} onAll={() => compose('menu')} />
+          <QuickStarts
+            onStart={(step: QuickStep) => (step === 'plan' ? onNewPlan() : compose(step))}
+            onAll={() => compose('menu')}
+          />
         </TimelineRow>,
       );
     }
@@ -484,6 +479,10 @@ export default function VotesScreen({
         userId={userId}
         initialStep={composeStep}
         onClose={() => setComposing(false)}
+        onNewPlan={() => {
+          setComposing(false);
+          onNewPlan();
+        }}
         onStarted={async (kind, status) => {
           setComposing(false);
           setNotice(startedNotice(kind, status, needed, members));

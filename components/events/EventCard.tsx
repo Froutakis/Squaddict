@@ -36,7 +36,7 @@ type EventCardProps = {
   onPress?: () => void;
   onRsvp?: (status: RsvpStatus | null) => void;
   onRequest?: () => void;
-  // Replaces the bottom row (e.g. the squad vote button).
+  // Replaces the bottom row (e.g. a compact I'm in / Pass).
   stub?: ReactNode;
 };
 

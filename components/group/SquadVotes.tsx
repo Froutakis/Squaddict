@@ -19,8 +19,8 @@ type SquadVotesProps = {
   onOpenVotes: () => void;
 };
 
-// What this squad is still deciding on about follows and plans, to answer in
-// place. Shows nothing when there is nothing.
+// What this squad is still deciding on about follows, to answer in place.
+// Shows nothing when there is nothing.
 export default function SquadVotes({ votes, members, userId, onOpenSquad, onOpenEvent, onChanged, onOpenVotes }: SquadVotesProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +70,7 @@ export default function SquadVotes({ votes, members, userId, onOpenSquad, onOpen
           onCancel={() => run(vote.id, () => cancelVote(vote.id))}
           onOpen={() => {
             if (vote.target.type === 'squad') onOpenSquad(vote.target.group);
-            else if (vote.target.type === 'event') onOpenEvent(vote.target.event);
+            else if (vote.target.type === 'plan' && vote.target.created) onOpenEvent(vote.target.event);
           }}
           onStale={onChanged}
         />

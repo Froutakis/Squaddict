@@ -34,7 +34,7 @@ type PublicProfileProps = {
   onBack: () => void;
   onAnswer: (plan: FeedEvent, status: RsvpStatus | null) => void;
   onOpenPlan: (plan: FeedEvent) => void;
-  // The vote button for a plan, in place of I'm in / Pass.
+  // The bottom row of a plan, in place of the card's own I'm in / Pass.
   stubFor?: (plan: FeedEvent) => ReactNode;
 };
 

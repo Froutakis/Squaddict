@@ -19,6 +19,7 @@ import { pickActing } from '../lib/acting';
 import { isSquadPlan } from '../lib/squadVote';
 import { getGroupsForUser } from '../services/serviceGroup';
 import { getPareaGoing, type PareaGoing } from '../services/serviceFeed';
+import { getSuggestions, type PlanSuggestion } from '../services/serviceSuggestions';
 import { getUnreadCounts } from '../services/serviceChat';
 import ShowMore, { visibleSlice } from '../components/general/ShowMore';
 import {
@@ -62,9 +63,6 @@ import StoryViewer from '../components/events/StoryViewer';
 import SectionHead from '../components/general/SectionHead';
 import Button from '../components/general/Button';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
-import RsvpButtons from '../components/events/RsvpButtons';
-import SquadGoStub from '../components/events/SquadGoStub';
-import { useSquadPlans } from '../components/events/useSquadPlans';
 import UpNext from '../components/events/UpNext';
 import {
   capture,
@@ -113,7 +111,11 @@ type HomeScreenProps = {
   onOpenEvents?: () => void;
   // What the side rail shows: your squads, the current one, their unread.
   onRailData?: (data: RailData) => void;
+  // Tells App which page sits on top of Parea, if any.
+  onOverlayChange?: (overlay: HomeOverlay) => void;
 };
+
+export type HomeOverlay = 'votes' | 'calendar' | 'squad' | null;
 
 export type RailData = {
   squads: Group[];
@@ -124,7 +126,7 @@ export type RailData = {
   me: { name: string; avatarUrl: string | null };
 };
 
-function toCardData(event: MyEvent, coverUrl?: string | null, withName?: string): CardEvent {
+function toCardData(event: MyEvent, coverUrl?: string | null): CardEvent {
   return {
     coverUrl,
     id: event.id,
@@ -133,7 +135,7 @@ function toCardData(event: MyEvent, coverUrl?: string | null, withName?: string)
     startTime: event.startTime,
     location: event.location,
     placeLabel: event.placeLabel,
-    groupName: withName ? `${event.groupName} · with ${withName}` : event.groupName,
+    groupName: event.groupName,
     myStatus: event.myStatus,
     going: event.going,
     goingCount: event.going.length,
@@ -156,6 +158,7 @@ export default function HomeScreen({
   view = 'memories',
   onOpenEvents,
   onRailData,
+  onOverlayChange,
   openVotesNonce = 0,
 }: HomeScreenProps) {
   const { signed, signPaths, dropSigned } = useSignedImages();
@@ -175,6 +178,9 @@ export default function HomeScreen({
   const [showAllGoing, setShowAllGoing] = useState(false);
   const [going, setGoing] = useState<PareaGoing[]>([]);
   const [goingSaving, setGoingSaving] = useState<string | null>(null);
+  // Other pareas' plans a member suggested to the parea on screen.
+  const [suggested, setSuggested] = useState<PlanSuggestion[]>([]);
+  const [suggestedNonce, setSuggestedNonce] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [votesOpen, setVotesOpen] = useState(false);
@@ -244,12 +250,15 @@ export default function HomeScreen({
   // The memories page opens on NOW: the coming days above, memories below.
   const scrollRef = useRef<ScrollView>(null);
   const [viewHeight, setViewHeight] = useState(0);
-  const [lineY, setLineY] = useState<number | null>(null);
-  const [nowY, setNowY] = useState<number | null>(null);
+  // Where NOW sits in the page, measured against the page itself: an onLayout y
+  // is only relative to its parent and, on the web, is not sent again when rows
+  // above it change height.
+  const contentRef = useRef<View>(null);
+  const nowRef = useRef<View>(null);
+  const [nowAt, setNowAt] = useState<number | null>(null);
   const [awayFromNow, setAwayFromNow] = useState<'up' | 'down' | null>(null);
   const anchoredFor = useRef<string | null>(null);
   const topEdge = useRef(new Animated.Value(0)).current;
-  const nowAt = lineY !== null && nowY !== null ? lineY + nowY : null;
 
   // Once per parea (and each time you come back to the memories), open on NOW.
   useEffect(() => {
@@ -333,8 +342,25 @@ export default function HomeScreen({
   function refresh() {
     setRefreshing(true);
     setPhotoNonce((n) => n + 1);
+    setSuggestedNonce((n) => n + 1);
     load(true);
   }
+
+  // The suggestions belong to the parea on screen.
+  useEffect(() => {
+    if (!groupId) {
+      setSuggested([]);
+      return;
+    }
+
+    let cancelled = false;
+    getSuggestions(groupId).then((list) => {
+      if (!cancelled) setSuggested(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, suggestedNonce, chatClosedNonce]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -419,18 +445,22 @@ export default function HomeScreen({
     if (selectGroup) chooseSquad(selectGroup.id);
   }, [selectGroup?.nonce]);
 
-  useEffect(() => {
-    if (calendarNonce > 0) setFullCalendar(true);
-  }, [calendarNonce]);
-
   // Votes has no Back of its own: the rail is the way out, like everywhere
   // else. Only a bump while Parea is up counts, not the value it mounts with.
+  // The calendar and a squad page step aside too, so Memories means Memories.
   const railHomeSeen = useRef(railHomeNonce);
   useEffect(() => {
     if (railHomeNonce === railHomeSeen.current) return;
     railHomeSeen.current = railHomeNonce;
     setVotesOpen(false);
+    setFullCalendar(false);
+    setProfileGroup(null);
   }, [railHomeNonce]);
+
+  // After the step-aside above: the rail's Calendar bumps both at once.
+  useEffect(() => {
+    if (calendarNonce > 0) setFullCalendar(true);
+  }, [calendarNonce]);
 
   useEffect(() => {
     if (newSquadNonce > 0) setShowGroupForm(true);
@@ -446,17 +476,32 @@ export default function HomeScreen({
     });
   }, [groups, groupId, unread, pendingVotes, displayName, avatarUrl, onRailData]);
 
+  // The page on top of Parea, for the rail's "you are here".
+  // Votes sits above the calendar when both are open.
+  const overlay: HomeOverlay = votesOpen && groups.some((group) => group.id === groupId)
+    ? 'votes'
+    : fullCalendar
+      ? 'calendar'
+      : profileGroup
+        ? 'squad'
+        : null;
+  useEffect(() => {
+    onOverlayChange?.(overlay);
+  }, [overlay, onOverlayChange]);
+  useEffect(() => () => onOverlayChange?.(null), [onOverlayChange]);
+
   useEffect(() => {
     if (!focusEventId) return;
 
     const target =
       events.find((event) => event.id === focusEventId) ??
-      going.find((one) => one.event.id === focusEventId)?.event;
+      going.find((one) => one.event.id === focusEventId)?.event ??
+      suggested.find((one) => one.event.id === focusEventId)?.event;
     if (!target) return;
 
     setOpenEvent(target);
     onFocusHandled?.();
-  }, [focusEventId, events, going]);
+  }, [focusEventId, events, going, suggested]);
 
   // Answering a friend's plan moves it out of this list and into your week.
   async function answerFriendsPlan(eventId: string, status: RsvpStatus | null) {
@@ -473,6 +518,7 @@ export default function HomeScreen({
       ]);
       setEvents(myEvents);
       setGoing(friendsPlans);
+      setSuggestedNonce((n) => n + 1);
     } catch {
       setRsvpError('Could not save your answer. Try again.');
     } finally {
@@ -494,12 +540,6 @@ export default function HomeScreen({
     [events, groupId],
   );
 
-  // "with MVPS" on another squad's plan that the squad on screen is going to.
-  function withNameFor(event: MyEvent): string | undefined {
-    if (!groupId || event.groupId === groupId) return undefined;
-    if (!(event.withGroupIds ?? []).includes(groupId)) return undefined;
-    return groups.find((group) => group.id === groupId)?.name;
-  }
   const upcoming = visible.filter((e) => e.date >= today);
   const upNextEvent = upcoming.find((e) => e.myStatus !== 'out');
   const liveEvent = visible.find(
@@ -534,13 +574,14 @@ export default function HomeScreen({
       (e.date < today || !e.startTime || e.startTime <= clockNow) &&
       !(e.id === liveEvent?.id && e.id === heroEvent?.id),
   );
-  const friendsPlans = groupId
-    ? going.filter((plan) => plan.viaGroupIds.includes(groupId))
-    : going;
-  const squadPlans = useSquadPlans(
-    user.id,
-    friendsPlans.map((plan) => ({ id: plan.event.id, groupId: plan.event.groupId })),
-    openVotes,
+  // "Nikos suggests": plans you have not answered yet. Answered, they move
+  // into your week like any plan of yours.
+  const suggestions = suggested.filter((one) => one.event.myStatus === undefined);
+  const suggestedIds = new Set(suggestions.map((one) => one.event.id));
+  // Members of your parea who said I'm in to another parea's public plan;
+  // a plan already suggested here shows once, as the suggestion.
+  const friendsPlans = (groupId ? going.filter((plan) => plan.viaGroupIds.includes(groupId)) : going).filter(
+    (plan) => !suggestedIds.has(plan.event.id),
   );
   const goingSlice = visibleSlice(friendsPlans, 2, showAllGoing);
   const waitingSlice = visibleSlice(waiting, 3, showAllWaiting);
@@ -669,7 +710,7 @@ export default function HomeScreen({
           />
         ) : null}
 
-        <View onLayout={(event) => setLineY(event.nativeEvent.layout.y)}>
+        <View>
           <PlanLine
             plans={linePlans}
             now={now}
@@ -684,7 +725,8 @@ export default function HomeScreen({
               setAddingPhoto(plan);
             }}
             onThrowPlan={() => openNewEvent(today)}
-            onNowLayout={setNowY}
+            nowRef={nowRef}
+            onNowLayout={measureNow}
             error={rsvpError ?? (wantsPhoto ? null : photoError)}
           />
 
@@ -791,7 +833,7 @@ export default function HomeScreen({
     }
 
     const activeGroup = groups.find((g) => g.id === groupId);
-    if (activeGroup && visible.length === 0 && friendsPlans.length === 0) {
+    if (activeGroup && visible.length === 0 && friendsPlans.length === 0 && suggestions.length === 0) {
       return (
         <View style={styles.state}>
           <Text style={styles.stateTitle}>Quiet in {activeGroup.name}</Text>
@@ -840,6 +882,31 @@ export default function HomeScreen({
           </View>
         ) : null}
 
+        {suggestions.length > 0 ? (
+          <View>
+            <SectionHead
+              title="Suggested"
+              meta={suggestions.length > 1 ? `${suggestions.length} plans` : undefined}
+            />
+            <View style={styles.body}>
+              {suggestions.map((one) => (
+                <EventCard
+                  key={one.event.id}
+                  event={{
+                    ...toCardData(one.event, one.event.coverUrl),
+                    groupName: `${one.suggesterName.split(' ')[0] || one.suggesterName} suggests · ${one.event.groupName}`,
+                    goingCount: one.goingCount,
+                  }}
+                  action="rsvp"
+                  saving={goingSaving === one.event.id}
+                  onPress={() => setOpenEvent(one.event)}
+                  onRsvp={(status) => answerFriendsPlan(one.event.id, status)}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         {friendsPlans.length > 0 ? (
           <View>
             <SectionHead
@@ -859,23 +926,6 @@ export default function HomeScreen({
                   saving={goingSaving === plan.event.id}
                   onPress={() => setOpenEvent(plan.event)}
                   onRsvp={(status) => answerFriendsPlan(plan.event.id, status)}
-                  stub={
-                    <SquadGoStub
-                      stance={squadPlans.stanceFor({ id: plan.event.id, groupId: plan.event.groupId })}
-                      busy={squadPlans.busyId === plan.event.id}
-                      onAct={async () => {
-                        if (await squadPlans.act({ id: plan.event.id, groupId: plan.event.groupId })) load(true);
-                      }}
-                    >
-                      <RsvpButtons
-                        status={plan.event.myStatus}
-                        saving={goingSaving === plan.event.id}
-                        onChange={(status) => answerFriendsPlan(plan.event.id, status)}
-                        compact
-                        stretch
-                      />
-                    </SquadGoStub>
-                  }
                 />
               ))}
               <ShowMore
@@ -892,11 +942,6 @@ export default function HomeScreen({
             <Text style={styles.error}>{rsvpError}</Text>
           </View>
         ) : null}
-        {squadPlans.error ? (
-          <View style={styles.body}>
-            <Text style={styles.error}>{squadPlans.error}</Text>
-          </View>
-        ) : null}
 
         {waiting.length > 0 ? (
           <View>
@@ -905,7 +950,7 @@ export default function HomeScreen({
             {waitingSlice.shown.map((event) => (
               <EventCard
                 key={event.id}
-                event={toCardData(event, coverFor(event), withNameFor(event))}
+                event={toCardData(event, coverFor(event))}
                 action="rsvp"
                 onPress={() => setOpenEvent(event)}
                 onRsvp={(status) => handleRsvp(event.id, status)}
@@ -941,6 +986,13 @@ export default function HomeScreen({
     );
   }
 
+  function measureNow() {
+    const node = nowRef.current;
+    const page = contentRef.current;
+    if (!node || !page) return;
+    node.measureLayout(page, (_x, y) => setNowAt((was) => (was === y ? was : y)), () => {});
+  }
+
   function scrollToNow(animated: boolean) {
     if (nowAt === null || viewHeight === 0) return;
     scrollRef.current?.scrollTo({ y: Math.max(0, nowAt - viewHeight * 0.45), animated });
@@ -964,17 +1016,20 @@ export default function HomeScreen({
         contentContainerStyle={styles.content}
         onLayout={(event) => setViewHeight(event.nativeEvent.layout.height)}
         onScroll={view === 'memories' ? onPageScroll : undefined}
+        onContentSizeChange={view === 'memories' ? measureNow : undefined}
         scrollEventThrottle={32}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />
         }
       >
-        <HomeHeader
-          squad={groups.find((group) => group.id === groupId)}
-          label={view === 'memories' ? 'Memories' : 'Plans'}
-          onMenu={() => onOpenRail?.()}
-        />
-        {renderBody()}
+        <View ref={contentRef} collapsable={false} style={styles.contentInner}>
+          <HomeHeader
+            squad={groups.find((group) => group.id === groupId)}
+            label={view === 'memories' ? 'Memories' : 'Plans'}
+            onMenu={() => onOpenRail?.()}
+          />
+          {renderBody()}
+        </View>
       </ScrollView>
 
       {view === 'memories' ? (
@@ -1026,7 +1081,7 @@ export default function HomeScreen({
       <DayPlansSheet
         label={dayPlans ? dayFilterLabel(dayPlans) : null}
         plans={dayPlans ? visible.filter((e) => e.date === dayPlans) : []}
-        toCard={(event) => toCardData(event, coverFor(event), withNameFor(event))}
+        toCard={(event) => toCardData(event, coverFor(event))}
         onOpen={(event) => {
           setDayPlans(null);
           setOpenEvent(event);
@@ -1061,7 +1116,11 @@ export default function HomeScreen({
           setEditEvent(null);
           setDraftEvent(null);
         }}
-        onSaved={async () => setEvents(await getMyEvents(user.id))}
+        onSaved={async () => {
+          setEvents(await getMyEvents(user.id));
+          setVotesNonce((n) => n + 1);
+        }}
+        onOpenVotes={openVotes}
       />
 
       <GroupFormSheet
@@ -1077,7 +1136,6 @@ export default function HomeScreen({
         livePeople={openEvent !== null && openEvent.id === sharingEvent?.id ? livePeople : undefined}
         currentUserId={user.id}
         onClose={() => setOpenEvent(null)}
-        onOpenVotes={openVotes}
         onChanged={async () => {
           const [myEvents, friendsPlans] = await Promise.all([
             getMyEvents(user.id),
@@ -1085,6 +1143,7 @@ export default function HomeScreen({
           ]);
           setEvents(myEvents);
           setGoing(friendsPlans);
+          setSuggestedNonce((n) => n + 1);
           setVotesNonce((n) => n + 1);
         }}
         onPhotosChanged={() => setPhotoNonce((n) => n + 1)}
@@ -1120,6 +1179,7 @@ export default function HomeScreen({
           onOpenRail={() => onOpenRail?.()}
           onOpenSquad={setProfileGroup}
           onOpenEvent={(event) => setOpenEvent(voteEventToSheet(event))}
+          onNewPlan={() => openNewEvent(null)}
           onChanged={() => {
             setVotesNonce((n) => n + 1);
             load(true);
@@ -1172,8 +1232,8 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingVertical: space.md,
     paddingBottom: 130,
-    gap: space.md,
   },
+  contentInner: { gap: space.md },
   body: { paddingHorizontal: space.lg, gap: space.sm },
   line: { paddingTop: space.xs },
   error: { color: colors.danger, ...typo.medium, fontSize: 13 },

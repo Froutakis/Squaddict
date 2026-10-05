@@ -33,9 +33,6 @@ import { getCurrentCoords, type Coords, type LocationState } from '../services/s
 import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
 import RsvpButtons from '../components/events/RsvpButtons';
-import SquadGoStub from '../components/events/SquadGoStub';
-import { useSquadPlans } from '../components/events/useSquadPlans';
-import type { PlanStance } from '../lib/squadVote';
 import type { Person } from '../lib/people';
 import { colors, typo, layout, radius, shadow, solidFor, space, textSize } from '../theme';
 import Chip from '../components/general/Chip';
@@ -85,8 +82,7 @@ const TITLE_ROW = 36;
 export const EXPLORE_FAB_DROP = TITLE_TOP + TITLE_ROW / 2 - FAB_CENTER_Y;
 const SEARCH_DELAY_MS = 300;
 
-function toCardData(event: FeedEvent, friendsGoing?: Person[], stance?: PlanStance | null): CardEvent {
-  const via = stance && stance.kind === 'rsvp' ? stance.via : null;
+function toCardData(event: FeedEvent, friendsGoing?: Person[]): CardEvent {
   return {
     friendsGoing,
     id: event.id,
@@ -95,7 +91,7 @@ function toCardData(event: FeedEvent, friendsGoing?: Person[], stance?: PlanStan
     startTime: event.startTime,
     location: event.location,
     placeLabel: event.placeLabel,
-    groupName: via ? `${event.groupName} · ${via} going` : event.groupName,
+    groupName: event.groupName,
     myStatus: event.myStatus,
     going: [],
     goingCount: event.goingCount,
@@ -193,27 +189,18 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
   const [highlights, setHighlights] = useState<FeedHighlight[]>([]);
   const [friendsGoing, setFriendsGoing] = useState<Record<string, Person[]>>({});
   const { signed, signPaths, dropSigned } = useSignedImages();
-  const squadPlans = useSquadPlans(
-    userId,
-    events.filter((event) => !event.isMember).map((event) => ({ id: event.id, groupId: event.groupId })),
-    onOpenVotes,
-  );
-
-  // Another squad's plan: answer only once a squad of yours is going.
+  // Another parea's public plan: anyone answers it for themselves.
   function cardProps(event: FeedEvent) {
-    const stance = event.isMember ? null : squadPlans.stanceFor(event);
     return {
-      event: toCardData(event, friendsGoing[event.id], stance),
+      event: toCardData(event, friendsGoing[event.id]),
       stub: event.isMember ? undefined : (
-        <SquadGoStub stance={stance} busy={squadPlans.busyId === event.id} onAct={() => squadPlans.act(event)}>
-          <RsvpButtons
-            status={event.myStatus}
-            saving={savingId === event.id}
-            onChange={(status) => handleRsvp(event.id, status)}
-            compact
-            stretch
-          />
-        </SquadGoStub>
+        <RsvpButtons
+          status={event.myStatus}
+          saving={savingId === event.id}
+          onChange={(status) => handleRsvp(event.id, status)}
+          compact
+          stretch
+        />
       ),
     };
   }
@@ -789,7 +776,7 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
       {searchBar()}
       {locationInfo(false)}
       {chipRow(false)}
-      {error ?? squadPlans.error ? <Text style={styles.error}>{error ?? squadPlans.error}</Text> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
     </>
   );
 
@@ -927,7 +914,6 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
       currentUserId={userId}
       onClose={() => setOpenEvent(null)}
       onChanged={() => load(0, false)}
-      onOpenVotes={onOpenVotes}
     />
   );
 
@@ -1032,9 +1018,9 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
               </Glass>
             ) : null}
 
-            {error ?? squadPlans.error ? (
+            {error ? (
               <Glass radius={radius.lg} style={styles.island}>
-                <Text style={[styles.error, styles.flush]}>{error ?? squadPlans.error}</Text>
+                <Text style={[styles.error, styles.flush]}>{error}</Text>
               </Glass>
             ) : null}
           </View>
