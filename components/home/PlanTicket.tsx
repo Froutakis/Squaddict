@@ -213,7 +213,7 @@ const pillBox = StyleSheet.create({
 });
 
 const pillText = StyleSheet.create({
-  ask: { color: '#8A2A1B' },
+  ask: { color: tint.dangerInk },
   accent: { color: colors.accentInk },
   quiet: { color: colors.textSoft },
   done: { color: colors.success },

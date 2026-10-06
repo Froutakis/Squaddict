@@ -50,6 +50,7 @@ export function friendsLine(people: Person[]): string {
 function statusOf(myStatus?: RsvpStatus): { state: PunchState; label: string } {
   if (myStatus === 'in') return { state: 'in', label: "You're in" };
   if (myStatus === 'out') return { state: 'out', label: "You're out" };
+  if (myStatus === 'maybe') return { state: 'open', label: 'Maybe' };
   return { state: 'open', label: 'Not answered' };
 }
 

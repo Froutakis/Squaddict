@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { getEventPhotos, type EventPhoto } from '../../services/serviceEvents';
+import { isBlocked } from '../../services/serviceSafety';
 import type { SignedMap } from '../chat/media';
 import type { MemoryNight } from '../home/memories';
 import { formatDateTime } from '../../lib/datetime';
@@ -164,8 +165,12 @@ export default function StoryViewer({
     const id = current.event.id;
 
     getEventPhotos(id)
-      .then(function (rows) {
+      .then(function (all) {
         if (cancelled) return;
+        // Photos from people you blocked are left out.
+        const rows = all.filter(function (row) {
+          return !isBlocked(row.userId);
+        });
         setFrames(function (prev) {
           return { ...prev, [id]: rows.length > 0 ? rows : 'missing' };
         });
@@ -380,7 +385,7 @@ export default function StoryViewer({
             stub={
               <View style={styles.stubRow}>
                 {onOpenGroup ? null : (
-                  <Punch state={event.myStatus === 'in' ? 'in' : 'out'} size={22} />
+                  <Punch state={event.myStatus === 'in' ? 'in' : event.myStatus === 'out' ? 'out' : 'open'} size={22} />
                 )}
                 {going.length > 0 ? <AttendeeStack people={going} size={22} max={3} /> : null}
                 {wereIn ? (

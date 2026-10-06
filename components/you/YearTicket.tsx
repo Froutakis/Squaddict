@@ -38,7 +38,7 @@ export default function YearTicket({
 
   const stub = (
     <View style={styles.stub}>
-      <Stat value={pareas} label={pluralWord(pareas, 'squad', 'squads')} />
+      <Stat value={pareas} label={pluralWord(pareas, 'parea', 'pareas')} />
       <Stat value={photos} label={pluralWord(photos, 'photo', 'photos')} />
       <Stat value={streak} label={streak === 1 ? 'week streak' : 'weeks streak'} />
     </View>

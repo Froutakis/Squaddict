@@ -4,6 +4,7 @@ import { isSearchable } from "../components/chat/search";
 import { previewText, type Attachment } from "../components/chat/media";
 import type { Reaction } from "../components/chat/reactions";
 import { UNIQUE_VIOLATION } from "../lib/postgres";
+import { isBlocked } from "./serviceSafety";
 
 const SENDER = "profiles!sender_id(display_name)";
 
@@ -107,9 +108,12 @@ export async function getMessageById(id: string): Promise<ChatMessage | null> {
 
 export type ReplyQuote = {
   id: string;
+  senderId: string;
   senderName: string;
   content: string;
   deleted: boolean;
+  // From someone you blocked: the quote says "Hidden message" instead.
+  hidden: boolean;
 };
 
 export type ChatMessage = {
@@ -157,9 +161,11 @@ export function toQuote(row: any): ReplyQuote {
   const deleted = row.deleted_at !== null && row.deleted_at !== undefined;
   return {
     id: row.id,
+    senderId: row.sender_id ?? "",
     senderName: row.profiles?.display_name ?? "",
     content: deleted ? "" : row.content,
     deleted,
+    hidden: isBlocked(row.sender_id),
   };
 }
 
@@ -168,6 +174,10 @@ export const MESSAGE_PAGE_SIZE = 50;
 export type MessagePage = {
   messages: ChatMessage[];
   hasMore: boolean;
+  // Where the next page starts, from the rows as fetched: the oldest for
+  // getMessages, the newest for getMessagesAfter. Blocked people's messages are
+  // dropped from `messages`, so a page of only theirs still moves on.
+  cursor: string | null;
 };
 
 export async function getMessages(
@@ -193,8 +203,10 @@ export async function getMessages(
   const rows = data ?? [];
 
   return {
-    messages: rows.map((row) => toChatMessage(row)).reverse(),
+    // People you blocked are left out.
+    messages: rows.map((row) => toChatMessage(row)).filter((message) => !isBlocked(message.senderId)).reverse(),
     hasMore: rows.length === limit,
+    cursor: rows.length > 0 ? (rows[rows.length - 1] as any).created_at : null,
   };
 }
 
@@ -216,8 +228,9 @@ export async function getMessagesAfter(
   const rows = data ?? [];
 
   return {
-    messages: rows.map((row) => toChatMessage(row)),
+    messages: rows.map((row) => toChatMessage(row)).filter((message) => !isBlocked(message.senderId)),
     hasMore: rows.length === limit,
+    cursor: rows.length > 0 ? (rows[rows.length - 1] as any).created_at : null,
   };
 }
 
@@ -234,7 +247,7 @@ export async function getGroupPreviews(
 
   const { data, error } = await supabase
     .from("messages")
-    .select("group_id, content, created_at, attachment_path, " + SENDER)
+    .select("group_id, sender_id, content, created_at, attachment_path, " + SENDER)
     .in("group_id", groupIds)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -243,9 +256,11 @@ export async function getGroupPreviews(
   const previews: Record<string, GroupPreview> = {};
   for (const row of (data ?? []) as any[]) {
     if (previews[row.group_id]) continue;
+    // The last word from someone you blocked is not shown, nor who said it.
+    const hidden = isBlocked(row.sender_id);
     previews[row.group_id] = {
-      content: previewText(row.content, !!row.attachment_path),
-      senderName: row.profiles?.display_name ?? "",
+      content: hidden ? "Hidden message" : previewText(row.content, !!row.attachment_path),
+      senderName: hidden ? "" : row.profiles?.display_name ?? "",
       createdAt: row.created_at,
     };
   }

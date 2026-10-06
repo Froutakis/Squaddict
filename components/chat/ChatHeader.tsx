@@ -59,7 +59,7 @@ export default function ChatHeader({
         <Pressable
           onPress={onOpenGroup}
           accessibilityRole="button"
-          accessibilityLabel={`${name}, ${presence}. Open the squad page`}
+          accessibilityLabel={`${name}, ${presence}. Open the parea page`}
           style={({ pressed }) => [styles.squad, pressed && styles.pressed]}
         >
           <View style={styles.nameRow}>

@@ -9,7 +9,7 @@ import { inviteMessage } from '../../lib/invite';
 import { placeLines } from '../../lib/place';
 import type { Person } from '../../lib/people';
 import Monogram from '../general/Monogram';
-import { brand, colors, paper, radius, shadow, space, textSize, tint, typo } from '../../theme';
+import { brand, colors, paper, radius, shadow, space, sunInk, textSize, tint, typo } from '../../theme';
 
 // Votes on the line, the Home way: the vote that waits on you is a blue
 // ticket you answer on its stub (VoteTicket); the others are rows you tap to
@@ -26,12 +26,12 @@ const PICKERS_SHOWN = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // On the blue ticket, as in LineTicket.
-const ON_BLUE_KICKER = '#C3CEF7';
-const ON_BLUE_LINE = '#DCE3FA';
+const ON_BLUE_KICKER = colors.accentSoft;
+const ON_BLUE_LINE = colors.accentSoft;
 // Red and sun text dark enough for small type on white and on their tints
 // (4.5:1), which colors.danger is not.
 const RED_TEXT = '#B23624';
-const SUN_TEXT = '#8A5300';
+const SUN_TEXT = sunInk;
 
 type Ballot = 'yes' | 'no' | 'wait';
 
@@ -905,6 +905,6 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     transform: [{ rotate: '-7deg' }],
   },
-  stampTop: { ...typo.display, fontSize: textSize.caption, letterSpacing: 0.6, textTransform: 'uppercase', textAlign: 'center' },
+  stampTop: { ...typo.display, fontSize: textSize.caption, letterSpacing: 0.2, textAlign: 'center' },
   stampBottom: { ...typo.bold, fontSize: textSize.caption, fontVariant: ['tabular-nums'], textAlign: 'center' },
 });

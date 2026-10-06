@@ -9,6 +9,7 @@ import {
   type EventPhoto,
 } from '../../services/serviceEvents';
 import { pickImage, prepareImage, signImages, takePhoto } from '../../services/serviceMedia';
+import { isBlocked } from '../../services/serviceSafety';
 import type { SignedMap } from '../chat/media';
 import { readJson, writeJson } from '../../lib/store';
 import { colors, typo, radius, space, textSize } from '../../theme';
@@ -216,7 +217,8 @@ export default function EventPhotos({
       setError(null);
 
       try {
-        const rows = await getEventPhotos(eventId);
+        // Photos from people you blocked are left out.
+        const rows = (await getEventPhotos(eventId)).filter((photo) => !isBlocked(photo.userId));
         if (cancelled) return;
         setPhotos(rows);
 
@@ -390,8 +392,7 @@ const styles = StyleSheet.create({
     color: colors.textSoft,
     ...typo.mono,
     fontSize: textSize.caption,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
@@ -455,8 +456,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
     paddingBottom: space.xl,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     backgroundColor: colors.surface,
   },
   grabber: {

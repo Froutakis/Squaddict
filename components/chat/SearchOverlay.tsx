@@ -99,7 +99,7 @@ export default function SearchOverlay({ groupId, visible, onClose }: SearchOverl
               style={styles.input}
               value={term}
               onChangeText={setTerm}
-              placeholder="Search this squad"
+              placeholder="Search this chat"
               placeholderTextColor={paper.inkSoft}
               autoCorrect={false}
               autoFocus

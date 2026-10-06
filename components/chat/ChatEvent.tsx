@@ -209,6 +209,23 @@ function PlanTicket({
             </Pressable>
             <StubAction label="Pass" onPress={() => onAnswer(plan, 'out')} />
           </>
+        ) : status === 'maybe' ? (
+          // Maybe is its own state; tap it to take it back (the plan sheet has all three).
+          <>
+            <StubAction label="I'm in" strong onPress={() => onAnswer(plan, 'in')} />
+            <Pressable
+              onPress={() => onAnswer(plan, null)}
+              accessibilityRole="button"
+              accessibilityLabel="You said maybe"
+              accessibilityHint="Takes back your answer"
+              accessibilityState={{ selected: true }}
+              style={({ pressed }) => [styles.act, styles.actMaybe, pressed && styles.actPressed]}
+            >
+              <Text style={[styles.actText, styles.actTextMaybe]} numberOfLines={1}>
+                Maybe
+              </Text>
+            </Pressable>
+          </>
         ) : (
           <>
             <StubAction label="I'm in" strong onPress={() => onAnswer(plan, 'in')} />
@@ -499,11 +516,13 @@ const styles = StyleSheet.create({
   actStrong: { backgroundColor: '#FFFFFF' },
   actSoft: { backgroundColor: 'rgba(255,255,255,0.15)' },
   actIn: { backgroundColor: tint.success },
+  actMaybe: { backgroundColor: colors.accentSoft },
   actInk: { backgroundColor: colors.ink, alignSelf: 'stretch' },
   actPressed: { transform: [{ scale: 0.95 }] },
   actText: { color: '#FFFFFF', ...typo.display, fontSize: 13 },
   actTextStrong: { color: brand[0] },
   actTextIn: { color: colors.success },
+  actTextMaybe: { color: colors.accentInk },
   actTextInk: { color: colors.onInk },
 
   tally: { alignItems: 'center' },

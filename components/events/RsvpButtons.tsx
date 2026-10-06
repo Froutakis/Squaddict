@@ -12,6 +12,7 @@ type RsvpButtonsProps = {
   stretch?: boolean;
 };
 
+// Maybe keeps the hole open: only a pass gets the "out" bar.
 function punchState(status?: RsvpStatus): PunchState {
   if (status === 'in') return 'in';
   if (status === 'out') return 'out';
@@ -44,6 +45,16 @@ export default function RsvpButtons({
         onPress={() => pick('in')}
       />
       <Option
+        label="Maybe"
+        active={status === 'maybe'}
+        soft
+        disabled={saving}
+        compact={compact}
+        onDark={onDark}
+        stretch={stretch}
+        onPress={() => pick('maybe')}
+      />
+      <Option
         label={status === 'out' ? 'Passed' : 'Pass'}
         active={status === 'out'}
         disabled={saving}
@@ -63,16 +74,22 @@ type OptionProps = {
   compact: boolean;
   onDark: boolean;
   stretch: boolean;
+  // Maybe is its own state: the soft blue, not the ink of a yes.
+  soft?: boolean;
   onPress: () => void;
 };
 
-function Option({ label, active, disabled, compact, onDark, stretch, onPress }: OptionProps) {
+function Option({ label, active, disabled, compact, onDark, stretch, soft = false, onPress }: OptionProps) {
   let box = onDark ? styles.idleDark : styles.idleLight;
   let text = onDark ? styles.textIdleDark : styles.textIdleLight;
 
   if (active) {
     box = onDark ? styles.activeDark : styles.activeLight;
     text = onDark ? styles.textActiveDark : styles.textActiveLight;
+    if (soft) {
+      box = styles.activeSoft;
+      text = styles.textActiveSoft;
+    }
   }
 
   return (
@@ -82,6 +99,7 @@ function Option({ label, active, disabled, compact, onDark, stretch, onPress }: 
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ selected: active, disabled }}
+      hitSlop={compact ? 4 : undefined}
       style={({ pressed }) => [
         styles.option,
         compact && styles.optionCompact,
@@ -120,10 +138,12 @@ const styles = StyleSheet.create({
   idleDark: { backgroundColor: 'transparent', borderColor: 'rgba(255,255,255,0.3)' },
   activeLight: { backgroundColor: colors.ink, borderColor: colors.ink },
   activeDark: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
+  activeSoft: { backgroundColor: colors.accentSoft, borderColor: colors.accentSoft },
 
   label: { ...typo.semi, fontSize: textSize.base },
   textIdleLight: { color: colors.textSoft },
   textIdleDark: { color: '#FFFFFF' },
   textActiveLight: { color: '#FFFFFF' },
   textActiveDark: { color: colors.onLight },
+  textActiveSoft: { color: colors.accentInk },
 });

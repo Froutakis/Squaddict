@@ -25,6 +25,8 @@ import { parseDateKey } from '../../lib/datetime';
 import type { Person } from '../../lib/people';
 import type { SignedMap } from '../chat/media';
 import Monogram from '../general/Monogram';
+import ReportSheet from '../general/ReportSheet';
+import { isBlocked, type ReportTarget } from '../../services/serviceSafety';
 import { REACTION_ICONS, REACTION_NAMES } from '../general/reactionIcons';
 import { whyLabel } from './PhotoPost';
 import { shortPlace } from './LineTicket';
@@ -80,6 +82,10 @@ export default function PostViewer({
   // Everyone who reacted, in a sheet inside the viewer (a sheet of the feed
   // behind it would only show once the viewer closed).
   const [reactorsOpen, setReactorsOpen] = useState(false);
+  // The photo on screen, being reported (and maybe its author blocked).
+  const [reporting, setReporting] = useState<ReportTarget | null>(null);
+  // Blocked from the report sheet: the viewer closes once they tap Done.
+  const [blockedHere, setBlockedHere] = useState(false);
   const pager = useRef<ScrollView>(null);
   const lastTap = useRef(0);
   const stepTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,7 +101,9 @@ export default function PostViewer({
     setReactorsOpen(false);
 
     getEventPhotos(item.event.id)
-      .then((all) => {
+      .then((fetched) => {
+        // Photos from people you blocked are left out.
+        const all = fetched.filter((photo) => !isBlocked(photo.userId));
         if (cancelled || all.length === 0) return;
         const first = all.findIndex((photo) => photo.id === item.photo.id);
         setPhotos(first > 0 ? [...all.slice(first), ...all.slice(0, first)] : all);
@@ -268,6 +276,25 @@ export default function PostViewer({
                     <Ionicons name="share-outline" size={19} color={colors.onInk} />
                   </Pressable>
                 ) : null}
+                {current && current.userId !== userId ? (
+                  <Pressable
+                    onPress={() =>
+                      setReporting({
+                        kind: 'photo',
+                        id: current.id,
+                        userId: current.userId,
+                        userName: takenBy?.name ?? null,
+                        label: `${takenBy?.name ? `${takenBy.name}'s photo` : 'A photo'} from ${item.event.title}`,
+                      })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel="Report this photo"
+                    hitSlop={8}
+                    style={({ pressed }) => [styles.round, pressed && styles.pressed]}
+                  >
+                    <Ionicons name="flag-outline" size={18} color={colors.onInk} />
+                  </Pressable>
+                ) : null}
               </View>
             </SafeAreaView>
 
@@ -434,6 +461,18 @@ export default function PostViewer({
           </View>
         ) : null}
       </View>
+      <ReportSheet
+        target={reporting}
+        userId={userId}
+        onClose={() => {
+          setReporting(null);
+          if (blockedHere) {
+            setBlockedHere(false);
+            onClose();
+          }
+        }}
+        onBlocked={() => setBlockedHere(true)}
+      />
     </Modal>
   );
 }
@@ -500,7 +539,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.sm + 2,
     paddingTop: space.sm,
   },
-  round: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: onPhoto.glass },
+  round: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: onPhoto.glass },
   topText: { flex: 1, minWidth: 0, minHeight: 44, justifyContent: 'center' },
   topTitle: { color: colors.onInk, ...typo.display, fontSize: textSize.base },
   topSub: { color: onPhoto.soft, ...typo.medium, fontSize: textSize.small },
@@ -532,8 +571,8 @@ const styles = StyleSheet.create({
   panel: {
     marginTop: -22,
     maxHeight: '46%',
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     backgroundColor: colors.surface,
   },
   thumbs: { flexGrow: 0, marginTop: -THUMB_LIFT },
@@ -600,8 +639,8 @@ const styles = StyleSheet.create({
   sheetBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: scrim.sheet },
   sheet: {
     maxHeight: '70%',
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     backgroundColor: colors.surface,
   },
   sheetInner: { flexShrink: 1, paddingHorizontal: space.md, paddingTop: space.sm },

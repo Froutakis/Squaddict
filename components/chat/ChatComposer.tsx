@@ -44,7 +44,7 @@ type Dismissed = { at: number; query: string };
 
 export default function ChatComposer({
   onSend,
-  placeholder = 'Message the squad',
+  placeholder = 'Message the parea',
   disabled = false,
   initialText = '',
   editing = false,
@@ -451,8 +451,7 @@ const styles = StyleSheet.create({
     color: paper.accent,
     ...typo.mono,
     fontSize: 10.5,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   bannerBody: { color: paper.inkSoft, ...typo.regular, fontSize: 14, lineHeight: 19 },
   photoRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },

@@ -47,6 +47,8 @@ export const tint = {
   danger: '#FBE6E1',
   neutral: '#E4EAF0',
   sun: '#FFF3D6',
+  // Deep red words on the danger tint: the Answer pill, the ask chip.
+  dangerInk: '#8A2A1B',
 };
 
 // A theme colour see-through: alpha(colors.bg, 0.7) → 'rgba(237,240,245,0.7)'.
@@ -100,7 +102,7 @@ export const spot = {
   tint: '#FFF3D6',
 };
 
-export const brand = ['#1D3AC0', '#152C8F'] as const;
+export const brand = ['#2347DC', '#16309E'] as const;
 
 export const avatarGradients: readonly (readonly [string, string])[] = [
   ['#152C6B', '#152C6B'],
@@ -151,7 +153,8 @@ export const shadow = {
   },
 };
 
-export const radius = { sm: 10, md: 14, lg: 18, xl: 24, pill: 999 };
+// sheet: the top corners of every bottom sheet.
+export const radius = { sm: 10, md: 14, lg: 18, xl: 24, sheet: 30, pill: 999 };
 export const space = { xxs: 4, xs: 6, sm: 10, md: 16, lg: 24, xl: 32 };
 
 export const layout = { column: 720 };

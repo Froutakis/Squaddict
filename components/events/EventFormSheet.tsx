@@ -130,7 +130,7 @@ export default function EventFormSheet({
   async function handleSave() {
     if (!title.trim()) { setProblem({ at: 'title', text: 'Give your plan a title.' }); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) { setProblem({ at: 'date', text: 'Pick a day.' }); return; }
-    if (!editing && !targetGroup) { setProblem({ at: 'group', text: 'Pick a squad.' }); return; }
+    if (!editing && !targetGroup) { setProblem({ at: 'group', text: 'Pick a parea.' }); return; }
     if (placeRequired && !place) { setProblem({ at: 'place', text: 'Pick a place from the list so it shows on the map.' }); return; }
 
     const input: NewEvent = {
@@ -384,7 +384,7 @@ export default function EventFormSheet({
                 <View style={styles.publicText}>
                   <Text style={styles.publicTitle}>Open to Squaddict</Text>
                   <Text style={styles.publicBody}>
-                    Anyone nearby can find this plan and ask to come, and its photos show up for other pareas after. Off means your squad only.
+                    Anyone nearby can find this plan and ask to come, and its photos show up for other pareas after. Off means your parea only.
                   </Text>
                 </View>
                 <Switch
@@ -451,8 +451,8 @@ const styles = StyleSheet.create({
   sheet: {
     maxHeight: '90%',
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
   },
 
   head: { paddingHorizontal: 20, paddingTop: space.sm },

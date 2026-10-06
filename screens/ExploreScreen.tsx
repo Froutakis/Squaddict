@@ -585,7 +585,7 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
     if (activeSearch !== '') return 'Try another word, or clear your filters.';
     if (liveOnly) return 'No public plans are happening near you at the moment.';
     if (followingOnly && followedIds === '') {
-      return `${acting?.name ?? 'Your squad'} does not follow any pareas yet. Follow one from its page.`;
+      return `${acting?.name ?? 'Your parea'} follows nobody yet. Find one you like and follow it from its page.`;
     }
     if (hasFilters) return 'No public plans match those filters yet. Try clearing them.';
     return 'No public plans in range. Try a wider radius.';

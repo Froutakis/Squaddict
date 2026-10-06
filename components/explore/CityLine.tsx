@@ -266,6 +266,7 @@ export default function CityLine({
         accessibilityLabel: `Suggest ${plan.title} to ${suggestTo}`,
       };
     } else if (plan.myStatus === 'out') pill = { label: 'Passed', tone: 'quiet' };
+    else if (plan.myStatus === 'maybe') pill = { label: 'Maybe', tone: 'accent' };
     const isChosen = chosen === plan.id;
 
     return (
@@ -715,7 +716,7 @@ const styles = StyleSheet.create({
   end: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body, paddingTop: 2 },
 
   backdrop: { flex: 1, backgroundColor: scrim.sheet, justifyContent: 'flex-end' },
-  sheet: { maxHeight: '86%', borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, backgroundColor: colors.surface },
+  sheet: { maxHeight: '86%', borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, backgroundColor: colors.surface },
   grabber: { width: 40, height: 4, alignSelf: 'center', marginTop: space.sm, borderRadius: radius.pill, backgroundColor: colors.borderStrong },
   sheetBody: { padding: space.lg, paddingTop: space.md, gap: space.sm },
   sheetTitle: { color: colors.text, ...typo.display, fontSize: 22, letterSpacing: -0.3 },

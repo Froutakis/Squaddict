@@ -2,6 +2,7 @@ import { supabase } from "./supabaseClient";
 import { clearCache } from "./serviceCache";
 import { unregisterPush } from "./serviceNotifications";
 import { removeAvatar, removeImage } from "./serviceMedia";
+import { WEB_URL } from "../lib/config";
 
 export type User = {
   id: string;
@@ -15,7 +16,8 @@ export async function register(email: string, password: string, displayName: str
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { display_name: displayName } },
+    // The confirmation link brings people back to the web app, signed in.
+    options: { data: { display_name: displayName }, emailRedirectTo: WEB_URL },
   });
   if (error) throw error;
 
@@ -30,6 +32,18 @@ export async function login(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
   return data.user;
+}
+
+// Emails a link to set a new password. The link opens the web app signed in,
+// where App shows the new-password screen.
+export async function sendPasswordReset(email: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: WEB_URL });
+  if (error) throw error;
+}
+
+export async function updatePassword(password: string) {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
 }
 
 export async function getCurrentUser() {

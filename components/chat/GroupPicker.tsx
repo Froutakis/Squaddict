@@ -131,10 +131,10 @@ export default function GroupPicker({
           style={styles.searchInput}
           value={query}
           onChangeText={setQuery}
-          placeholder="Search your squads"
+          placeholder="Search your pareas"
           placeholderTextColor={paper.inkFaint}
           autoCorrect={false}
-          accessibilityLabel="Search squads"
+          accessibilityLabel="Search your pareas"
         />
         {needle ? (
           <Pressable
@@ -149,17 +149,17 @@ export default function GroupPicker({
         ) : null}
       </View>
 
-      <Text style={styles.section}>Squads</Text>
+      <Text style={styles.section}>Pareas</Text>
 
       {shown.length === 0 ? (
         <View style={styles.blank}>
           <Text style={styles.blankTitle}>
-            {groups.length === 0 ? 'No squads yet' : 'Nothing matches'}
+            {groups.length === 0 ? 'No pareas yet' : 'Nothing matches'}
           </Text>
           <Text style={styles.blankText}>
             {groups.length === 0
               ? 'Make one below, or use a code somebody sent you.'
-              : `No squad called "${query.trim()}".`}
+              : `No parea called "${query.trim()}".`}
           </Text>
         </View>
       ) : (
@@ -285,8 +285,7 @@ const styles = StyleSheet.create({
     color: paper.inkSoft,
     ...typo.semi,
     fontSize: 11,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
 
   card: {

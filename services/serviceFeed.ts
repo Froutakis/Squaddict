@@ -6,7 +6,7 @@ import { searchTerm } from "../lib/search";
 
 export type { FeedWhen };
 import { toEventTags, type EventTag } from "../lib/tags";
-import type { EventPhoto, MyEvent, RsvpStatus } from "./serviceEvents";
+import { toRsvp, type EventPhoto, type MyEvent, type RsvpStatus } from "./serviceEvents";
 import type { Person } from "../lib/people";
 
 export type FeedEvent = {
@@ -109,7 +109,7 @@ function toFeedEvent(r: any, userId: string, isMember: boolean, center: Coords |
     groupName: r.groups?.name ?? "Squad",
     groupHandle: r.groups?.handle ?? "",
     goingCount: answers.filter((a) => a.status === "in").length,
-    myStatus: mine === "in" || mine === "out" ? mine : undefined,
+    myStatus: toRsvp(mine),
     isMember,
   };
 }

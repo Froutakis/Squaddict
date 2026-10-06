@@ -4,6 +4,7 @@ import { GROUP_FIELDS, toGroup, type Group } from "./serviceGroup";
 import { getFollowing } from "./serviceFollow";
 import type { EventPhoto, MyEvent } from "./serviceEvents";
 import { keyOf } from "../lib/datetime";
+import { isBlocked } from "./serviceSafety";
 import { capPerNight, isOwnCircle, mixFeed, type FeedReason, type PhotoReaction } from "../lib/photoFeed";
 
 // One memory in the Home feed: a photo, with the night and the squad it is from.
@@ -98,7 +99,8 @@ async function toPosts(rows: any[], why: Map<string, Night>): Promise<FeedPhoto[
     .limit(PHOTOS);
   if (photoError) throw photoError;
 
-  const photos: EventPhoto[] = ((photoRows ?? []) as any[]).map((row) => ({
+  // Photos by people you blocked are left out.
+  const photos: EventPhoto[] = ((photoRows ?? []) as any[]).filter((row) => !isBlocked(row.user_id)).map((row) => ({
     id: row.id,
     eventId: row.event_id,
     userId: row.user_id,

@@ -30,7 +30,7 @@ export default function GroupBar({
           onPress={() => onSelect(null)}
           accessibilityRole="button"
           accessibilityState={{ selected: activeId === null }}
-          accessibilityLabel="All squads"
+          accessibilityLabel="All pareas"
           style={({ pressed }) => [
             styles.chip,
             activeId === null ? styles.chipActive : styles.chipIdle,

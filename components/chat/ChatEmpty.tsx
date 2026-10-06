@@ -186,7 +186,6 @@ const styles = StyleSheet.create({
     color: colors.textSoft,
     ...typo.mono,
     fontSize: textSize.micro,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
 });

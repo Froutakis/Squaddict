@@ -216,9 +216,17 @@ export default function PlanLine({
     let pill: TicketPill | null;
     if (other || plan.myStatus === undefined) pill = { label: 'Answer', tone: 'ask' };
     else if (passed) pill = { label: 'Passed', tone: 'quiet' };
+    else if (plan.myStatus === 'maybe') pill = { label: 'Maybe', tone: 'accent' };
     else pill = { label: count > 1 ? `${count} in` : "You're in", tone: 'done', icon: 'checkmark' };
     const isChosen = chosen === plan.id;
-    const status = other || plan.myStatus === undefined ? 'needs your answer' : passed ? 'you passed' : "you're in";
+    const status =
+      other || plan.myStatus === undefined
+        ? 'needs your answer'
+        : passed
+          ? 'you passed'
+          : plan.myStatus === 'maybe'
+            ? 'you said maybe'
+            : "you're in";
 
     return (
       <PlanTicket

@@ -27,6 +27,8 @@ type MessageMenuProps = {
   onDelete: (message: ChatMessage) => void;
   onReact: (message: ChatMessage, emoji: string) => void;
   onReply: (message: ChatMessage) => void;
+  // Someone else's message: report it, and block them if you want.
+  onReport?: (message: ChatMessage) => void;
 };
 
 // A long press on a message: the four reactions of the memories, each with
@@ -40,6 +42,7 @@ export default function MessageMenu({
   onDelete,
   onReact,
   onReply,
+  onReport,
 }: MessageMenuProps) {
   if (!message) {
     return null;
@@ -139,6 +142,24 @@ export default function MessageMenu({
                 </Pressable>
               </>
             ) : null}
+
+            {!canEdit && onReport ? (
+              <>
+                <View style={styles.divider} />
+
+                <Pressable
+                  onPress={function () {
+                    onReport(target);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Report or block ${who}`}
+                  style={itemStyle}
+                >
+                  <Ionicons name="flag-outline" size={18} color={RED_TEXT} />
+                  <Text style={[styles.text, styles.textDanger]}>Report or block</Text>
+                </Pressable>
+              </>
+            ) : null}
           </View>
         </Pressable>
       </Pressable>
@@ -166,8 +187,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingBottom: space.xl,
     backgroundColor: paper.bg,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
   },
   grab: {
     alignSelf: 'center',
@@ -183,8 +204,7 @@ const styles = StyleSheet.create({
     color: paper.inkSoft,
     ...typo.mono,
     fontSize: 10.5,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   previewText: { color: paper.ink, ...typo.regular, fontSize: 15, lineHeight: 21 },
 

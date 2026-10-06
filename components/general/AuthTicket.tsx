@@ -130,8 +130,8 @@ const styles = StyleSheet.create({
   brandText: { color: colors.onInk, ...typo.display, fontSize: 17, letterSpacing: -0.3 },
   title: { marginTop: 30, maxWidth: 260, color: colors.onInk, ...typo.display, fontSize: 31, lineHeight: 33, letterSpacing: -1.2 },
   // Clear of the stub, which sits up by the name.
-  titleShort: { marginTop: 50 },
-  lead: { marginTop: 8, maxWidth: 260, color: 'rgba(255,255,255,0.78)', ...typo.medium, fontSize: 14.5, lineHeight: 20 },
+  titleShort: { marginTop: 50, maxWidth: 205 },
+  lead: { marginTop: 8, maxWidth: 280, color: 'rgba(255,255,255,0.78)', ...typo.medium, fontSize: 14.5, lineHeight: 20 },
 
   stub: {
     position: 'absolute',

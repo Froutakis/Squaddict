@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import type { MyEvent, RsvpStatus } from "./serviceEvents";
+import { toRsvp, type MyEvent, type RsvpStatus } from "./serviceEvents";
 
 // "Suggest to my parea": a member points their parea at another parea's
 // public plan. It is not a vote: the plan shows in the chat as a card and on
@@ -24,7 +24,7 @@ export async function suggestPlan(groupId: string, eventId: string): Promise<boo
 }
 
 function toStatus(value: unknown): RsvpStatus | undefined {
-  return value === "in" || value === "out" ? value : undefined;
+  return toRsvp(value);
 }
 
 // The parea's suggestions of plans still ahead. Before plans_by_vote.sql is

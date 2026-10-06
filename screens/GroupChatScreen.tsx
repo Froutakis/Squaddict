@@ -25,6 +25,8 @@ import VoteCard from '../components/votes/VoteCard';
 import { voteQuestion } from '../lib/squadVote';
 import MessageBubble, { DateSeparator } from '../components/chat/MessageBubble';
 import MessageMenu from '../components/chat/MessageMenu';
+import ReportSheet from '../components/general/ReportSheet';
+import { isBlocked, onBlocksChanged, type ReportTarget } from '../services/serviceSafety';
 import {
   actionFor,
   chatReactions,
@@ -35,6 +37,7 @@ import {
   type ReactionMap,
 } from '../components/chat/reactions';
 import {
+  applyBlocks,
   quoteOf,
   refreshQuotes,
   resolveQuote,
@@ -107,7 +110,7 @@ import {
 } from '../services/serviceMedia';
 import { closeGroupChat, sendCardsChanged, sendTyping, startChat } from '../services/serviceRealtime';
 import { getUserById } from '../services/serviceUser';
-import { colors, layout, paper, scrim, typo, space, textSize } from '../theme';
+import { colors, layout, paper, radius, scrim, typo, space, textSize } from '../theme';
 import GroupScreen from './GroupScreen';
 import PlanCard from '../components/chat/PlanCard';
 import ChatEvent from '../components/chat/ChatEvent';
@@ -227,6 +230,8 @@ export default function GroupChatScreen({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<ChatMessage | null>(null);
+  // A message being reported (and maybe its author blocked).
+  const [reporting, setReporting] = useState<ReportTarget | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [typists, setTypists] = useState<Typist[]>([]);
@@ -288,6 +293,9 @@ export default function GroupChatScreen({
   const namesRef = useRef<Record<string, string>>({});
   const membersRef = useRef<Person[]>([]);
   const loadingOlderRef = useRef(false);
+  // Where the next older page starts, from the rows as fetched (blocked
+  // people's included), so a page of only theirs does not stall paging.
+  const olderCursorRef = useRef<string | null>(null);
   const outboxRef = useRef<OutgoingMessage[]>([]);
   outboxRef.current = outbox;
   const messagesRef = useRef<ChatMessage[]>([]);
@@ -422,7 +430,7 @@ export default function GroupChatScreen({
         loadUnread();
       } catch {
         if (!cancelled && groupsRef.current.length === 0) {
-          setError("Couldn't load your squads.");
+          setError('Could not load your pareas. Try again.');
         }
       } finally {
         if (!cancelled) {
@@ -446,6 +454,15 @@ export default function GroupChatScreen({
     }
     writeCachedGroups(user.id, { groups, previews });
   }, [user.id, groups, previews]);
+
+  // Blocks load after sign in and change from the report sheet: take their
+  // messages out, hide quotes of them, and read the last lines again.
+  useEffect(() => {
+    return onBlocksChanged(function () {
+      setMessages(applyBlocks);
+      if (groupsRef.current.length > 0) loadPreviews(groupsRef.current);
+    });
+  }, [loadPreviews]);
 
   useEffect(() => {
     if (messagesFor === null || messagesFor !== activeId || messages.length === 0) {
@@ -534,6 +551,7 @@ export default function GroupChatScreen({
     setSigned({});
     setViewing(null);
     setHasMore(false);
+    olderCursorRef.current = null;
     setConnection('connecting');
     connectionRef.current = 'connecting';
     setLoadingOlder(false);
@@ -554,6 +572,8 @@ export default function GroupChatScreen({
     typingSentRef.current = 0;
 
     function handleIncomingRow(row: any) {
+      // Someone you blocked: their new messages stay out too.
+      if (isBlocked(row.sender_id)) return;
       const senderName = namesRef.current[row.sender_id];
       const incoming = resolveQuote(toChatMessage(row, senderName), messagesRef.current);
 
@@ -619,7 +639,7 @@ export default function GroupChatScreen({
 
         collected = [...collected, ...page.messages];
 
-        if (!page.hasMore || page.messages.length === 0) {
+        if (!page.hasMore || !page.cursor) {
           break;
         }
 
@@ -630,10 +650,11 @@ export default function GroupChatScreen({
           }
           setMessages(resolveQuotes(fresh.messages));
           setHasMore(fresh.hasMore);
+          olderCursorRef.current = fresh.cursor;
           return;
         }
 
-        since = page.messages[page.messages.length - 1].createdAt;
+        since = page.cursor;
       }
 
       if (collected.length === 0) {
@@ -684,7 +705,8 @@ export default function GroupChatScreen({
       setMessages(function (prev) {
         if (prev.length > 0) return prev;
         used = true;
-        return resolveQuotes(cached);
+        // The cache may hold messages from before a block.
+        return applyBlocks(resolveQuotes(cached));
       });
 
       if (used) {
@@ -730,6 +752,7 @@ export default function GroupChatScreen({
         setMessages(resolveQuotes(chat.messages));
         setMessagesFor(groupId);
         setHasMore(chat.hasMore);
+        olderCursorRef.current = chat.cursor;
 
         const saved = await readCachedOutbox(user.id, groupId);
         if (!cancelled && saved && saved.length > 0) {
@@ -744,7 +767,7 @@ export default function GroupChatScreen({
       } catch (problem) {
         console.error('[squaddict] το άνοιγμα της συνομιλίας απέτυχε:', problem);
         if (!cancelled && messagesRef.current.length === 0) {
-          setError("Couldn't load this conversation.");
+          setError('Could not load this conversation.');
         }
       } finally {
         if (!cancelled) {
@@ -1036,7 +1059,17 @@ export default function GroupChatScreen({
       setLoadingOlder(true);
 
       try {
-        const page = await getMessages(activeId, { before: oldest.createdAt });
+        // Start below whichever is older: the oldest shown, or the oldest row read.
+        const cursor = olderCursorRef.current;
+        let before =
+          cursor && Date.parse(cursor) < Date.parse(oldest.createdAt) ? cursor : oldest.createdAt;
+        let page = await getMessages(activeId, { before });
+        // A page of only blocked people's messages shows nothing: read on, a few pages at most.
+        for (let skips = 0; page.messages.length === 0 && page.hasMore && page.cursor && skips < 4; skips++) {
+          before = page.cursor;
+          page = await getMessages(activeId, { before });
+        }
+        olderCursorRef.current = page.cursor ?? before;
 
         loadReactionsFor(page.messages.map(function (m) { return m.id; }));
 
@@ -1604,6 +1637,7 @@ export default function GroupChatScreen({
   const overlayOpenRef = useRef(false);
   overlayOpenRef.current =
     menuFor !== null ||
+    reporting !== null ||
     viewing !== null ||
     searchOpen ||
     openPlan !== null ||
@@ -2040,7 +2074,7 @@ export default function GroupChatScreen({
           online={online}
           typing={typing}
           connection={connectionLabel(connection)}
-          backLabel={onExit ? `Close chat, back to ${activeGroup.name}` : 'Back to squads'}
+          backLabel={onExit ? `Close chat, back to ${activeGroup.name}` : 'Back to pareas'}
           onBack={closeGroup}
           onSearch={function () {
             setSearchOpen(true);
@@ -2260,12 +2294,40 @@ export default function GroupChatScreen({
               dropPrefill();
               setEditing(target);
             }}
+            onReport={function (target) {
+              setMenuFor(null);
+              if (!target.senderId) return;
+              const name = target.senderName || 'Someone';
+              setTimeout(function () {
+                setReporting({
+                  kind: 'message',
+                  id: target.id,
+                  userId: target.senderId,
+                  userName: name,
+                  label: `${name}: ${target.content.trim() || (target.attachment ? 'a photo' : 'a message')}`,
+                });
+              }, SHEET_SWAP_MS);
+            }}
             onDelete={function (target) {
               setMenuFor(null);
               setEditing(function (current) {
                 return current && current.id === target.id ? null : current;
               });
               applyDelete(target);
+            }}
+          />
+          <ReportSheet
+            target={reporting}
+            userId={user.id}
+            onClose={function () {
+              setReporting(null);
+            }}
+            onBlocked={function (blockedId) {
+              setMessages(function (prev) {
+                return prev.filter(function (message) {
+                  return message.senderId !== blockedId;
+                });
+              });
             }}
           />
           <Modal
@@ -2542,8 +2604,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingTop: space.sm,
     paddingBottom: space.xl,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     backgroundColor: paper.bg,
   },
   voteTalk: { alignSelf: 'flex-start', marginLeft: 36, marginTop: 2, paddingVertical: 4, paddingHorizontal: 2 },

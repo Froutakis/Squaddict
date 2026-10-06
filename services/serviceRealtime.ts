@@ -116,5 +116,5 @@ export async function startChat(
 ) {
   const page = await getMessages(groupId, { limit });
   const channel = openGroupChat(groupId, me, handlers);
-  return { messages: page.messages, hasMore: page.hasMore, channel };
+  return { messages: page.messages, hasMore: page.hasMore, cursor: page.cursor, channel };
 }

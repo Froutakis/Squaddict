@@ -663,8 +663,8 @@ const styles = StyleSheet.create({
   sheet: {
     maxHeight: '88%',
     backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
     paddingBottom: space.xl,
@@ -694,9 +694,9 @@ const styles = StyleSheet.create({
   },
   featurePressed: { transform: [{ scale: 0.98 }] },
   featureMain: { flex: 1, minWidth: 0, gap: 3, padding: 14 },
-  featureKick: { color: '#C3CEF7', ...typo.mono, fontSize: 10.5, letterSpacing: 1.4 },
+  featureKick: { color: colors.accentSoft, ...typo.mono, fontSize: 10.5, letterSpacing: 1.4 },
   featureTitle: { color: colors.onInk, ...typo.display, fontSize: 18, letterSpacing: -0.3 },
-  featureLine: { color: '#DCE3FA', ...typo.semi, fontSize: textSize.small },
+  featureLine: { color: colors.accentSoft, ...typo.semi, fontSize: textSize.small },
   // The dashes are as tall as the ticket, as in LineTicket.
   featurePerf: { width: 2, marginVertical: 10 },
   featureDashes: { position: 'absolute', top: 0, bottom: 0, left: 0, width: 2, gap: 4, overflow: 'hidden' },

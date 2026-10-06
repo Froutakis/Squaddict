@@ -38,6 +38,8 @@ import { voteEventToSheet } from '../components/votes/VoteCard';
 import { FAB_CENTER_Y, FAB_INSET } from '../components/general/MenuFab';
 import { features } from '../lib/features';
 import type { VoteStart } from '../components/votes/NewVoteSheet';
+import ReportSheet from '../components/general/ReportSheet';
+import type { ReportTarget } from '../services/serviceSafety';
 
 type Member = {
   id: string;
@@ -82,6 +84,8 @@ export default function GroupScreen({
 }: GroupScreenProps) {
   const [plans, setPlans] = useState<FeedEvent[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
+  // This parea, being reported from its public page.
+  const [reporting, setReporting] = useState<ReportTarget | null>(null);
   const [openPlan, setOpenPlan] = useState<SheetEvent | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [member, setMember] = useState(false);
@@ -235,7 +239,7 @@ export default function GroupScreen({
           const upcoming = await getGroupPublicEvents(group.id);
           if (!cancelled) setPlans(upcoming);
         } catch {
-          if (!cancelled) setError("Couldn't load their plans");
+          if (!cancelled) setError('Could not load their plans.');
         }
       }
 
@@ -282,7 +286,7 @@ export default function GroupScreen({
       if (onLeave) onLeave();
       else onBack();
     } catch {
-      setError('Could not leave the squad. Try again.');
+      setError('Could not leave the parea. Try again.');
       setLeaving(false);
       setConfirmLeave(false);
     }
@@ -353,6 +357,9 @@ export default function GroupScreen({
           onBack={onBack}
           onAnswer={answer}
           onOpenPlan={openSheet}
+          onReport={() =>
+            setReporting({ kind: 'parea', id: current.id, userId: null, userName: null, label: current.name })
+          }
           stubFor={(plan) => (
             <RsvpButtons
               status={plan.myStatus}
@@ -364,6 +371,7 @@ export default function GroupScreen({
           )}
         />
         {sheet}
+        <ReportSheet target={reporting} userId={userId} onClose={() => setReporting(null)} />
       </>
     );
   }
@@ -406,7 +414,7 @@ export default function GroupScreen({
 
               <View style={styles.buttons}>
                 {isActing ? (
-                  <View style={[styles.button, styles.buttonActing]} accessibilityLabel="You are acting as this squad">
+                  <View style={[styles.button, styles.buttonActing]} accessibilityLabel="You are acting as this parea">
                     <View style={styles.actingDot} />
                     <Text style={styles.buttonActingText} numberOfLines={1}>
                       Acting
@@ -417,8 +425,8 @@ export default function GroupScreen({
                     onPress={actAsThisSquad}
                     disabled={actingBusy}
                     accessibilityRole="button"
-                    accessibilityLabel="Act as this squad"
-                    accessibilityHint="Follows will be made in this squad's name"
+                    accessibilityLabel="Act as this parea"
+                    accessibilityHint="Follows will be made in this parea's name"
                     style={({ pressed }) => [styles.button, styles.buttonPrimary, (pressed || actingBusy) && styles.pressed]}
                   >
                     <Text style={styles.buttonPrimaryText} numberOfLines={1}>
@@ -521,7 +529,7 @@ export default function GroupScreen({
                   </View>
 
                   {restricted ? (
-                    <Text style={styles.hint}>Only members see who is in this squad.</Text>
+                    <Text style={styles.hint}>Only members see who is in this parea.</Text>
                   ) : (
                     <View style={styles.memberList}>
                       {members.map((person, index) => (
@@ -564,10 +572,10 @@ export default function GroupScreen({
                     <Pressable
                       onPress={() => setConfirmLeave(true)}
                       accessibilityRole="button"
-                      accessibilityLabel="Leave this squad"
+                      accessibilityLabel="Leave this parea"
                       style={({ pressed }) => [styles.leaveLink, pressed && styles.pressed]}
                     >
-                      <Text style={styles.leaveLinkText}>Leave squad</Text>
+                      <Text style={styles.leaveLinkText}>Leave parea</Text>
                     </Pressable>
                   )}
                 </View>

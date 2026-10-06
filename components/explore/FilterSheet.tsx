@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Modal, Pressable, SafeAreaView, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import type { FeedWhen } from '../../services/serviceFeed';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../../lib/tags';
-import { colors, space, textSize, typo } from '../../theme';
+import { colors, radius, space, textSize, typo } from '../../theme';
 
 type FilterSheetProps = {
   visible: boolean;
@@ -201,7 +201,7 @@ function Toggle({
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(5,9,15,0.42)' },
-  sheet: { maxHeight: '86%', backgroundColor: colors.surface, borderTopLeftRadius: 30, borderTopRightRadius: 30 },
+  sheet: { maxHeight: '86%', backgroundColor: colors.surface, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet },
   // Padding inside: an iPhone's SafeAreaView sets its own.
   inner: { flexShrink: 1, paddingHorizontal: space.lg - 4, paddingTop: space.sm, paddingBottom: space.md },
   grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong },
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.ink,
+    backgroundColor: colors.primary,
   },
   showText: { color: colors.onInk, ...typo.display, fontSize: 16 },
   pressed: { opacity: 0.75 },

@@ -138,10 +138,10 @@ export default function MessageBubble({
               {reply.senderName || 'Someone'}
             </Text>
             <Text
-              style={[styles.quoteBody, mine && styles.quoteBodyMine, reply.deleted && styles.quoteGone]}
+              style={[styles.quoteBody, mine && styles.quoteBodyMine, (reply.deleted || reply.hidden) && styles.quoteGone]}
               numberOfLines={1}
             >
-              {reply.deleted ? 'Message deleted' : reply.content}
+              {reply.deleted ? 'Message deleted' : reply.hidden ? 'Hidden message' : reply.content}
             </Text>
           </>
         ) : (
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
   },
   quoteMine: { backgroundColor: 'rgba(255, 255, 255, 0.12)' },
   quoteOnPhoto: { marginTop: 0, marginHorizontal: 0, marginBottom: 4 },
-  quoteWho: { color: paper.accent, ...typo.mono, fontSize: 10.5, letterSpacing: 1.2, textTransform: 'uppercase' },
+  quoteWho: { color: paper.accent, ...typo.mono, fontSize: 10.5, letterSpacing: 0.2 },
   quoteWhoMine: { color: paper.accentOnMine },
   quoteBody: { color: paper.inkSoft, ...typo.regular, fontSize: 14, lineHeight: 19 },
   quoteBodyMine: { color: colors.borderStrong },
@@ -504,8 +504,7 @@ const styles = StyleSheet.create({
     color: paper.inkSoft,
     ...typo.mono,
     fontSize: 11,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   pendingNote: {
     marginTop: 3,

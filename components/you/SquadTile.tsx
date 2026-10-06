@@ -30,7 +30,7 @@ export default function SquadTile({ group, acting = false, unread = 0, votes = 0
   const badge = unreadLabel(unread);
   const members = `${group.memberCount} ${group.memberCount === 1 ? 'member' : 'members'}`;
   const waiting = votes > 0 ? `${votes} ${votes === 1 ? 'vote' : 'votes'} waiting` : null;
-  const label = [group.name, members, acting ? 'acting squad' : null, badge ? `${badge} unread` : null, waiting]
+  const label = [group.name, members, acting ? 'acting parea' : null, badge ? `${badge} unread` : null, waiting]
     .filter(Boolean)
     .join(', ');
 

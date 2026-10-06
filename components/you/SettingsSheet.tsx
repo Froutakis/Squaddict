@@ -16,12 +16,14 @@ import {
 } from 'react-native';
 import { updateDisplayName } from '../../services/serviceUser';
 import { deleteAccount } from '../../services/serviceAuth';
+import { getBlockedPeople, unblockUser, type BlockedPerson } from '../../services/serviceSafety';
+import Monogram from '../general/Monogram';
 import { getExploreDefault, setExploreDefault } from '../events/EventPhotos';
 import { APP_VERSION, SUPPORT_EMAIL } from '../../lib/config';
-import { PRIVACY_SECTIONS, PRIVACY_UPDATED } from '../../lib/legal';
+import { PRIVACY_SECTIONS, PRIVACY_UPDATED, TERMS_SECTIONS, TERMS_UPDATED } from '../../lib/legal';
 import { colors, radius, space, textSize, typo } from '../../theme';
 
-type Page = 'main' | 'name' | 'privacy' | 'delete';
+type Page = 'main' | 'name' | 'blocked' | 'privacy' | 'terms' | 'delete';
 type Icon = ComponentProps<typeof Ionicons>['name'];
 
 const CONFIRM_WORD = 'DELETE';
@@ -53,6 +55,9 @@ export default function SettingsSheet({
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The Blocked people page: null while it loads.
+  const [blockedPeople, setBlockedPeople] = useState<BlockedPerson[] | null>(null);
+  const [unblocking, setUnblocking] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -70,6 +75,31 @@ export default function SettingsSheet({
   function go(next: Page) {
     setError(null);
     setPage(next);
+    if (next === 'blocked') loadBlocked();
+  }
+
+  function loadBlocked() {
+    setBlockedPeople(null);
+    setError(null);
+    getBlockedPeople()
+      .then(setBlockedPeople)
+      .catch(() => {
+        setBlockedPeople([]);
+        setError('Could not load the people you blocked. Try again.');
+      });
+  }
+
+  async function unblock(person: BlockedPerson) {
+    setUnblocking(person.id);
+    setError(null);
+    try {
+      await unblockUser(person.id);
+      setBlockedPeople((was) => (was ?? []).filter((one) => one.id !== person.id));
+    } catch {
+      setError('Could not unblock. Check your connection and try again.');
+    } finally {
+      setUnblocking(null);
+    }
   }
 
   async function saveName() {
@@ -193,10 +223,12 @@ export default function SettingsSheet({
                 trackColor={{ true: colors.primary, false: colors.border }}
               />
             </View>
+            <Row icon="hand-left-outline" label="Blocked people" onPress={() => go('blocked')} />
           </View>
 
           <View style={styles.group}>
             <Row icon="shield-checkmark-outline" label="Privacy policy" onPress={() => go('privacy')} />
+            <Row icon="document-text-outline" label="Terms of use" onPress={() => go('terms')} />
             <Row
               icon="chatbox-ellipses-outline"
               label="Send feedback"
@@ -256,6 +288,54 @@ export default function SettingsSheet({
     );
   }
 
+  function renderBlocked() {
+    return (
+      <>
+        {header('Blocked people')}
+        <ScrollView contentContainerStyle={styles.pageBody}>
+          <Text style={styles.paragraph}>
+            You don't see their messages or photos, and their messages don't notify you.
+          </Text>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          {blockedPeople === null ? (
+            <ActivityIndicator color={colors.primary} style={styles.loading} />
+          ) : blockedPeople.length === 0 ? (
+            error ? null : <Text style={styles.empty}>Nobody. You can block someone when you report their message or photo.</Text>
+          ) : (
+            <View style={styles.group}>
+              {blockedPeople.map((person) => {
+                const name = person.name ?? 'Someone from another parea';
+                const busyHere = unblocking === person.id;
+                return (
+                  <View key={person.id} style={styles.row}>
+                    <Monogram name={person.name ?? '?'} uri={person.avatarUrl} size={32} />
+                    <Text style={[styles.rowLabel, styles.rowText]} numberOfLines={1}>
+                      {name}
+                    </Text>
+                    <Pressable
+                      onPress={() => unblock(person)}
+                      disabled={unblocking !== null}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Unblock ${name}`}
+                      accessibilityState={{ disabled: unblocking !== null }}
+                      style={({ pressed }) => [styles.unblock, pressed && styles.pressed]}
+                    >
+                      {busyHere ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : (
+                        <Text style={styles.unblockText}>Unblock</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </ScrollView>
+      </>
+    );
+  }
+
   function renderPrivacy() {
     return (
       <>
@@ -263,6 +343,23 @@ export default function SettingsSheet({
         <ScrollView contentContainerStyle={styles.pageBody}>
           <Text style={styles.updated}>Last updated {PRIVACY_UPDATED}</Text>
           {PRIVACY_SECTIONS.map((section) => (
+            <View key={section.title} style={styles.section}>
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <Text style={styles.paragraph}>{section.body}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      </>
+    );
+  }
+
+  function renderTerms() {
+    return (
+      <>
+        {header('Terms of use')}
+        <ScrollView contentContainerStyle={styles.pageBody}>
+          <Text style={styles.updated}>Last updated {TERMS_UPDATED}</Text>
+          {TERMS_SECTIONS.map((section) => (
             <View key={section.title} style={styles.section}>
               <Text style={styles.sectionTitle}>{section.title}</Text>
               <Text style={styles.paragraph}>{section.body}</Text>
@@ -338,9 +435,13 @@ export default function SettingsSheet({
               ? renderMain()
               : page === 'name'
                 ? renderName()
-                : page === 'privacy'
+                : page === 'blocked'
+                  ? renderBlocked()
+                  : page === 'privacy'
                   ? renderPrivacy()
-                  : renderDelete()}
+                  : page === 'terms'
+                    ? renderTerms()
+                    : renderDelete()}
           </Pressable>
         </Pressable>
       </KeyboardAvoidingView>
@@ -391,8 +492,8 @@ const styles = StyleSheet.create({
     maxHeight: '90%',
     minHeight: '55%',
     paddingTop: space.sm,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     backgroundColor: colors.bg,
   },
   grabber: {
@@ -478,4 +579,15 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.text, ...typo.semi, fontSize: textSize.base },
   warning: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   warningText: { color: colors.danger, ...typo.semi, fontSize: textSize.base },
+  loading: { marginTop: space.lg },
+  empty: { marginTop: space.sm, color: colors.textFaint, ...typo.medium, fontSize: textSize.body, textAlign: 'center' },
+  unblock: {
+    minHeight: 36,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentSoft,
+  },
+  unblockText: { color: colors.accentInk, ...typo.bold, fontSize: textSize.body },
 });

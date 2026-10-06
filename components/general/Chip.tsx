@@ -47,6 +47,8 @@ export default function Chip({
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      // 30 tall: the slop makes it a 44 target.
+      hitSlop={7}
       accessibilityRole="button"
       accessibilityState={{ selected: active, disabled }}
       accessibilityLabel={label}

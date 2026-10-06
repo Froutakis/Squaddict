@@ -78,7 +78,7 @@ export function WaveRow({
       </Text>
       <Pressable
         onPress={onWaveBack}
-        hitSlop={6}
+        hitSlop={4}
         disabled={wave.wavedBack || busy}
         accessibilityRole="button"
         accessibilityState={{ disabled: wave.wavedBack || busy }}
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   wave: { flexDirection: 'row', alignItems: 'center', gap: space.xs, padding: 9, paddingLeft: 11, borderRadius: radius.sm, backgroundColor: colors.bg },
   waveText: { flex: 1, color: colors.textSoft, ...typo.semi, fontSize: textSize.small, lineHeight: 16 },
   waveStrong: { color: colors.text, ...typo.display },
-  waveButton: { minHeight: 32, paddingHorizontal: 12, justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.ink },
+  waveButton: { minHeight: 36, paddingHorizontal: 12, justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.ink },
   waveButtonText: { color: colors.onInk, ...typo.display, fontSize: textSize.small },
   waveDone: { backgroundColor: DONE },
   waveDoneText: { color: colors.success },
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
   rankLine: { color: colors.textSoft, ...typo.semi, fontSize: textSize.small },
 
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  sheet: { maxHeight: '86%', borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, backgroundColor: colors.surface },
+  sheet: { maxHeight: '86%', borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, backgroundColor: colors.surface },
   grabber: { width: 40, height: 4, alignSelf: 'center', marginTop: space.sm, borderRadius: radius.pill, backgroundColor: colors.borderStrong },
   sheetBody: { padding: space.lg, paddingTop: space.md, gap: space.sm },
   sheetTitle: { marginTop: space.xs, color: colors.text, ...typo.display, fontSize: 22, letterSpacing: -0.3 },

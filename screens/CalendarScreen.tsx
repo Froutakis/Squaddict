@@ -65,7 +65,7 @@ const MAX_ROWS = 3;
 // Where the peek's tear line and notches sit, from its top.
 const PEEK_TEAR = 65;
 
-type ChipTone = 'in' | 'ask' | 'live' | 'over';
+type ChipTone = 'in' | 'maybe' | 'ask' | 'live' | 'over';
 
 function sameMonth(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
@@ -78,6 +78,7 @@ function toneOf(plan: MyEvent, now: Date): ChipTone {
   if (now >= endsAt) return 'over';
   if (now >= startsAt) return 'live';
   if (plan.myStatus === undefined) return 'ask';
+  if (plan.myStatus === 'maybe') return 'maybe';
   return plan.myStatus === 'in' ? 'in' : 'over';
 }
 
@@ -536,6 +537,9 @@ function PlanRow({ plan, now, first, onPress }: { plan: MyEvent; now: Date; firs
   } else if (tone === 'ask') {
     pill = { label: 'Answer', tone: 'ask' };
     status = 'needs your answer';
+  } else if (plan.myStatus === 'maybe') {
+    pill = { label: 'Maybe', tone: 'accent' };
+    status = 'you said maybe';
   } else if (plan.myStatus === 'out') {
     pill = { label: 'Passed', tone: 'quiet' };
     status = 'you passed';
@@ -568,6 +572,7 @@ function PlanRow({ plan, now, first, onPress }: { plan: MyEvent; now: Date; firs
 
 const chipFill: Record<ChipTone, string> = {
   in: colors.primary,
+  maybe: colors.accentSoft,
   ask: tint.danger,
   live: sun,
   over: colors.sunk,
@@ -575,8 +580,9 @@ const chipFill: Record<ChipTone, string> = {
 
 const chipInk: Record<ChipTone, string> = {
   in: colors.onInk,
+  maybe: colors.accentInk,
   // The same deep red as the Answer pill.
-  ask: '#8A2A1B',
+  ask: tint.dangerInk,
   live: sunOn,
   over: colors.textSoft,
 };

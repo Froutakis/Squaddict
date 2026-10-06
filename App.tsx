@@ -7,8 +7,10 @@ import RegisterScreen from './screens/RegisterScreen';
 import { supabase } from './services/supabaseClient';
 import { colors, radius, space, typo, textSize } from './theme';
 import { joinByInviteCode } from './services/serviceGroup';
+import { forgetBlocks, loadBlocks } from './services/serviceSafety';
 import { inviteCodeFrom } from './lib/invite';
 import LoginScreen from './screens/LoginScreen';
+import NewPasswordScreen from './screens/NewPasswordScreen';
 import HomeScreen, { type HomeOverlay, type RailData } from './screens/HomeScreen';
 import GroupChatScreen from './screens/GroupChatScreen';
 import ChatSlide from './components/chat/ChatSlide';
@@ -36,11 +38,18 @@ type HomeAsk = 'plan' | 'calendar' | 'squad';
 const PENDING_INVITE_KEY = 'squaddict.pendingInvite';
 const NOTICE_MS = 4000;
 
+// On the web, a reset link lands with #...type=recovery. Read it now, before the
+// client tidies the address, in case PASSWORD_RECOVERY fired before we listened.
+const OPENED_FOR_RECOVERY =
+  Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hash.includes('type=recovery');
+
 const NO_RAIL_DATA: RailData = { squads: [], activeId: null, unread: {}, votes: 0, me: { name: '', avatarUrl: null } };
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  // Signed in from a reset-password link: a new password comes first.
+  const [recovering, setRecovering] = useState(OPENED_FOR_RECOVERY);
   const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
   const [screen, setScreen] = useState<Screen>('home');
   // The chat open on top of it all; 'votes' opens it on its Votes tab, and
@@ -75,7 +84,12 @@ export default function App() {
       setCheckingSession(false);
     });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true);
+      if (event === 'SIGNED_OUT') {
+        setRecovering(false);
+        forgetBlocks();
+      }
       setUser(session?.user ?? null);
     });
 
@@ -85,6 +99,7 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
+    loadBlocks().catch(() => {});
     registerForPush().catch((problem) => {
       console.warn('[squaddict] push registration failed:', problem);
     });
@@ -172,6 +187,17 @@ export default function App() {
       <LoginScreen onSwitchToRegister={() => setAuthScreen('register')} />
     ) : (
       <RegisterScreen onSwitchToLogin={() => setAuthScreen('login')} />
+    );
+  }
+
+  if (recovering) {
+    return (
+      <NewPasswordScreen
+        onDone={() => {
+          setRecovering(false);
+          setNotice('Your new password is saved.');
+        }}
+      />
     );
   }
 

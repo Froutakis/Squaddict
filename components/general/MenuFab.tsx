@@ -3,6 +3,8 @@ import { colors, radius, space, typo } from '../../theme';
 
 const SIZE = 44;
 const TOP = space.sm;
+// The button's gap from the left edge; a button on the right mirrors it.
+export const FAB_LEFT = space.md;
 
 // How far a screen's top row starts from the left, to clear the button.
 export const FAB_INSET = space.md + SIZE + space.sm;
@@ -53,7 +55,7 @@ const styles = StyleSheet.create({
   fab: {
     width: SIZE,
     height: SIZE,
-    marginLeft: space.md,
+    marginLeft: FAB_LEFT,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',

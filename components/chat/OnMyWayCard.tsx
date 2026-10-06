@@ -198,8 +198,7 @@ const styles = StyleSheet.create({
     color: ON_INK_SOFT,
     ...typo.mono,
     fontSize: textSize.micro,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   title: {
     marginTop: 6,
@@ -214,8 +213,7 @@ const styles = StyleSheet.create({
     color: ON_INK_SOFT,
     ...typo.mono,
     fontSize: textSize.caption,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
 
   outline: {

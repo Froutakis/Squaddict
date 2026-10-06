@@ -17,7 +17,7 @@ type PlanCardProps = {
   onLongPress?: () => void;
 };
 
-// A plan suggested in the chat, as a ticket: what, when, where, and I'm in /
+// A plan suggested in the chat, as a ticket: what, when, where, and In, Maybe or
 // Pass on the stub. Not a vote: everyone answers for themselves.
 export default function PlanCard({ plan, saving, onAnswer, onOpen, onLongPress }: PlanCardProps) {
   const event = plan.event;
@@ -58,6 +58,15 @@ export default function PlanCard({ plan, saving, onAnswer, onOpen, onLongPress }
                 <Text style={[styles.buttonText, status === 'in' ? styles.inText : styles.onInk]}>
                   {status === 'in' ? "You're in" : "I'm in"}
                 </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => pick('maybe')}
+                accessibilityRole="button"
+                accessibilityLabel={status === 'maybe' ? 'You said maybe. Tap to take it back' : 'Maybe'}
+                accessibilityState={{ selected: status === 'maybe' }}
+                style={({ pressed }) => [styles.button, status === 'maybe' ? styles.maybeChip : styles.grey, pressed && styles.pressed]}
+              >
+                <Text style={[styles.buttonText, status === 'maybe' && styles.maybeText]}>Maybe</Text>
               </Pressable>
               <Pressable
                 onPress={() => pick('out')}
@@ -109,8 +118,7 @@ const styles = StyleSheet.create({
     color: colors.success,
     ...typo.mono,
     fontSize: textSize.micro,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   title: {
     marginTop: 6,
@@ -126,8 +134,7 @@ const styles = StyleSheet.create({
     ...typo.mono,
     fontSize: textSize.caption,
     lineHeight: 15,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   meta: { marginTop: 6, color: colors.textSoft, ...typo.semi, fontSize: 12.5 },
 
@@ -149,6 +156,8 @@ const styles = StyleSheet.create({
   grey: { backgroundColor: colors.surfaceAlt },
   inChip: { backgroundColor: tint.success },
   inText: { color: colors.success },
+  maybeChip: { backgroundColor: colors.accentSoft },
+  maybeText: { color: colors.accentInk },
   outChip: { backgroundColor: tint.danger },
   outText: { color: colors.danger },
   note: { color: colors.textSoft, ...typo.medium, fontSize: textSize.small },

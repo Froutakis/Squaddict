@@ -6,14 +6,14 @@ import { features } from '../../lib/features';
 import type { Person } from '../../lib/people';
 import Monogram from '../general/Monogram';
 import { shortPlace } from '../home/LineTicket';
-import { brand, colors, paper, radius, shadow, space, textSize, typo } from '../../theme';
+import { alpha, brand, colors, paper, radius, shadow, space, textSize, typo } from '../../theme';
 
 // What fills the Votes line when nothing is open: how the parea decides, a
 // few ideas worth a vote, and one-tap ways to start one.
 
-const LINE = '#B9C6F3';
+const LINE = alpha(colors.primary, 0.28);
 const MEMO = 'rgba(232,237,253,0.6)';
-const ON_BLUE_KICKER = '#C3CEF7';
+const ON_BLUE_KICKER = colors.accentSoft;
 const PILE_SHOWN = 5;
 const DASHES = 24;
 

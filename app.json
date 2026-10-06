@@ -37,7 +37,7 @@
       [
         "expo-notifications",
         {
-          "color": "#2145E6"
+          "color": "#2347DC"
         }
       ],
       [
@@ -46,7 +46,7 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#1D3AC0"
+          "backgroundColor": "#2347DC"
         }
       ]
     ],
@@ -55,7 +55,7 @@
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1D3AC0"
+        "backgroundColor": "#2347DC"
       },
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",

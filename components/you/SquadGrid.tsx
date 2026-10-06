@@ -47,13 +47,13 @@ export default function SquadGrid({ groups, actingId, unread, votes = {}, onOpen
                 key="new"
                 onPress={onNew}
                 accessibilityRole="button"
-                accessibilityLabel="New squad: make one or join with a code"
+                accessibilityLabel="New parea: start one or join with an invite"
                 style={({ pressed }) => [styles.newTile, pressed && styles.pressed]}
               >
                 <View style={styles.plus}>
                   <Ionicons name="add" size={18} color={colors.primary} />
                 </View>
-                <Text style={styles.newTitle}>New squad</Text>
+                <Text style={styles.newTitle}>New parea</Text>
                 <Text style={styles.newHint}>Make one or enter a code</Text>
               </Pressable>
             ),

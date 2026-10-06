@@ -22,6 +22,7 @@ export default function IconTabs<T extends string>({ options, value, onChange }:
           <Pressable
             key={option.value}
             onPress={() => onChange(option.value)}
+            hitSlop={4}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
             accessibilityLabel={option.dot ? option.label + ', something needs you' : option.label}

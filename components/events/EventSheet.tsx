@@ -20,6 +20,8 @@ import AttendeeStack from './Attendee';
 import { friendsLine } from './EventCard';
 import AnswerSeg, { toStatus, type Answer } from '../general/AnswerSeg';
 import { OnNow } from '../home/PlanTicket';
+import ReportSheet from '../general/ReportSheet';
+import type { ReportTarget } from '../../services/serviceSafety';
 
 export type SheetEvent = {
   id: string;
@@ -66,12 +68,13 @@ export default function EventSheet({
   // Your pareas, the one you act as, and everyone in them: for "From your
   // pareas" and "Suggest to my parea".
   const [myGroups, setMyGroups] = useState<Group[]>([]);
+  // A plan from outside your pareas, being reported.
+  const [reporting, setReporting] = useState<ReportTarget | null>(null);
   const [actingId, setActingId] = useState<string | null>(null);
   const [mates, setMates] = useState<Set<string>>(new Set());
   const [suggesting, setSuggesting] = useState(false);
   const [suggestNote, setSuggestNote] = useState<string | null>(null);
   // Maybe is not saved (only in and out are); it is remembered while the sheet is open.
-  const [maybeFor, setMaybeFor] = useState<string | null>(null);
 
   const place = placeLines(event?.location, event?.placeLabel);
 
@@ -167,7 +170,7 @@ export default function EventSheet({
       onClose();
     }
     catch {
-      setError('Could not delete the event.');
+      setError('Could not delete the plan.');
     }
     finally {
       setSaving(false);
@@ -193,21 +196,21 @@ export default function EventSheet({
   const suggestTo = pickActing(canSuggestTo, actingId);
 
   const live = event !== null && isHappeningNow(event.date, event.startTime, event.endTime);
-  const answerValue: Answer | null = myStatus ?? (event && maybeFor === event.id ? 'maybe' : null);
+  const answerValue: Answer | null = myStatus ?? null;
   const hasMap = event?.lat !== undefined && event?.lng !== undefined;
   const subtitle = event?.description?.trim() || (live && event ? `Hosted by ${event.groupName}` : null);
 
   // The facts that are known, two to a row.
-  const facts: { label: string; value: string; mono?: boolean }[] = [];
+  // lines: how many lines the value may take before it ends in "…".
+  const facts: { label: string; value: string; mono?: boolean; lines?: number }[] = [];
   if (event) {
     facts.push({ label: 'When', value: formatDateTime(event.date, event.startTime), mono: true });
-    if (place.primary) facts.push({ label: 'Where', value: place.primary });
+    if (place.primary) facts.push({ label: 'Where', value: place.primary, lines: 1 });
     facts.push({ label: 'Going', value: going.length === 0 ? 'Nobody yet' : going.length === 1 ? '1 person' : `${going.length} people` });
     if (fromPareas.length > 0) facts.push({ label: 'From your pareas', value: friendsLine(fromPareas) });
   }
 
   function answer(choice: Answer) {
-    setMaybeFor(choice === 'maybe' && event ? event.id : null);
     const status = toStatus(choice);
     if (status === (myStatus ?? null)) return;
     handleRsvp(status);
@@ -279,7 +282,7 @@ export default function EventSheet({
                 {facts.map((fact) => (
                   <View key={fact.label} style={styles.fact} accessible accessibilityLabel={`${fact.label}: ${fact.value}`}>
                     <Text style={styles.factLabel}>{fact.label}</Text>
-                    <Text style={[styles.factValue, fact.mono && styles.factMono]} numberOfLines={2}>{fact.value}</Text>
+                    <Text style={[styles.factValue, fact.mono && styles.factMono]} numberOfLines={fact.lines ?? 2} ellipsizeMode="tail">{fact.value}</Text>
                   </View>
                 ))}
               </View>
@@ -393,6 +396,28 @@ export default function EventSheet({
                 </View>
               ) : null}
 
+              {/* A plan from outside your pareas can be reported. */}
+              {!isOwner && !hostIsMine ? (
+                <Pressable
+                  onPress={() =>
+                    setReporting({
+                      kind: 'plan',
+                      id: event.id,
+                      userId: event.createdBy ?? null,
+                      userName: attendees.find((a) => a.id === event.createdBy)?.name ?? null,
+                      label: `${event.title}, ${event.groupName}`,
+                    })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel="Report this plan"
+                  hitSlop={6}
+                  style={({ pressed }) => [styles.report, pressed && styles.pressed]}
+                >
+                  <Ionicons name="flag-outline" size={15} color={colors.textSoft} />
+                  <Text style={styles.reportText}>Report this plan</Text>
+                </Pressable>
+              ) : null}
+
               {isOwner ? (
                 confirming ? (
                   <View style={styles.confirmRow}>
@@ -422,7 +447,7 @@ export default function EventSheet({
                         onPress={() => onEdit(event)}
                         disabled={saving}
                         accessibilityRole="button"
-                        accessibilityLabel="Edit event"
+                        accessibilityLabel="Edit plan"
                         style={({ pressed }) => [styles.ownerBtn, pressed && styles.pressed]}
                       >
                         <Ionicons name="create-outline" size={17} color={colors.textSoft} />
@@ -433,7 +458,7 @@ export default function EventSheet({
                       onPress={() => setConfirming(true)}
                       disabled={saving}
                       accessibilityRole="button"
-                      accessibilityLabel="Delete event"
+                      accessibilityLabel="Delete plan"
                       style={({ pressed }) => [styles.ownerBtn, pressed && styles.pressed]}
                     >
                       <Ionicons name="trash-outline" size={17} color={colors.danger} />
@@ -449,18 +474,21 @@ export default function EventSheet({
 
       <AttendeeSheet visible={roster} attendees={attendees} onClose={() => setRoster(false)} />
 
+      <ReportSheet target={reporting} userId={currentUserId} onClose={() => setReporting(null)} />
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  report: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, marginTop: space.sm },
+  reportText: { color: colors.textSoft, ...typo.semi, fontSize: textSize.body },
   backdrop: { flex: 1, backgroundColor: scrim.sheet },
   dismiss: { flex: 1 },
   sheet: {
     maxHeight: '92%',
     overflow: 'hidden',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     backgroundColor: colors.surface,
   },
   bodyScroll: { flexGrow: 0, flexShrink: 1 },
@@ -482,9 +510,10 @@ const styles = StyleSheet.create({
   subtitle: { marginTop: 4, color: colors.textSoft, ...typo.medium, fontSize: 13.5, lineHeight: 19 },
 
   facts: { marginTop: 14, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  fact: { flexGrow: 1, flexBasis: '45%', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.bg },
+  // minWidth 0 lets a long value shrink and end in "…" instead of spilling off the left.
+  fact: { flexGrow: 1, flexBasis: '45%', minWidth: 0, overflow: 'hidden', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.bg },
   factLabel: { color: colors.textFaint, ...typo.medium, fontSize: 11.5 },
-  factValue: { marginTop: 1, color: colors.text, ...typo.semi, fontSize: 14.5 },
+  factValue: { marginTop: 1, color: colors.text, ...typo.semi, fontSize: 14.5, textAlign: 'left', writingDirection: 'ltr' },
   factMono: { ...typo.mono, fontWeight: '600' },
   whereSub: { marginTop: 6, color: colors.textFaint, ...typo.medium, fontSize: textSize.small, lineHeight: 17 },
 

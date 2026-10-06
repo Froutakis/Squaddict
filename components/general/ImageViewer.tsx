@@ -35,7 +35,7 @@ export default function ImageViewer({ uri, label, onClose }: ImageViewerProps) {
             }}
           />
         ) : (
-          <Text style={styles.missing}>Couldn't load this image.</Text>
+          <Text style={styles.missing}>Could not load this image.</Text>
         )}
 
         <Pressable

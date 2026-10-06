@@ -3,8 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { RsvpStatus } from '../../services/serviceEvents';
 import { colors, radius, textSize, typo } from '../../theme';
 
-// Your answer to a plan. The database keeps in or out; Maybe means no answer
-// yet, said out loud, so it clears whatever you had.
+// Your answer to a plan: In, Maybe or Out, each kept on the plan.
 export type Answer = 'in' | 'maybe' | 'out';
 
 const OPTIONS: { key: Answer; label: string }[] = [
@@ -15,7 +14,7 @@ const OPTIONS: { key: Answer; label: string }[] = [
 
 // What the database is told for each choice.
 export function toStatus(answer: Answer): RsvpStatus | null {
-  return answer === 'maybe' ? null : answer;
+  return answer;
 }
 
 type AnswerSegProps = {

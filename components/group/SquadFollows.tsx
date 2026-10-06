@@ -57,7 +57,7 @@ export default function SquadFollows({ group, reloadKey, onOpen }: SquadFollowsP
         <Ionicons name="compass-outline" size={24} color={colors.textSoft} />
         <Text style={styles.emptyTitle}>{group.name} follows nobody yet</Text>
         <Text style={styles.emptyBody}>
-          Act as this squad, then follow a parea from its profile or from Explore.
+          Act as this parea, then follow a parea from its profile or from Explore.
         </Text>
       </View>
     );
@@ -88,7 +88,7 @@ export default function SquadFollows({ group, reloadKey, onOpen }: SquadFollowsP
       ) : null}
 
       {rows.length === 0 ? (
-        <Text style={styles.quiet}>No squad matches.</Text>
+        <Text style={styles.quiet}>No parea matches.</Text>
       ) : (
         <View style={styles.list}>
           {rows.map((row, index) => (

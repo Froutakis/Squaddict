@@ -378,8 +378,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
     ...typo.mono,
     fontSize: textSize.micro,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   kickerGreen: { color: colors.success },
   kickerSoft: { color: colors.textSoft },
@@ -401,8 +400,7 @@ const styles = StyleSheet.create({
     ...typo.mono,
     fontSize: textSize.caption,
     lineHeight: 15,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   by: { marginTop: 6, color: colors.textSoft, ...typo.semi, fontSize: 12.5 },
 
@@ -423,8 +421,7 @@ const styles = StyleSheet.create({
     color: colors.textSoft,
     ...typo.mono,
     fontSize: 10.5,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
   pollCount: { marginTop: space.xxs, marginBottom: 0 },
 
@@ -463,8 +460,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
     ...typo.mono,
     fontSize: 10.5,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    letterSpacing: 0.2,
   },
 
   stamp: {

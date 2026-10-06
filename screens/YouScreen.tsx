@@ -195,7 +195,7 @@ export default function YouScreen({ user, onPlan, onOpenVotes }: YouScreenProps)
         </View>
 
         <View>
-          <SectionHead title="Your squads" meta={groups.length > 0 ? String(groups.length) : undefined} />
+          <SectionHead title="Your pareas" meta={groups.length > 0 ? String(groups.length) : undefined} />
           <View style={styles.body}>
             <SquadGrid
               groups={groups}

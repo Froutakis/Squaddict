@@ -27,7 +27,7 @@ export default function HomeHeader({ squad, label, onMenu, right }: HomeHeaderPr
           <Pressable
             onPress={onMenu}
             accessibilityRole="button"
-            accessibilityLabel={`${squad.name}. Open the side rail to switch squads`}
+            accessibilityLabel={`${squad.name}. Open the side rail to switch pareas`}
             style={({ pressed }) => [styles.squad, pressed && styles.pressed]}
           >
             <Monogram name={squad.name} uri={squad.avatarUrl} size={30} />

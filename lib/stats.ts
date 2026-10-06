@@ -2,7 +2,7 @@ import { keyOf, parseLocal } from './datetime';
 
 type Night = {
   date: string;
-  myStatus?: 'in' | 'out';
+  myStatus?: 'in' | 'maybe' | 'out';
   groupName: string;
   location?: string;
   placeLabel?: string;

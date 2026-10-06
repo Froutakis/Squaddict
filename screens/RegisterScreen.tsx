@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AuthField from '../components/general/AuthField';
 import Button from '../components/general/Button';
 import { AuthCard, AuthHero, AuthSwitch, authStyles } from '../components/general/AuthTicket';
 import { register } from '../services/serviceAuth';
+import { PRIVACY_URL, TERMS_URL } from '../lib/config';
+import { colors, space, textSize, typo } from '../theme';
 
 type RegisterScreenProps = {
   onSwitchToLogin?: () => void;
@@ -18,7 +20,7 @@ function authErrorMessage(error: unknown) {
   if (message.includes('valid email') || message.includes('invalid email')) return 'Enter a valid email address.';
   if (message.includes('password')) return 'Password must be at least 6 characters.';
   if (message.includes('network') || message.includes('fetch')) return 'Check your internet connection and try again.';
-  return 'Something went wrong. Please try again.';
+  return "That didn't work. Try again.";
 }
 
 type Field = 'name' | 'email' | 'password' | 'confirm';
@@ -49,7 +51,7 @@ export default function RegisterScreen({ onSwitchToLogin }: RegisterScreenProps)
     const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanName || !cleanEmail || !password || !confirmPassword) {
-      fail(!cleanName ? 'name' : !cleanEmail ? 'email' : !password ? 'password' : 'confirm', 'Please fill in all fields.');
+      fail(!cleanName ? 'name' : !cleanEmail ? 'email' : !password ? 'password' : 'confirm', 'Fill in all fields.');
       return;
     }
     if (password.length < 6) {
@@ -81,7 +83,7 @@ export default function RegisterScreen({ onSwitchToLogin }: RegisterScreenProps)
       <KeyboardAvoidingView style={authStyles.grow} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={authStyles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {/* The stub writes your name as you type it. */}
-          <AuthHero short title="Find your squad." stub={{ kicker: 'Admit one', name: name.trim() || 'You', line: 'New member' }} />
+          <AuthHero short title="Find your parea." stub={{ kicker: 'Admit one', name: name.trim() || 'You', line: 'New member' }} />
 
           <AuthCard mode="signup" onSwitch={onSwitchToLogin} busy={loading}>
             <AuthField
@@ -132,6 +134,18 @@ export default function RegisterScreen({ onSwitchToLogin }: RegisterScreenProps)
             <View style={authStyles.button}>
               <Button title="Sign up" onPress={handleRegister} loading={loading} />
             </View>
+
+            <Text style={styles.agree}>
+              By signing up you agree to the{' '}
+              <Text style={styles.agreeLink} accessibilityRole="link" onPress={() => Linking.openURL(TERMS_URL).catch(() => {})}>
+                Terms of use
+              </Text>{' '}
+              and the{' '}
+              <Text style={styles.agreeLink} accessibilityRole="link" onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}>
+                Privacy policy
+              </Text>
+              .
+            </Text>
           </AuthCard>
 
           <View style={authStyles.grow} />
@@ -141,3 +155,8 @@ export default function RegisterScreen({ onSwitchToLogin }: RegisterScreenProps)
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  agree: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body, lineHeight: 22, textAlign: 'center', marginTop: space.sm },
+  agreeLink: { color: colors.primary, ...typo.bold },
+});

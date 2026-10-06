@@ -18,6 +18,7 @@ import { AgainCard, ThrowbackCard } from './FeedCards';
 import { DateNode, GroupNode, GroupTitle, TimelineRow } from './Timeline';
 import { readJson, writeJson } from '../../lib/store';
 import { getGroupById } from '../../services/serviceGroup';
+import { isBlocked, onBlocksChanged } from '../../services/serviceSafety';
 import { getBoard, getCrossings, getWaves, sendWave, type BoardRow, type Crossing, type Wave } from '../../services/serviceCrossed';
 import { BoardSheet, CrossedSheet, CrossedStrip, RankRow, WaveRow } from './Meeting';
 import { colors, radius, shadow, space, textSize, typo } from '../../theme';
@@ -123,6 +124,28 @@ export default function PhotoFeed({
       cancelled = true;
     };
   }, [group.id, reloadKey, retry]);
+
+  // Blocked from a post (or anywhere else): their photos leave the feed now.
+  useEffect(() => {
+    return onBlocksChanged(function () {
+      setItems((current) => {
+        let touched = false;
+        const kept: FeedPhoto[] = [];
+        for (const item of current) {
+          const all = [item.photo, ...item.more];
+          const left = all.filter((photo) => !isBlocked(photo.userId));
+          if (left.length === all.length) {
+            kept.push(item);
+            continue;
+          }
+          touched = true;
+          // The night stays if someone else's photo of it is left to lead it.
+          if (left.length > 0) kept.push({ ...item, photo: left[0], more: left.slice(1) });
+        }
+        return touched ? kept : current;
+      });
+    });
+  }, []);
 
   useEffect(() => {
     if (!ownOnly) return;
@@ -259,7 +282,7 @@ export default function PhotoFeed({
   if (failed) {
     return (
       <View style={styles.problem}>
-        <Text style={styles.problemTitle}>Couldn't load your memories</Text>
+        <Text style={styles.problemTitle}>Could not load your memories.</Text>
         <Text style={styles.problemBody}>Check the connection and try again. Nothing was lost.</Text>
         <Pressable
           onPress={() => setRetry((n) => n + 1)}
@@ -650,8 +673,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
     paddingBottom: space.xl,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     backgroundColor: colors.surface,
   },
   grabber: {

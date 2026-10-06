@@ -55,7 +55,7 @@ import { MEMORY_LIMIT, toMemoryNights, type MemoryNight } from '../components/ho
 import DayPlansSheet from '../components/home/DayPlansSheet';
 import StoryViewer from '../components/events/StoryViewer';
 import Button from '../components/general/Button';
-import { friendsLine, type CardEvent } from '../components/events/EventCard';
+import type { CardEvent } from '../components/events/EventCard';
 import {
   capture,
   messageFor,
@@ -76,7 +76,7 @@ const RESUME_REFRESH_MS = 60 * 1000;
 const AHEAD_DAYS = 45;
 const AHEAD_PLANS = 20;
 // Home opens with today at the top, this much room above it.
-const TODAY_ROOM = 60;
+const TODAY_ROOM = 96;
 
 type HomeScreenProps = {
   user: AuthUser;
@@ -278,7 +278,7 @@ export default function HomeScreen({
         setEvents(myEvents);
       } catch (problem) {
         console.warn("[squaddict] home load failed:", problem);
-        if (!quiet) setError("Couldn't load your week");
+        if (!quiet) setError('Could not load your week. Pull to try again.');
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -539,30 +539,20 @@ export default function HomeScreen({
       (e.date < today || !e.startTime || e.startTime <= clockNow) &&
       e.id !== liveEvent?.id,
   );
-  // Other pareas' plans on the line, each once. "Nikos suggests": plans you
-  // have not answered yet; answered, they move into your plans like any of
-  // yours. Then members of your parea who said I'm in to another parea's
-  // public plan; one already suggested here shows as the suggestion. One that
-  // is already on the line, or that you answered, is left out.
+  // Other pareas' plans on the line: only the ones suggested to this parea
+  // ("Nikos suggests") that you have not answered yet; answered, they move into
+  // your plans like any of yours. A public plan nobody suggested here stays in
+  // Explore, even when friends are going.
   const skipIds = new Set([
     ...visible.map((e) => e.id),
     ...events.filter((e) => e.myStatus !== undefined).map((e) => e.id),
   ]);
   const suggestions = suggested.filter((one) => one.event.myStatus === undefined && !skipIds.has(one.event.id));
-  const suggestedIds = new Set(suggestions.map((one) => one.event.id));
-  const friendsPlans = (groupId ? going.filter((plan) => plan.viaGroupIds.includes(groupId)) : going).filter(
-    (plan) => !suggestedIds.has(plan.event.id) && !skipIds.has(plan.event.id),
-  );
   const otherPlans: OtherPlan[] = [
     ...suggestions.map((one) => ({
       event: one.event,
       note: `${one.suggesterName.split(' ')[0] || one.suggesterName} suggests`,
       saving: goingSaving === one.event.id,
-    })),
-    ...friendsPlans.map((plan) => ({
-      event: plan.event,
-      note: plan.friends.length > 0 ? friendsLine(plan.friends) : `${plan.goingCount} going`,
-      saving: goingSaving === plan.event.id,
     })),
   ];
   const nights = useMemo(
@@ -785,12 +775,12 @@ export default function HomeScreen({
     if (groups.length === 0) {
       return (
         <View style={styles.state}>
-          <Text style={styles.stateTitle}>No squads yet</Text>
+          <Text style={styles.stateTitle}>No parea yet. Lonely.</Text>
           <Text style={styles.stateBody}>
-            Start one and send the code to your people, or paste a code somebody sent you.
+            Start one and send the invite to your people, or paste one somebody sent you.
           </Text>
           <View style={styles.stateButton}>
-            <Button title="Start a squad" onPress={() => setShowGroupForm(true)} />
+            <Button title="Start a parea" onPress={() => setShowGroupForm(true)} />
           </View>
         </View>
       );

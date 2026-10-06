@@ -21,6 +21,8 @@ import EventCard from '../events/EventCard';
 import ShowMore, { visibleSlice } from '../general/ShowMore';
 import { useSignedImages } from '../home/useSignedImages';
 import { pluralWord } from '../../lib/text';
+import { FAB_CENTER_Y, FAB_INSET, FAB_LEFT } from '../general/MenuFab';
+import { isBlocked } from '../../services/serviceSafety';
 
 const HERO = 190;
 const AVATAR = 76;
@@ -36,6 +38,8 @@ type PublicProfileProps = {
   onOpenPlan: (plan: FeedEvent) => void;
   // The bottom row of a plan, in place of the card's own I'm in / Pass.
   stubFor?: (plan: FeedEvent) => ReactNode;
+  // Report this parea (its name, photos or plans).
+  onReport?: () => void;
 };
 
 // A squad as people outside it see it: who they are, where they go,
@@ -50,6 +54,7 @@ export default function PublicProfile({
   onAnswer,
   onOpenPlan,
   stubFor,
+  onReport,
 }: PublicProfileProps) {
   const [profile, setProfile] = useState<PareaProfile | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
@@ -62,8 +67,10 @@ export default function PublicProfile({
     getPareaProfile(group.id)
       .then((found) => {
         if (cancelled) return;
-        setProfile(found);
-        signPaths(found.photos.map((photo) => photo.path));
+        // Photos from people you blocked stay out of the collage and the grid.
+        const shown = { ...found, photos: found.photos.filter((photo) => !isBlocked(photo.userId)) };
+        setProfile(shown);
+        signPaths(shown.photos.map((photo) => photo.path));
       })
       .catch(() => {
         if (!cancelled) setProfile({ nightsOut: 0, places: [], covers: [], photos: [] });
@@ -111,6 +118,16 @@ export default function PublicProfile({
           >
             <Ionicons name="chevron-back" size={20} color={colors.text} />
           </Pressable>
+          {onReport ? (
+            <Pressable
+              onPress={onReport}
+              accessibilityRole="button"
+              accessibilityLabel={`Report ${group.name}`}
+              style={({ pressed }) => [styles.round, styles.roundRight, pressed && styles.pressed]}
+            >
+              <Ionicons name="flag-outline" size={18} color={colors.textSoft} />
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.body}>
@@ -317,12 +334,14 @@ const styles = StyleSheet.create({
   collageSide: { flex: 1, gap: 2 },
   collageSmall: { flex: 1, width: '100%' },
   heroShade: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(12,25,38,0.25)' },
+  // Beside the floating menu button, level with it, so the button never covers it.
+  roundRight: { left: undefined, right: FAB_LEFT },
   round: {
     position: 'absolute',
-    top: space.sm,
-    left: space.md,
-    width: 36,
-    height: 36,
+    top: FAB_CENTER_Y - 22,
+    left: FAB_INSET,
+    width: 44,
+    height: 44,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',

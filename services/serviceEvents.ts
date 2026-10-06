@@ -85,7 +85,12 @@ export type EventPhoto = {
   inExplore: boolean;
 };
 
-export type RsvpStatus = "in" | "out";
+export type RsvpStatus = "in" | "maybe" | "out";
+
+// A stored answer, or nothing for "invited" and anything unknown.
+export function toRsvp(value: unknown): RsvpStatus | undefined {
+  return value === "in" || value === "maybe" || value === "out" ? value : undefined;
+}
 
 export type Attendee = Person & {
   status: RsvpStatus;
@@ -125,7 +130,7 @@ function toAttendee(a: AttendeeRow): Attendee {
     id: a.user_id,
     name: a.profiles?.display_name ?? "",
     avatarUrl: a.profiles?.avatar_url ?? null,
-    status: a.status === "in" ? "in" : "out",
+    status: toRsvp(a.status) ?? "out",
   };
 }
 
@@ -136,7 +141,7 @@ function toMyEvent(r: EventRowWithJoins, userId: string): MyEvent {
     return {
         ...toEvent(r),
         groupName: r.groups?.name ?? "Squad",
-        myStatus: mine === "in" || mine === "out" ? mine : undefined,
+        myStatus: toRsvp(mine),
         going: answers
             .filter((a) => a.status === "in")
             .map((a) => ({
@@ -276,7 +281,8 @@ export async function getMyAnswers(eventIds: string[]): Promise<Record<string, R
 
     const answers: Record<string, RsvpStatus> = {};
     for (const row of (data ?? []) as { event_id: string; status: string }[]) {
-        if (row.status === "in" || row.status === "out") answers[row.event_id] = row.status;
+        const answer = toRsvp(row.status);
+        if (answer) answers[row.event_id] = answer;
     }
     return answers;
 }
@@ -286,7 +292,7 @@ export async function getAttendees(eventId: string): Promise<Attendee[]> {
         .from("event_attendees")
         .select("user_id, status, profiles(display_name, avatar_url)")
         .eq("event_id", eventId)
-        .in("status", ["in", "out"]);
+        .in("status", ["in", "maybe", "out"]);
     if (error) throw error;
 
     return (data as unknown as AttendeeRow[]).map(toAttendee);

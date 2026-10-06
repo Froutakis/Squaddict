@@ -116,15 +116,15 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     padding: space.lg,
     gap: space.md,
   },
 
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   month: { color: colors.textFaint, ...typo.semi, fontSize: 12, letterSpacing: 0.8 },
-  navBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  navBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   pressed: { opacity: 0.7 },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap' },

@@ -23,8 +23,8 @@ const TABS: { key: Mode; label: string }[] = [
 ];
 
 const HINTS: Record<Mode, string> = {
-  create: 'The handle is permanent and unique. The name the squad can change later, by a vote.',
-  join: 'Paste the invite the squad sent you. Each invite works once.',
+  create: 'The handle is permanent and unique. The parea can change the name later, by a vote.',
+  join: 'Paste the invite your parea sent you. Each invite works once.',
 };
 
 type GroupFormSheetProps = {
@@ -86,7 +86,7 @@ export default function GroupFormSheet({
     const inviteCode = code.trim();
 
     if (mode === 'create' && !groupName) {
-      setFormError('Give your squad a name.');
+      setFormError('Give your parea a name.');
       return;
     }
     if (mode === 'create' && !HANDLE_PATTERN.test(cleanHandle)) {
@@ -110,7 +110,7 @@ export default function GroupFormSheet({
     }
     catch (e) {
       if (e instanceof Error && mode === 'join') setFormError(e.message);
-      else setFormError(mode === 'create' ? 'Could not create the squad. Try again.' : 'Could not join that squad. Try again.');
+      else setFormError(mode === 'create' ? 'Could not start the parea. Try again.' : 'Could not join that parea. Try again.');
     }
     finally {
       setSaving(false);
@@ -135,7 +135,7 @@ export default function GroupFormSheet({
           }}
         >
           <Pressable style={styles.sheet} onPress={() => {}}>
-            <SheetHeader title="New squad" onClose={onClose} closeDisabled={saving} grabber />
+            <SheetHeader title="New parea" onClose={onClose} closeDisabled={saving} grabber />
 
             {/* Scrolls when the keyboard leaves little room, so the header stays in view. */}
             <ScrollView style={styles.scroll} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" bounces={false}>
@@ -225,8 +225,8 @@ const styles = StyleSheet.create({
   sheet: {
     maxHeight: '90%',
     backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     paddingHorizontal: space.lg,
     paddingTop: space.sm,
     paddingBottom: space.xl,
