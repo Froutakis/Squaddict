@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { FeedEvent } from '../../services/serviceFeed';
-import type { MyEvent, RsvpStatus } from '../../services/serviceEvents';
+import type { RsvpStatus } from '../../services/serviceEvents';
 import {
   clearPhotoReaction,
   getPhotoReactions,
@@ -16,17 +17,18 @@ import type { Group } from '../../services/serviceGroup';
 import Monogram from '../general/Monogram';
 import PhotoPost from '../home/PhotoPost';
 import PostViewer from '../home/PostViewer';
-import LineTicket, { shortPlace } from '../home/LineTicket';
-import { DateNode, GroupNode, GroupTitle, TimelineRow, TodayNode } from '../home/Timeline';
-import { dayWord, stretchOf } from '../home/PlanLine';
-import { colors, radius, space, textSize, typo } from '../../theme';
+import { shortPlace } from '../home/LineTicket';
+import PlanTicket, { TicketActions, type TicketPill } from '../home/PlanTicket';
+import AnswerSeg, { toStatus, type Answer } from '../general/AnswerSeg';
+import { DateNode, GroupNode, GroupTitle, TimeNode, TimelineRow, TodayNode } from '../home/Timeline';
+import { stretchOf } from '../home/PlanLine';
+import { colors, onPhoto, radius, scrim, space, spot as spotInk, sun, sunInk, textSize, typo } from '../../theme';
 
 // Explore as a line, the same idea as Home one step out: the city's line.
 // Above now, open public plans you can join (furthest on top); below, the
 // public nights of every parea around you. The rail shows whose night it is.
 
 const PLANS_SHOWN = 15;
-const TINT = '#E8EDFD';
 const SPOT_MIN_PAREAS = 2;
 
 type CityLineProps = {
@@ -49,6 +51,22 @@ type CityLineProps = {
   onShowMap: () => void;
   // When filters hide every plan, a way to clear them.
   onClearFilters?: () => void;
+  // Suggest a public plan to the parea you act as (it lands in its chat).
+  // Left out for plans that can't be suggested there.
+  suggestTo?: string | null;
+  canSuggest?: (plan: FeedEvent) => boolean;
+  onSuggest?: (plan: FeedEvent) => void;
+  suggestingId?: string | null;
+  // The NOW row, so the page can open on it; onNowLayout says when it moved.
+  nowRef?: RefObject<View | null>;
+  // Where today starts (Tonight, or NOW when nothing is on tonight).
+  todayRef?: RefObject<View | null>;
+  onTodayLayout?: () => void;
+  onNowLayout?: () => void;
+  // 'nights' leaves the plans out: only the city's nights under NOW.
+  show?: 'all' | 'nights';
+  // The parea yours crossed most lately, between the plans.
+  crossing?: { name: string; avatarUrl: string | null; times: number; onPress: () => void } | null;
 };
 
 export default function CityLine({
@@ -68,11 +86,24 @@ export default function CityLine({
   onOpenGroup,
   onShowMap,
   onClearFilters,
+  suggestTo = null,
+  canSuggest,
+  onSuggest,
+  suggestingId = null,
+  nowRef,
+  todayRef,
+  onTodayLayout,
+  onNowLayout,
+  show = 'all',
+  crossing = null,
 }: CityLineProps) {
   const [reactions, setReactions] = useState<Record<string, PhotoReaction[]>>({});
   const [openPost, setOpenPost] = useState<FeedPhoto | null>(null);
   const [spotOpen, setSpotOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // One plan chosen on the line at a time; Maybe is kept here only (see AnswerSeg).
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [maybes, setMaybes] = useState<Set<string>>(new Set());
   const reactionsRef = useRef(reactions);
   reactionsRef.current = reactions;
   const todayKey = keyOf(now);
@@ -120,7 +151,6 @@ export default function CityLine({
     .filter((p) => p.date >= todayKey)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.startTime ?? '').localeCompare(b.startTime ?? ''))
     .slice(0, PLANS_SHOWN);
-  const next = open.find((p) => p.myStatus !== 'out') ?? null;
   const tonight = open.filter((p) => p.date === todayKey).length;
   const stretches: { label: string; plans: FeedEvent[] }[] = [];
   for (const plan of [...open].reverse()) {
@@ -140,72 +170,215 @@ export default function CityLine({
   }
   const spot = spotOfWeek(nights, now);
 
+  function nodeKind(plan: FeedEvent): 'later' | 'live' | 'selected' {
+    if (isHappeningNow(plan.date, plan.startTime, plan.endTime, now)) return 'live';
+    return chosen === plan.id ? 'selected' : 'later';
+  }
+
   function distance(lat?: number, lng?: number) {
     if (!center || lat === undefined || lng === undefined) return null;
     const km = Math.sqrt(((lat - center.lat) * 111) ** 2 + ((lng - center.lng) * 111 * Math.cos((center.lat * Math.PI) / 180)) ** 2);
     return km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`;
   }
 
+  // First tap chooses a plan (or grows the one on now); the second opens it.
+  function tap(plan: FeedEvent) {
+    if (chosen === plan.id) onOpenPlan(plan);
+    else setChosen(plan.id);
+  }
+
+  function answerOf(plan: FeedEvent): Answer | null {
+    if (plan.myStatus) return plan.myStatus;
+    return maybes.has(plan.id) ? 'maybe' : null;
+  }
+
+  function answer(plan: FeedEvent, choice: Answer) {
+    setMaybes((was) => {
+      const next = new Set(was);
+      if (choice === 'maybe') next.add(plan.id);
+      else next.delete(plan.id);
+      return next;
+    });
+    const status = toStatus(choice);
+    if (status !== (plan.myStatus ?? null)) onRsvp(plan, status);
+  }
+
   function planRow(plan: FeedEvent) {
     const live = isHappeningNow(plan.date, plan.startTime, plan.endTime, now);
-    if (plan.id === next?.id) {
-      const time = plan.startTime ? ` · ${plan.startTime}` : '';
-      const far = distance(plan.lat, plan.lng);
+    const place = shortPlace(plan.placeLabel ?? plan.location);
+    const far = distance(plan.lat, plan.lng);
+    const isIn = plan.myStatus === 'in';
+    const canSuggestIt = !!(suggestTo && onSuggest && canSuggest?.(plan));
+    const suggesting = suggestingId === plan.id;
+    const suggest = () => onSuggest?.(plan);
+    const saving = savingId === plan.id;
+
+    if (live) {
+      const grown = chosen === plan.id;
+      const short = [place, far].filter(Boolean).join(', ') || plan.groupName;
+      const long = [plan.groupName, place, far].filter(Boolean).join(', ');
       return (
-        <View style={styles.ticketWrap}>
-          <LineTicket
-            event={asMyEvent(plan)}
-            phase={live ? 'live' : 'later'}
-            kicker={live ? 'ON NOW' : `NEXT · ${plan.date === todayKey ? 'TONIGHT' : dayWord(plan.date, now)}${time}${far ? ` · ${far.toUpperCase()}` : ''}`}
-            people={`${plan.goingCount} in`}
-            checkedIn={false}
-            onOpen={() => onOpenPlan(plan)}
-            onIn={() => onRsvp(plan, 'in')}
-            onPass={() => onRsvp(plan, 'out')}
-            onClear={() => onRsvp(plan, null)}
-            onCheckIn={() => onOpenPlan(plan)}
-            onAddPhoto={() => onOpenPlan(plan)}
-          />
-        </View>
+        <PlanTicket
+          state="live"
+          grown={grown}
+          title={plan.title}
+          sub={short}
+          long={long}
+          onPress={() => tap(plan)}
+          accessibilityLabel={`${plan.title}, on now, ${grown ? long : short}`}
+          accessibilityHint={grown ? 'Opens the plan' : 'Shows who is going'}
+          extra={
+            <>
+              <Text style={styles.going}>{plan.goingCount === 1 ? '1 going' : `${plan.goingCount} going`}</Text>
+              <View style={styles.liveAnswer}>
+                <AnswerSeg tone="sheet" value={answerOf(plan)} onChange={(choice) => answer(plan, choice)} disabled={saving} label={`Your answer to ${plan.title}`} />
+              </View>
+              {canSuggestIt ? (
+                <TicketActions
+                  actions={[
+                    {
+                      label: suggesting ? 'Suggesting…' : `Suggest to ${suggestTo}`,
+                      icon: 'paper-plane-outline',
+                      strong: true,
+                      disabled: suggesting,
+                      onPress: suggest,
+                    },
+                  ]}
+                />
+              ) : null}
+            </>
+          }
+        />
       );
     }
-    const isIn = plan.myStatus === 'in';
-    const sub = [plan.date === todayKey ? plan.startTime : null, shortPlace(plan.placeLabel ?? plan.location), distance(plan.lat, plan.lng), `${plan.goingCount} in`]
-      .filter(Boolean)
-      .join(' · ');
+
+    const when = plan.date === todayKey ? plan.startTime : [dayName(plan.date, now), plan.startTime].filter(Boolean).join(' ');
+    const sub = [plan.groupName, when, place, far, `${plan.goingCount} going`].filter(Boolean).join(', ');
+    let pill: TicketPill | null = null;
+    if (isIn) pill = { label: "You're in", tone: 'done', icon: 'checkmark' };
+    else if (canSuggestIt) {
+      pill = {
+        label: suggesting ? 'Suggesting…' : 'Suggest',
+        tone: 'accent',
+        icon: 'paper-plane-outline',
+        onPress: suggest,
+        disabled: suggesting,
+        accessibilityLabel: `Suggest ${plan.title} to ${suggestTo}`,
+      };
+    } else if (plan.myStatus === 'out') pill = { label: 'Passed', tone: 'quiet' };
+    const isChosen = chosen === plan.id;
+
     return (
+      <PlanTicket
+        state={isChosen ? 'chosen' : 'plain'}
+        title={plan.title}
+        sub={sub}
+        pill={pill}
+        answer={{ value: answerOf(plan), onChange: (choice) => answer(plan, choice), disabled: saving }}
+        onPress={() => tap(plan)}
+        accessibilityLabel={`${plan.title}, ${sub}${isIn ? ", you're in" : ''}`}
+        accessibilityHint={isChosen ? 'Opens the plan' : 'Shows your answer'}
+      />
+    );
+  }
+
+  // Something to stop for between the plans, so the line is not only plans:
+  // a parea you crossed, an older week's photos around here, the spot of the
+  // week. The reel skips the newest week: that one starts right under NOW.
+  const reelGroup = groups[1] ?? null;
+  const reelNights = reelGroup?.items ?? [];
+  const reelPhotos = reelNights.flatMap((n) => [n.photo, ...n.more]).slice(0, 3);
+  const reelCount = reelNights.reduce((sum, n) => sum + n.photoCount, 0);
+  const reelPareas = new Set(reelNights.map((n) => n.group.id)).size;
+  const betweens: React.ReactNode[] = [];
+  if (crossing) {
+    betweens.push(
       <Pressable
-        onPress={() => onOpenPlan(plan)}
+        key="crossed"
+        onPress={crossing.onPress}
         accessibilityRole="button"
-        accessibilityLabel={`${plan.title}, ${plan.groupName}, ${sub}. Open the plan`}
-        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+        accessibilityLabel={`${crossing.name} was out where you were ${timesWord(crossing.times)}. See them`}
+        style={({ pressed }) => [styles.crossed, pressed && styles.pressed]}
       >
-        <View style={styles.rowText}>
-          <Text style={styles.rowTitle} numberOfLines={1}>
-            {plan.title}
-          </Text>
-          <Text style={styles.rowSub} numberOfLines={1}>
-            {plan.groupName} · {sub}
-          </Text>
+        <Monogram name={crossing.name} uri={crossing.avatarUrl} size={32} />
+        <Text style={styles.crossedText}>
+          <Text style={styles.strong}>{crossing.name}</Text> was out where you were {timesWord(crossing.times)}.
+        </Text>
+        <Text style={styles.crossedAction}>See</Text>
+      </Pressable>,
+    );
+  }
+  if (reelPhotos.length > 0 && reelGroup) {
+    betweens.push(
+      <Pressable
+        key="reel"
+        onPress={() => setOpenPost(reelNights[0])}
+        accessibilityRole="button"
+        accessibilityLabel={`${reelGroup.label} around here: ${reelPareas} ${reelPareas === 1 ? 'parea' : 'pareas'}, ${reelCount} photos. Open`}
+        style={({ pressed }) => [styles.reel, pressed && styles.pressed]}
+      >
+        <View style={styles.reelPhotos}>
+          {reelPhotos.map((photo, i) => {
+            const url = signed[photo.path]?.url;
+            return (
+              <View key={photo.id} style={[styles.reelPhoto, i === 0 && styles.reelPhotoBig]}>
+                {url ? (
+                  <Image source={{ uri: url }} style={StyleSheet.absoluteFill} resizeMode="cover" onError={() => onImageError(photo.path)} />
+                ) : null}
+              </View>
+            );
+          })}
         </View>
-        <Pressable
-          onPress={() => onRsvp(plan, isIn ? null : 'in')}
-          disabled={savingId === plan.id}
-          accessibilityRole="button"
-          accessibilityLabel={isIn ? `You're in for ${plan.title}. Take back your answer` : `Join ${plan.title}`}
-          hitSlop={6}
-          style={({ pressed }) => [styles.join, isIn && styles.joined, pressed && styles.pressed]}
-        >
-          <Text style={[styles.joinText, isIn && styles.joinedText]}>{isIn ? '✓ In' : 'Join'}</Text>
-        </Pressable>
-      </Pressable>
+        <LinearGradient colors={[scrim.reelClear, scrim.reel]} style={styles.reelShade} pointerEvents="none">
+          <Text style={styles.reelKicker}>{reelGroup.label.toUpperCase()}, AROUND HERE</Text>
+          <Text style={styles.reelTitle}>
+            {reelPareas} {reelPareas === 1 ? 'parea' : 'pareas'} · {reelCount} {reelCount === 1 ? 'photo' : 'photos'}
+          </Text>
+        </LinearGradient>
+      </Pressable>,
+    );
+  }
+  if (spot) {
+    const nightsWord = spot.items.length === 1 ? 'night' : 'nights';
+    betweens.push(
+      <Pressable
+        key="spot"
+        onPress={() => setSpotOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`${spot.place} was the spot this week. See who was there`}
+        style={({ pressed }) => [styles.spotCard, pressed && styles.pressed]}
+      >
+        <View style={styles.spotIcon}>
+          <Ionicons name="location-outline" size={18} color={spotInk.ink} />
+        </View>
+        <Text style={styles.spotCardText}>
+          <Text style={styles.strong}>{spot.place}</Text>
+          {` was the spot this week. ${spot.items.length} ${nightsWord}, ${spot.pareas.length} ${spot.pareas.length === 1 ? 'parea' : 'pareas'}.`}
+        </Text>
+      </Pressable>,
+    );
+  }
+  // After the 1st, 3rd and 5th plan row; any left over sit just above NOW.
+  const betweenAfter = [1, 3, 5];
+  let planRows = 0;
+  let nextBetween = 0;
+  function betweenRow(): React.ReactNode {
+    const item = betweens[nextBetween];
+    nextBetween += 1;
+    return (
+      <TimelineRow key={`between-${nextBetween}`} node={<View />}>
+        <View style={styles.between}>{item}</View>
+      </TimelineRow>
     );
   }
 
   const rows: React.ReactNode[] = [];
-  stretches.forEach((stretch, s) => {
+  const todayMark = <View key="today-mark" ref={todayRef} collapsable={false} onLayout={() => onTodayLayout?.()} />;
+  const hasTonight = show === 'all' && stretches.some((stretch) => stretch.label === 'Tonight');
+  if (show === 'all') stretches.forEach((stretch, s) => {
+    if (stretch.label === 'Tonight') rows.push(todayMark);
     rows.push(
-      <TimelineRow key={`s-${stretch.label}`} first={s === 0} node={<GroupNode hollow />}>
+      <TimelineRow key={`s-${stretch.label}`} first={s === 0} node={<GroupNode />}>
         <GroupTitle
           kicker={stretch.label}
           title={stretch.plans.length === 1 ? '1 plan you can join' : `${stretch.plans.length} plans you can join`}
@@ -213,30 +386,25 @@ export default function CityLine({
       </TimelineRow>,
     );
     for (const plan of stretch.plans) {
-      const d = parseDateKey(plan.date);
       rows.push(
         <TimelineRow
           key={plan.id}
           node={
-            <View style={styles.planNode}>
-              <Monogram name={plan.groupName} uri={null} size={24} style={styles.face} />
-              {plan.date === todayKey ? (
-                <Text style={styles.nodeTime}>{plan.startTime ?? 'TODAY'}</Text>
-              ) : (
-                <>
-                  <Text style={styles.nodeDay}>{d ? d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase() : ''}</Text>
-                  <Text style={styles.nodeNum}>{d ? String(d.getDate()).padStart(2, '0') : ''}</Text>
-                </>
-              )}
-            </View>
+            plan.date === todayKey ? (
+              <TimeNode time={plan.startTime} kind={nodeKind(plan)} />
+            ) : (
+              <DateNode date={plan.date} kind={nodeKind(plan) === 'selected' ? 'selected' : 'future'} />
+            )
           }
         >
           {planRow(plan)}
         </TimelineRow>,
       );
+      planRows += 1;
+      if (nextBetween < betweens.length && planRows === betweenAfter[nextBetween]) rows.push(betweenRow());
     }
   });
-  if (open.length === 0) {
+  if (show === 'all' && open.length === 0) {
     rows.push(
       <TimelineRow key="no-plans" first>
         <View style={styles.empty}>
@@ -252,18 +420,27 @@ export default function CityLine({
       </TimelineRow>,
     );
   }
+  // Whatever was not placed between plans (all of it, with no plans) sits
+  // just above NOW, so the line still has something to stop for.
+  if (show === 'all') {
+    while (nextBetween < betweens.length) rows.push(betweenRow());
+  }
+
+  if (!hasTonight) rows.push(todayMark);
 
   return (
     <View>
       {rows}
 
-      <TimelineRow solid node={<TodayNode note={tonight > 0 ? `${tonight} tonight` : undefined} />}>
-        <View style={styles.now}>
-          <Text style={styles.nowText}>NOW · {clock(now)}</Text>
-          <View style={styles.nowRule} />
-        </View>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-      </TimelineRow>
+      <View ref={nowRef} collapsable={false} onLayout={() => onNowLayout?.()}>
+        <TimelineRow solid node={<TodayNode note={tonight > 0 ? `${tonight} tonight` : undefined} />}>
+          <View style={styles.now}>
+            <Text style={styles.nowText}>{clock(now)}</Text>
+            <View style={styles.nowRule} />
+          </View>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+        </TimelineRow>
+      </View>
 
       {groups.map((group, g) => {
         const fires = group.items.reduce((sum, n) => sum + (reactions[n.photo.id] ?? []).length, 0);
@@ -275,7 +452,7 @@ export default function CityLine({
                 title={group.items.length === 1 ? '1 public night' : `${group.items.length} public nights`}
                 meta={fires > 0 ? `${fires} ${fires === 1 ? 'fire' : 'fires'}` : undefined}
               />
-              {g === 0 && spot ? (
+              {g === 0 && spot && show === 'nights' ? (
                 <Pressable
                   onPress={() => setSpotOpen(true)}
                   hitSlop={6}
@@ -426,28 +603,6 @@ function Stat({ n, label }: { n: number; label: string }) {
   );
 }
 
-// A FeedEvent dressed as one of your plans, for the line's ticket.
-function asMyEvent(plan: FeedEvent): MyEvent {
-  return {
-    id: plan.id,
-    groupId: plan.groupId,
-    groupName: plan.groupName,
-    title: plan.title,
-    date: plan.date,
-    startTime: plan.startTime,
-    endTime: plan.endTime,
-    location: plan.location,
-    placeLabel: plan.placeLabel,
-    lat: plan.lat,
-    lng: plan.lng,
-    tags: plan.tags,
-    isPublic: true,
-    createdBy: '',
-    myStatus: plan.myStatus,
-    going: [],
-  };
-}
-
 // The place with the most pareas this week (at least two), with its nights.
 function spotOfWeek(nights: FeedPhoto[], now: Date) {
   const week = keyOf(startOfWeek(now));
@@ -480,52 +635,77 @@ function weekLabel(date: string, now: Date) {
   return d.toLocaleDateString('en-US', { month: 'long' });
 }
 
+// "Sat 10", or "Tomorrow".
+function dayName(date: string, now: Date): string {
+  if (date === keyOf(addDays(now, 1))) return 'Tomorrow';
+  const d = parseDateKey(date);
+  return d ? `${d.toLocaleDateString('en-US', { weekday: 'short' })} ${d.getDate()}` : '';
+}
+
+// "three times lately"; once is just "lately".
+function timesWord(times: number): string {
+  if (times <= 1) return 'lately';
+  const words = ['', 'once', 'twice', 'three times', 'four times', 'five times'];
+  return `${words[times] ?? `${times} times`} lately`;
+}
+
 function clock(d: Date) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 const styles = StyleSheet.create({
-  pressed: { opacity: 0.7 },
-  flush: { marginHorizontal: 0 },
-  ticketWrap: { marginTop: 2, marginBottom: space.xs },
-
-  planNode: { alignItems: 'center', backgroundColor: colors.bg, paddingVertical: 2 },
-  face: { borderRadius: 8, marginBottom: 3 },
-  nodeTime: { color: colors.text, ...typo.display, fontSize: 13 },
-  nodeDay: { color: colors.textSoft, ...typo.mono, fontSize: textSize.micro, letterSpacing: 1.2 },
-  nodeNum: { color: colors.text, ...typo.display, fontSize: 18, lineHeight: 20 },
-
-  row: {
+  between: { paddingBottom: space.xs },
+  strong: { color: colors.text, ...typo.bold },
+  crossed: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    minHeight: 54,
-    paddingVertical: 8,
-    paddingLeft: 12,
-    paddingRight: 8,
-    marginBottom: space.xs,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    paddingVertical: space.sm + 2,
+    paddingHorizontal: space.sm + 3,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.borderStrong,
   },
+  crossedText: { flex: 1, color: colors.textSoft, ...typo.medium, fontSize: textSize.body, lineHeight: 18 },
+  crossedAction: { color: colors.primary, ...typo.display, fontSize: textSize.body },
+  reel: { height: 136, borderRadius: 18, overflow: 'hidden', backgroundColor: colors.ink },
+  reelPhotos: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, flexDirection: 'row', gap: 2 },
+  reelPhoto: { flex: 1, backgroundColor: colors.inkStrong, overflow: 'hidden' },
+  reelPhotoBig: { flex: 1.6 },
+  reelShade: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 26, paddingHorizontal: 13, paddingBottom: 11 },
+  reelKicker: { color: onPhoto.faint, ...typo.mono, fontSize: 10, letterSpacing: 1.4 },
+  reelTitle: { marginTop: 2, color: colors.onInk, ...typo.display, fontSize: 15 },
+  spotCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm + 2,
+    paddingVertical: space.sm + 2,
+    paddingHorizontal: space.sm + 3,
+    borderRadius: 18,
+    backgroundColor: spotInk.tint,
+  },
+  spotIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  spotCardText: { flex: 1, color: spotInk.ink, ...typo.medium, fontSize: textSize.body, lineHeight: 18 },
+  pressed: { opacity: 0.7 },
+  flush: { marginHorizontal: 0 },
+
+
   rowPressed: { backgroundColor: colors.surface },
   rowText: { flex: 1, minWidth: 0 },
   rowTitle: { color: colors.text, ...typo.bold, fontSize: textSize.base },
   rowSub: { color: colors.textSoft, ...typo.medium, fontSize: textSize.caption },
-  join: { minHeight: 34, minWidth: 64, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill, backgroundColor: colors.ink },
-  joined: { backgroundColor: '#E2F1EA' },
-  joinText: { color: colors.onInk, ...typo.display, fontSize: textSize.small },
-  joinedText: { color: colors.success },
 
-  now: { flexDirection: 'row', alignItems: 'center', gap: space.xs, height: 26 },
-  nowText: { color: colors.danger, ...typo.mono, fontSize: textSize.micro, letterSpacing: 1.2 },
-  nowRule: { flex: 1, height: 1.5, backgroundColor: colors.danger, opacity: 0.5 },
+  now: { flexDirection: 'row', alignItems: 'center', gap: space.xs, height: 30, paddingTop: 2 },
+  nowText: { color: sunInk, ...typo.mono, fontWeight: '600', fontSize: textSize.small },
+  nowRule: { flex: 1, height: 1.5, backgroundColor: sun },
+  going: { marginTop: space.xs, color: colors.textSoft, ...typo.medium, fontSize: 12.5 },
+  liveAnswer: { marginTop: 12 },
   error: { marginTop: space.xs, color: colors.danger, ...typo.medium, fontSize: textSize.body },
 
   spot: { alignSelf: 'flex-start', marginTop: space.xs, flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 34, paddingHorizontal: 12, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   spotText: { color: colors.primary, ...typo.display, fontSize: textSize.small },
-  where: { alignSelf: 'flex-start', marginHorizontal: 12, marginBottom: 2, flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 30, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: TINT },
+  where: { alignSelf: 'flex-start', marginHorizontal: 12, marginBottom: 2, flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 30, paddingHorizontal: 10, borderRadius: radius.pill, backgroundColor: colors.accentSoft },
   whereText: { color: colors.primary, ...typo.bold, fontSize: textSize.small },
 
   empty: { padding: 14, gap: 2, borderRadius: radius.md, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#B9C6F3', marginBottom: space.xs },
@@ -534,7 +714,7 @@ const styles = StyleSheet.create({
   emptyAction: { color: colors.primary, ...typo.display, fontSize: textSize.small, paddingTop: 2 },
   end: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body, paddingTop: 2 },
 
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: scrim.sheet, justifyContent: 'flex-end' },
   sheet: { maxHeight: '86%', borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, backgroundColor: colors.surface },
   grabber: { width: 40, height: 4, alignSelf: 'center', marginTop: space.sm, borderRadius: radius.pill, backgroundColor: colors.borderStrong },
   sheetBody: { padding: space.lg, paddingTop: space.md, gap: space.sm },

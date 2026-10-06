@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { colors, paper, radius, shadow, space, sun, textSize, tint, typo } from '../../theme';
-import TonightTicket from './TonightTicket';
+import { colors, space, textSize, typo } from '../../theme';
 
 // About a keyboard's height, so swapping one for the other moves nothing.
 export const TRAY_MIN = 260;
@@ -10,8 +9,6 @@ export const TRAY_MAX = 300;
 export function trayHeight(windowHeight: number): number {
   return Math.round(Math.min(TRAY_MAX, Math.max(TRAY_MIN, windowHeight * 0.36)));
 }
-
-const DASHES = 40;
 
 export type TrayTonight = {
   title: string;
@@ -33,21 +30,27 @@ type ChatTrayProps = {
   onLibrary: () => void;
   onProposePlan?: () => void;
   onAskParea?: () => void;
-  // Left out when Explore is switched off: there is nothing to suggest from.
-  onSuggestPlan?: () => void;
+  // The rest of what the parea decides, each opening its step of the new-vote
+  // sheet ('menu' is the whole list). Follow is left out when follows are off.
+  onStartVote?: (step: TrayVoteStep) => void;
+  canFollow?: boolean;
 };
 
-type Stub = {
+export type TrayVoteStep = 'follow' | 'invite' | 'remove' | 'menu';
+
+type Tile = {
   key: string;
   icon: keyof typeof Ionicons.glyphMap;
-  color: string;
   label: string;
+  // One short line, never two.
   hint: string;
   onPress: () => void;
 };
 
-// What the + opens in place of the keyboard: tonight's plan, a photo, and the
-// three things to put to the parea.
+// What the + opens in place of the keyboard, in two groups: what you send
+// (a photo, on my way) and what you put to the parea (every vote it can
+// start). The wide tiles are the ones that need the parea. Long-press On my
+// way to open tonight's plan.
 export default function ChatTray({
   height,
   compact = false,
@@ -59,18 +62,28 @@ export default function ChatTray({
   onLibrary,
   onProposePlan,
   onAskParea,
-  onSuggestPlan,
+  onStartVote,
+  canFollow = true,
 }: ChatTrayProps) {
-  const stubs: Stub[] = [];
+  const votes: Tile[] = [];
   if (onProposePlan) {
-    stubs.push({ key: 'plan', icon: 'ticket', color: colors.primary, label: 'Propose a plan', hint: 'Goes to a vote', onPress: onProposePlan });
+    votes.push({ key: 'plan', icon: 'ticket-outline', label: 'New plan', hint: 'Most say yes', onPress: onProposePlan });
   }
   if (onAskParea) {
-    stubs.push({ key: 'poll', icon: 'help-circle', color: sun, label: 'Ask the parea', hint: '2 to 4 choices', onPress: onAskParea });
+    votes.push({ key: 'poll', icon: 'stats-chart-outline', label: 'Poll', hint: 'One answer each', onPress: onAskParea });
   }
-  if (onSuggestPlan) {
-    stubs.push({ key: 'suggest', icon: 'compass', color: colors.success, label: 'Suggest a plan', hint: 'From Explore', onPress: onSuggestPlan });
+  if (onStartVote) {
+    if (canFollow) {
+      votes.push({ key: 'follow', icon: 'people-outline', label: 'Follow a parea', hint: 'Their public plans', onPress: () => onStartVote('follow') });
+    }
+    votes.push({ key: 'invite', icon: 'person-add-outline', label: 'Invite someone', hint: 'One-time link', onPress: () => onStartVote('invite') });
+    votes.push({ key: 'remove', icon: 'person-remove-outline', label: 'Remove someone', hint: 'They see it', onPress: () => onStartVote('remove') });
+    votes.push({ key: 'menu', icon: 'ellipsis-horizontal', label: 'More votes', hint: 'Name, photo', onPress: () => onStartVote('menu') });
   }
+  // Two big tiles to a row.
+  const rows: Tile[][] = [];
+  for (let i = 0; i < votes.length; i += 2) rows.push(votes.slice(i, i + 2));
+  const onMyWay = tonight && onOnMyWay ? onOnMyWay : null;
 
   return (
     <View style={[styles.tray, { height }]}>
@@ -79,154 +92,117 @@ export default function ChatTray({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {tonight && onOnMyWay ? (
-          <TonightTicket
-            kicker={tonight.kicker}
-            title={tonight.title}
-            line={compact ? '' : sharing ? 'Sharing your spot' : "You're in"}
-            live
-            compact
-            actionLabel={sharing ? 'Stop sharing' : 'On my way'}
-            actionIcon={sharing ? 'stop-circle-outline' : 'navigate'}
-            onAction={onOnMyWay}
-            onOpen={onOpenTonight}
-          />
-        ) : null}
-
-        <Text style={styles.label}>Photos</Text>
-        <View style={styles.tiles}>
-          <Pressable
-            onPress={onCamera}
-            accessibilityRole="button"
-            accessibilityLabel="Take a photo"
-            style={({ pressed }) => [styles.tile, styles.tileInk, compact && styles.tileCompact, pressed && styles.pressed]}
-          >
-            <Ionicons name="camera" size={22} color={colors.onInk} />
-            <Text style={[styles.tileText, styles.tileTextInk]}>Camera</Text>
-          </Pressable>
-          <Pressable
-            onPress={onLibrary}
-            accessibilityRole="button"
-            accessibilityLabel="Choose a photo from your library"
-            style={({ pressed }) => [styles.tile, compact && styles.tileCompact, pressed && styles.pressed]}
-          >
-            <Ionicons name="images" size={22} color={colors.ink} />
-            <Text style={styles.tileText}>Library</Text>
-          </Pressable>
+        <Text style={styles.label}>Send</Text>
+        <View style={styles.row}>
+          <SmallTile icon="camera-outline" label="Camera" a11y="Take a photo" compact={compact} onPress={onCamera} />
+          <SmallTile icon="image-outline" label="Photo" a11y="Choose a photo from your library" compact={compact} onPress={onLibrary} />
+          {onMyWay && tonight ? (
+            <BigTile
+              tile={{
+                key: 'way',
+                icon: sharing ? 'stop-circle-outline' : 'navigate-outline',
+                label: sharing ? 'Stop sharing' : 'On my way',
+                hint: tonight.title,
+                onPress: onMyWay,
+              }}
+              compact={compact}
+              onLongPress={onOpenTonight}
+            />
+          ) : (
+            <View style={styles.gapBig} />
+          )}
         </View>
 
-        {stubs.length > 0 ? (
-          <View style={styles.stubs}>
-            {stubs.map((stub) => (
-              <Pressable
-                key={stub.key}
-                onPress={stub.onPress}
-                accessibilityRole="button"
-                accessibilityLabel={stub.label}
-                accessibilityHint={stub.hint}
-                style={({ pressed }) => [styles.stub, pressed && styles.stubPressed]}
-              >
-                <View style={[styles.stubTop, compact && styles.stubTopCompact]}>
-                  <View style={[styles.stubIcon, { backgroundColor: iconTint(stub.key) }]}>
-                    <Ionicons name={stub.icon} size={16} color={stub.key === 'poll' ? colors.ink : stub.color} />
-                  </View>
-                </View>
-                <View style={styles.perf} pointerEvents="none">
-                  <View style={styles.dashes}>
-                    {Array.from({ length: DASHES }, (_, i) => (
-                      <View key={i} style={styles.dash} />
-                    ))}
-                  </View>
-                  <View style={[styles.notch, styles.notchLeft]} />
-                  <View style={[styles.notch, styles.notchRight]} />
-                </View>
-                <View style={[styles.stubBottom, compact && styles.stubBottomCompact]}>
-                  <Text style={styles.stubLabel} numberOfLines={2}>
-                    {stub.label}
-                  </Text>
-                  {compact ? null : (
-                    <Text style={styles.stubHint} numberOfLines={1}>
-                      {stub.hint}
-                    </Text>
-                  )}
-                </View>
-              </Pressable>
+        {votes.length > 0 ? <Text style={[styles.label, styles.labelNext]}>Put to the parea</Text> : null}
+        {rows.map((row, r) => (
+          <View key={r} style={styles.row}>
+            {row.map((tile) => (
+              <BigTile key={tile.key} tile={tile} compact={compact} />
             ))}
+            {/* A short last row keeps the same widths. */}
+            {row.length === 1 ? <View style={styles.gapBig} /> : null}
           </View>
-        ) : null}
+        ))}
       </ScrollView>
     </View>
   );
 }
 
-function iconTint(key: string): string {
-  if (key === 'plan') return paper.accentSoft;
-  if (key === 'poll') return tint.sun;
-  return tint.success;
+function SmallTile({
+  icon,
+  label,
+  a11y,
+  compact,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  a11y: string;
+  compact: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={a11y}
+      style={({ pressed }) => [styles.tile, styles.small, compact && styles.tileCompact, pressed && styles.pressed]}
+    >
+      <View style={styles.icon}>
+        <Ionicons name={icon} size={19} color={colors.text} />
+      </View>
+      <Text style={styles.tileText} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+// A wide tile: icon on the left, the name and one short line beside it.
+function BigTile({ tile, compact, onLongPress }: { tile: Tile; compact: boolean; onLongPress?: () => void }) {
+  const plan = tile.key === 'plan';
+  return (
+    <Pressable
+      onPress={tile.onPress}
+      onLongPress={onLongPress}
+      accessibilityRole="button"
+      accessibilityLabel={tile.label}
+      accessibilityHint={tile.hint}
+      style={({ pressed }) => [styles.tile, styles.big, plan && styles.bigPlan, compact && styles.tileCompact, pressed && styles.pressed]}
+    >
+      <View style={styles.icon}>
+        <Ionicons name={tile.icon} size={19} color={plan ? colors.primary : colors.text} />
+      </View>
+      <View style={styles.bigText}>
+        <Text style={styles.tileText} numberOfLines={1}>
+          {tile.label}
+        </Text>
+        <Text style={styles.hint} numberOfLines={1}>
+          {tile.hint}
+        </Text>
+      </View>
+    </Pressable>
+  );
 }
 
 const styles = StyleSheet.create({
-  tray: {
-    backgroundColor: colors.bg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  inner: { paddingHorizontal: space.md, paddingTop: space.sm + 2, paddingBottom: space.sm, gap: space.sm },
-  innerCompact: { paddingTop: space.sm, gap: space.xs + 2 },
-  pressed: { opacity: 0.85 },
+  // It takes the keyboard's place under the composer, one white panel with it.
+  tray: { backgroundColor: colors.surface },
+  inner: { paddingHorizontal: space.md, paddingTop: space.md, paddingBottom: space.sm + 4, gap: 8 },
+  innerCompact: { paddingTop: space.sm, gap: 6 },
+  pressed: { transform: [{ scale: 0.97 }] },
 
-  label: {
-    color: colors.textSoft,
-    ...typo.mono,
-    fontSize: textSize.micro,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-    marginBottom: -2,
-  },
-  tiles: { flexDirection: 'row', gap: space.xs + 2 },
-  tile: {
-    flex: 1,
-    height: 64,
-    borderRadius: radius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.xs + 2,
-    backgroundColor: colors.surface,
-    ...shadow.bubble,
-  },
-  tileCompact: { height: 56 },
-  tileInk: { backgroundColor: colors.ink },
-  tileText: { color: colors.ink, ...typo.bold, fontSize: textSize.base },
-  tileTextInk: { color: colors.onInk },
-
-  stubs: { flexDirection: 'row', gap: space.xs + 2 },
-  stub: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: radius.md + 2,
-    backgroundColor: colors.surface,
-    ...shadow.bubble,
-  },
-  stubPressed: { transform: [{ scale: 0.96 }] },
-  stubTop: { height: 38, justifyContent: 'center', paddingHorizontal: 12 },
-  stubTopCompact: { height: 34 },
-  stubIcon: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  perf: { height: 1.5, marginHorizontal: 10, justifyContent: 'center' },
-  dashes: { flexDirection: 'row', gap: 3, height: 1.5, overflow: 'hidden' },
-  dash: { width: 4, height: 1.5, borderRadius: 1, backgroundColor: colors.borderStrong },
-  notch: { position: 'absolute', top: -6, width: 12, height: 12, borderRadius: 6, backgroundColor: colors.bg },
-  notchLeft: { left: -16 },
-  notchRight: { right: -16 },
-  stubBottom: { paddingHorizontal: 12, paddingTop: 7, paddingBottom: 9 },
-  stubBottomCompact: { paddingHorizontal: 10, paddingTop: 6, paddingBottom: 8 },
-  stubLabel: { color: colors.ink, ...typo.display, fontSize: 13.5, lineHeight: 16, letterSpacing: -0.2 },
-  stubHint: {
-    marginTop: 3,
-    color: colors.textSoft,
-    ...typo.mono,
-    fontSize: 9,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
+  label: { color: colors.textFaint, ...typo.medium, fontSize: 12.5, marginHorizontal: 2 },
+  labelNext: { marginTop: 6 },
+  row: { flexDirection: 'row', gap: 8 },
+  tile: { height: 78, borderRadius: 16, backgroundColor: colors.bg },
+  tileCompact: { height: 64 },
+  small: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6 },
+  big: { flex: 2, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14 },
+  bigPlan: { backgroundColor: colors.accentSoft },
+  gapBig: { flex: 2 },
+  icon: { width: 36, height: 36, flexShrink: 0, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  bigText: { flex: 1, minWidth: 0 },
+  tileText: { color: colors.text, ...typo.semi, fontSize: textSize.small },
+  hint: { color: colors.textFaint, ...typo.medium, fontSize: 11.5 },
 });

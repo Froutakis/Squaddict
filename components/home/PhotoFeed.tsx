@@ -441,7 +441,6 @@ export default function PhotoFeed({
         signPaths={signPaths}
         onImageError={onImageError}
         onReact={(emoji) => openPost && react(openPost.photo.id, emoji)}
-        onShowReactors={() => openPost && setReactorsOf(openPost.photo.id)}
         onShare={() => openPost && shareNight(openPost)}
         onOpenGroup={
           openPost && canOpenGroup(openPost.group)

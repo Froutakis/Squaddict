@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Monogram from '../general/Monogram';
 import { FAB_CENTER_Y, FAB_INSET } from '../general/MenuFab';
@@ -8,7 +7,6 @@ import { colors, radius, space, textSize, typo } from '../../theme';
 
 const BUTTON = 44;
 const NAME_ROW = 32;
-const FADE = 22;
 // Sun text dark enough for small type on the page (4.5:1).
 const SUN_TEXT = '#8A5300';
 
@@ -28,9 +26,8 @@ type ChatHeaderProps = {
   onOpenGroup: () => void;
 };
 
-// The chat reads like another page of Home: no bar, a white back button where
-// the menu button always is, the squad's name and a kicker under it. The
-// messages fade out under it as they scroll up.
+// A white bar over the ticket-patterned chat: back where the menu button
+// always is, the squad's face and name, and who is around under it.
 export default function ChatHeader({
   name,
   avatarUrl,
@@ -44,7 +41,7 @@ export default function ChatHeader({
   onOpenGroup,
 }: ChatHeaderProps) {
   const presence = presenceLabel(memberCount, online);
-  const kicker = connection ? `Chat · ${connection}` : typing ? typing : `Chat · ${presence}`;
+  const kicker = connection ?? typing ?? presence;
 
   return (
     <View style={styles.header}>
@@ -66,7 +63,7 @@ export default function ChatHeader({
           style={({ pressed }) => [styles.squad, pressed && styles.pressed]}
         >
           <View style={styles.nameRow}>
-            <Monogram name={name} uri={avatarUrl} size={30} />
+            <Monogram name={name} uri={avatarUrl} size={30} style={styles.face} />
             <Text style={styles.name} numberOfLines={1}>
               {name}
             </Text>
@@ -90,19 +87,12 @@ export default function ChatHeader({
           <Ionicons name="search" size={22} color={colors.text} />
         </Pressable>
       </View>
-
-      <LinearGradient
-        colors={[colors.bg, `${colors.bg}00`]}
-        style={styles.fade}
-        pointerEvents="none"
-      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // Above the list, so the fade lies over the messages.
-  header: { zIndex: 1, backgroundColor: colors.bg },
+  header: { zIndex: 1, backgroundColor: colors.surface },
   // The back button sits exactly where MenuFab's does on every other screen.
   row: {
     flexDirection: 'row',
@@ -119,14 +109,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    shadowColor: colors.ink,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
   },
   backPressed: { opacity: 0.7, transform: [{ scale: 0.96 }] },
   // The name lines up with the back button's middle, as HomeHeader's does.
@@ -140,15 +122,9 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.7 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs, height: NAME_ROW },
-  name: { flexShrink: 1, color: colors.text, ...typo.display, fontSize: textSize.heading, letterSpacing: -0.4 },
-  kicker: {
-    marginTop: 1,
-    color: colors.textSoft,
-    ...typo.mono,
-    fontSize: textSize.caption,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
+  face: { borderRadius: 10 },
+  name: { flexShrink: 1, color: colors.text, ...typo.bold, fontSize: 17, letterSpacing: -0.3 },
+  kicker: { marginTop: 1, marginLeft: 30 + space.xs, color: colors.textFaint, ...typo.medium, fontSize: textSize.small },
   kickerLive: { color: colors.primary },
   kickerWarn: { color: SUN_TEXT },
   search: {
@@ -159,5 +135,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   searchPressed: { backgroundColor: colors.surfaceAlt },
-  fade: { position: 'absolute', left: 0, right: 0, top: '100%', height: FADE },
 });

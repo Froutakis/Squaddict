@@ -18,6 +18,8 @@ type AuthFieldProps = {
   onTogglePassword?: () => void;
   onSubmit?: () => void;
   error?: string;
+  // A rule shown under the field, green with a check once it is met.
+  help?: { text: string; met: boolean };
   style?: StyleProp<ViewStyle>;
 };
 
@@ -35,6 +37,7 @@ export default function AuthField({
   onTogglePassword,
   onSubmit,
   error,
+  help,
   style,
 }: AuthFieldProps) {
 
@@ -93,7 +96,17 @@ export default function AuthField({
         ) : null}
       </Pressable>
 
-      {error ? <Text style={fieldStyles.error}>{error}</Text> : null}
+      {error ? (
+        <View style={fieldStyles.help} accessibilityRole="alert">
+          <Ionicons name="alert-circle" size={15} color={colors.danger} />
+          <Text style={fieldStyles.error}>{error}</Text>
+        </View>
+      ) : help ? (
+        <View style={fieldStyles.help}>
+          <Ionicons name={help.met ? 'checkmark-circle' : 'ellipse-outline'} size={15} color={help.met ? colors.success : colors.textFaint} />
+          <Text style={[fieldStyles.helpText, help.met && fieldStyles.ok]}>{help.text}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }

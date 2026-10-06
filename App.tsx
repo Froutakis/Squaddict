@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import type { User } from '@supabase/supabase-js';
@@ -22,6 +22,7 @@ import {
   showNotificationsInForeground,
 } from './services/serviceNotifications';
 import { features } from './lib/features';
+import type { VoteStart } from './components/votes/NewVoteSheet';
 
 showNotificationsInForeground();
 
@@ -42,13 +43,19 @@ export default function App() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [authScreen, setAuthScreen] = useState<'login' | 'register'>('login');
   const [screen, setScreen] = useState<Screen>('home');
-  const [chatTarget, setChatTarget] = useState<{ groupId: string; nonce: number } | null>(null);
+  // The chat open on top of it all; 'votes' opens it on its Votes tab, and
+  // start opens the new-vote sheet there too (Invite, Follow).
+  const [chatTarget, setChatTarget] = useState<{
+    groupId: string;
+    nonce: number;
+    filter?: 'all' | 'votes';
+    start?: VoteStart;
+  } | null>(null);
   const [unread, setUnread] = useState(0);
   const [chatClosedNonce, setChatClosedNonce] = useState(0);
   const [focusEventId, setFocusEventId] = useState<string | null>(null);
   const [selectGroup, setSelectGroup] = useState<{ id: string; nonce: number } | null>(null);
   const [createNonce, setCreateNonce] = useState(0);
-  const [votesNonce, setVotesNonce] = useState(0);
   const [calendarNonce, setCalendarNonce] = useState(0);
   const [railHomeNonce, setRailHomeNonce] = useState(0);
   const [newSquadNonce, setNewSquadNonce] = useState(0);
@@ -90,7 +97,7 @@ export default function App() {
         setScreen('home');
       } else if (target.type === 'votes') {
         setSelectGroup({ id: target.groupId, nonce: Date.now() });
-        setVotesNonce((n) => n + 1);
+        setChatTarget({ groupId: target.groupId, nonce: Date.now(), filter: 'votes' });
         setScreen('home');
       } else {
         setFocusEventId(target.eventId);
@@ -182,7 +189,6 @@ export default function App() {
       setCreateNonce(0);
       setCalendarNonce(0);
       setNewSquadNonce(0);
-      setVotesNonce(0);
       setScreen('home');
     }
     if (ask === 'plan') setCreateNonce((n) => n + 1);
@@ -190,14 +196,14 @@ export default function App() {
     if (ask === 'squad') setNewSquadNonce((n) => n + 1);
   }
 
-  // Every vote starts on the Votes page, so buttons elsewhere that would have
-  // opened one bring you here instead. groupId is the squad deciding; without
-  // it, Parea's current squad.
-  function openVotes(groupId?: string) {
-    if (chatTarget) closeChat();
+  // Votes live in the parea's chat: buttons elsewhere that would open one
+  // open that chat on its Votes tab. groupId is the parea deciding; without
+  // it, the current one. With start, the chat opens that new vote right away.
+  function openVotes(groupId?: string, start?: VoteStart) {
+    const id = groupId ?? railData.activeId;
+    if (!id) return;
     if (groupId) setSelectGroup({ id: groupId, nonce: Date.now() });
-    goHome();
-    setVotesNonce((n) => n + 1);
+    setChatTarget({ groupId: id, nonce: Date.now(), filter: 'votes', start });
   }
 
   // Sheets wait for the rail to finish sliding away (iOS can't stack them).
@@ -215,7 +221,7 @@ export default function App() {
   // Where you are, as the rail marks it: a page on top wins over the screen under it.
   const current: RailScreen = chatTarget
     ? 'chat'
-    : onParea && (homeOverlay === 'votes' || homeOverlay === 'calendar')
+    : onParea && homeOverlay === 'calendar'
       ? homeOverlay
       : screen;
   return (
@@ -236,7 +242,7 @@ export default function App() {
             onUnreadChange={setUnread}
             selectGroup={selectGroup}
             createNonce={createNonce}
-            openVotesNonce={votesNonce}
+            onOpenVotes={openVotes}
             calendarNonce={calendarNonce}
             railHomeNonce={railHomeNonce}
             newSquadNonce={newSquadNonce}
@@ -255,8 +261,9 @@ export default function App() {
                 key={`chat-${chatTarget.nonce}`}
                 user={user}
                 initialGroupId={chatTarget.groupId}
+                initialFilter={chatTarget.filter}
+                initialVoteStart={chatTarget.start}
                 onExit={close}
-                onOpenVotes={openVotes}
                 onNewPlan={(groupId) => {
                   closeChat();
                   setSelectGroup({ id: groupId, nonce: Date.now() });
@@ -306,13 +313,6 @@ export default function App() {
           setRailHomeNonce((n) => n + 1);
         }}
         votes={railData.votes}
-        onVotes={() => {
-          leaveChat();
-          afterRail(() => {
-            goHome();
-            setVotesNonce((n) => n + 1);
-          });
-        }}
         onCalendar={() => {
           setRailOpen(false);
           leaveChat();

@@ -1,31 +1,33 @@
 import { StyleSheet } from 'react-native';
-import { colors, typo, radius, space } from './theme';
+import { colors, typo, space, tint } from './theme';
 
+// Fields: the label above, a filled box, what went wrong under it. The box
+// turns white with a blue ring while you type, red-soft with a red ring when
+// something is wrong. The border is always there (clear), so nothing moves.
 export const fieldStyles = StyleSheet.create({
-  field: { gap: space.xs },
-  label: {
-    color: colors.textFaint,
-    ...typo.mono,
-    fontSize: 10,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-  },
+  field: { gap: 6 },
+  label: { color: colors.text, ...typo.semi, fontSize: 13 },
   box: {
-    minHeight: 50,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    paddingHorizontal: space.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    borderRadius: 14,
+    backgroundColor: colors.bg,
   },
-  focused: { borderColor: colors.primary },
-  errorBox: { borderColor: colors.danger },
+  focused: { borderColor: colors.primary, backgroundColor: colors.surface },
+  errorBox: { borderColor: colors.danger, backgroundColor: tint.danger },
   disabled: { opacity: 0.6 },
-  input: { flex: 1, minHeight: 48, color: colors.text, ...typo.medium, fontSize: 15 },
+  // The box shows focus, so the web's own outline is dropped.
+  input: { flex: 1, minHeight: 44, color: colors.text, ...typo.regular, fontSize: 15, outlineStyle: 'none' } as any,
   mono: { ...typo.mono, letterSpacing: 0.4 },
   placeholder: { color: colors.textFaint },
-  error: { color: colors.danger, ...typo.medium, fontSize: 12.5 },
+  error: { flexShrink: 1, color: colors.danger, ...typo.medium, fontSize: 12.5 },
+  // A line under the field: an error with its icon, or a check that is met.
+  help: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  helpText: { flexShrink: 1, color: colors.textFaint, ...typo.medium, fontSize: 12.5 },
+  ok: { color: colors.success },
 });

@@ -67,10 +67,10 @@ const styles = StyleSheet.create({
   add: {
     height: 34,
     paddingHorizontal: 16,
-    borderRadius: radius.sm,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.ink,
+    backgroundColor: colors.primary,
   },
   addText: { color: colors.textOnBrand, ...typo.semi, fontSize: textSize.small },
 });

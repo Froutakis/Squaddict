@@ -377,6 +377,18 @@ export async function getChatVotes(
   return byMessage;
 }
 
+// The chat message that carries a vote's card, so the others' chats can be
+// told to read it again. Null before chat_cards.sql, or for a vote with no card.
+export async function getVoteMessageId(voteId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("squad_proposals")
+    .select("message_id")
+    .eq("id", voteId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return (data as { message_id?: string | null }).message_id ?? null;
+}
+
 export async function getOpenSquadVote(
   groupId: string,
   targetGroupId: string,

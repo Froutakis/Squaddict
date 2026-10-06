@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipIdle: { backgroundColor: colors.surface, borderColor: colors.border },
-  chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   pressed: { opacity: 0.7 },
 
   monogram: {

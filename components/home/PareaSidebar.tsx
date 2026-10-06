@@ -10,41 +10,38 @@ import {
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import type { Group } from '../../services/serviceGroup';
 import Monogram from '../general/Monogram';
-import Glass from '../general/Glass';
 import PlanButton, { PLAN_BUTTON_BOTTOM, PLAN_BUTTON_RIGHT, PLAN_BUTTON_SPACE } from '../general/PlanButton';
 import { FAB_BOTTOM } from '../general/MenuFab';
 import { colors, radius, space, sun, textSize, typo } from '../../theme';
 import { features } from '../../lib/features';
 
-const RAIL = 60;
-const RAIL_RADIUS = 30;
-const RAIL_LEFT = 10;
-const RAIL_PAD = 8;
-const BUTTON = 44;
-const KEY_RADIUS = 15;
-const GAP = 4;
+const RAIL = 76;
+const RAIL_RADIUS = 26;
+const RAIL_LEFT = 12;
+const RAIL_PAD = 12;
+// A parea's squircle.
+const PAREA = 48;
+const GAP = 6;
 const SLIDE_MS = 200;
 const LABEL_MS = 1600;
 // iOS can't present a sheet while the rail is still sliding away.
 export const RAIL_CLOSE_MS = 260;
 const LABEL_HEIGHT = 34;
 const LABEL_LEFT = RAIL_LEFT + RAIL + 10;
-const TAG_HEIGHT = 30;
-const FLYOUT_CELL = 62;
-// The first few times the rail opens, every icon has its name beside it.
+const NAME_HEIGHT = 48;
+// The first few times the rail opens, every parea has its name beside it.
 const WORDS_KEY = 'squaddict.railWordsShown';
 const WORDS_OPENS = 3;
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
-type Label = { key: string; text: string; extra?: string; y: number };
+type Label = { key: string; text: string; extra?: string; y: number; h: number };
 
 // Every screen the rail opens. One of them is always where you are.
-export type RailScreen = 'home' | 'explore' | 'chat' | 'calendar' | 'votes' | 'you';
+export type RailScreen = 'home' | 'explore' | 'chat' | 'calendar' | 'you';
 
 type Tool = {
   key: RailScreen | 'voice';
@@ -53,6 +50,8 @@ type Tool = {
   // The filled icon, for the screen you are on.
   iconOn: IconName;
   badge?: number;
+  // What a screen reader says for the badge, when "N unread" is not it.
+  spoken?: string;
   // A small sun dot for what is on its way.
   soon?: boolean;
   onPress?: () => void;
@@ -72,19 +71,20 @@ type PareaSidebarProps = {
   onPlan: () => void;
   onHome: () => void;
   onCalendar: () => void;
-  // Open votes in the current squad you have not answered.
+  // Open votes in the current parea you have not answered: they live in its
+  // chat, so they count on Chat.
   votes?: number;
-  onVotes: () => void;
   onExplore: () => void;
   onYou: () => void;
   onClose: () => void;
 };
 
-// The side rail, the app's only menu: a short pill of icons, centred down the
-// left edge. The current parea on top (the others open beside it); then the
-// screens (Home, Explore); then the parea's own pages; you at the
-// bottom. The screen you are on is an ink key with its name on a tab. New plan
-// is not in the column: it is a plain + bottom-right that comes up with it.
+// The side rail, the app's only menu: a white column down the left edge.
+// Your pareas on top as squircles with what is new in each, the one you are in
+// ringed in blue; then, under a line, the screens (Chat, Home, Explore,
+// Calendar) with their names, the one you are on in soft blue; you at the
+// bottom. New plan is not in the column: it is a blue ticket + bottom-right
+// that comes up with it.
 export default function PareaSidebar({
   visible,
   squads,
@@ -99,30 +99,24 @@ export default function PareaSidebar({
   onHome,
   onCalendar,
   votes = 0,
-  onVotes,
   onExplore,
   onYou,
   onClose,
 }: PareaSidebarProps) {
-  const { width: screenWidth } = useWindowDimensions();
   const slide = useRef(new Animated.Value(0)).current;
   const scrollY = useRef(new Animated.Value(0)).current;
   // Stays mounted while it slides out, then unmounts.
   const [mounted, setMounted] = useState(visible);
   const [label, setLabel] = useState<Label | null>(null);
-  const [flyout, setFlyout] = useState(false);
   const [words, setWords] = useState(false);
   // Where each button sits in the column, for the tags beside it.
-  const [rows, setRows] = useState<Record<string, number>>({});
+  const [rows, setRows] = useState<Record<string, { y: number; h: number }>>({});
   const opens = useRef<number | null>(null);
   const labelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (visible) setMounted(true);
-    else {
-      setLabel(null);
-      setFlyout(false);
-    }
+    else setLabel(null);
     Animated.timing(slide, {
       toValue: visible ? 1 : 0,
       duration: SLIDE_MS,
@@ -165,48 +159,48 @@ export default function PareaSidebar({
     labelTimer.current = setTimeout(() => setLabel(null), LABEL_MS);
   }
 
-  // The words already say what each icon is, so holding adds nothing.
+  // The names already say which parea is which, so holding adds nothing.
   const onHold = words ? () => {} : showLabel;
 
-  function placeRow(key: string, y: number) {
-    setRows((was) => (was[key] === y ? was : { ...was, [key]: y }));
+  function placeRow(key: string, y: number, h: number) {
+    setRows((was) => (was[key]?.y === y && was[key]?.h === h ? was : { ...was, [key]: { y, h } }));
   }
 
-  // Tapping outside, or Android back, closes the pareas first, then the rail.
+  // Tapping outside, or Android back, closes the rail.
   function dismiss() {
-    if (flyout) setFlyout(false);
-    else onClose();
+    onClose();
   }
+
 
   const active = squads.find((squad) => squad.id === activeId);
-  const othersUnread = squads.reduce((sum, squad) => (squad.id === activeId ? sum : sum + (unread[squad.id] ?? 0)), 0);
   const chatUnread = activeId ? unread[activeId] ?? 0 : 0;
-  // Where you go: Home (the parea's plans and memories), Explore.
-  const screens: Tool[] = [
-    { key: 'home', label: 'Home', icon: 'images-outline', iconOn: 'images', onPress: onHome },
-    ...(features.explore
-      ? [{ key: 'explore' as const, label: 'Explore', icon: 'map-outline' as IconName, iconOn: 'map' as IconName, onPress: onExplore }]
-      : []),
-  ];
-  // The current parea's own pages.
+  // Where you go: the current parea's chat, Home (its plans and memories),
+  // Explore, its calendar.
   const tools: Tool[] = [
-    { key: 'chat', label: 'Chat', icon: 'chatbubble-outline', iconOn: 'chatbubble', badge: chatUnread, onPress: onChat },
+    {
+      key: 'chat',
+      label: 'Chat',
+      icon: 'chatbubble-outline',
+      iconOn: 'chatbubble',
+      badge: chatUnread + votes,
+      // Messages and the votes waiting on you, said apart.
+      spoken: [chatUnread > 0 ? `${chatUnread} unread` : null, votes > 0 ? `${votes} ${votes === 1 ? 'vote' : 'votes'} waiting` : null]
+        .filter(Boolean)
+        .join(', '),
+      onPress: onChat,
+    },
+    { key: 'home', label: 'Home', icon: 'home-outline', iconOn: 'home', onPress: onHome },
+    ...(features.explore
+      ? [{ key: 'explore' as const, label: 'Explore', icon: 'compass-outline' as IconName, iconOn: 'compass' as IconName, onPress: onExplore }]
+      : []),
     { key: 'calendar', label: 'Calendar', icon: 'calendar-outline', iconOn: 'calendar', onPress: onCalendar },
-    { key: 'votes', label: 'Votes', icon: 'checkbox-outline', iconOn: 'checkbox', badge: votes, onPress: onVotes },
     ...(features.voice
       ? [{ key: 'voice' as const, label: 'Voice', icon: 'mic-outline' as IconName, iconOn: 'mic' as IconName, soon: true }]
       : []),
   ];
 
-  // The names that sit beside the column: the screen you are on always, the
-  // others only while the words are showing.
-  const names: Record<string, string> = { you: 'You' };
-  for (const tool of [...screens, ...tools]) names[tool.key] = tool.soon ? `${tool.label} · soon` : tool.label;
-  if (active) names.parea = active.name;
-
   function renderTool(tool: Tool) {
     const here = tool.key === current;
-    const held = label?.key === tool.key && !here;
     const badge = here ? 0 : tool.badge ?? 0;
     return (
       <RailButton
@@ -219,40 +213,39 @@ export default function PareaSidebar({
         onHold={tool.soon ? showLabel : onHold}
         onRow={placeRow}
         accessibilityState={{ selected: here }}
-        accessibilityLabel={`${tool.label}${here ? ', you are here' : ''}${tool.soon ? ', coming soon' : ''}${badge ? `, ${badge} unread` : ''}`}
+        accessibilityLabel={`${tool.label}${here ? ', you are here' : ''}${tool.soon ? ', coming soon' : ''}${tool.spoken ? `, ${tool.spoken}` : badge ? `, ${badge} unread` : ''}`}
       >
-        <View style={[styles.key, here && styles.keyHere, held && styles.keyHeld]}>
-          <Ionicons name={here ? tool.iconOn : tool.icon} size={22} color={here ? colors.onInk : colors.text} />
+        <View style={[styles.tool, here && styles.toolHere]}>
+          <Ionicons name={here ? tool.iconOn : tool.icon} size={20} color={here ? colors.accentInk : colors.textSoft} />
+          <Text style={[styles.toolText, here && styles.toolTextHere]} numberOfLines={1}>
+            {tool.label}
+          </Text>
+          {badge ? <View style={styles.toolDot} /> : null}
+          {tool.soon ? <View style={styles.soonDot} /> : null}
         </View>
-        {badge ? <Badge count={badge} style={styles.toolBadge} /> : null}
-        {tool.soon ? <View style={styles.soonDot} /> : null}
       </RailButton>
     );
   }
 
   const translateX = slide.interpolate({ inputRange: [0, 1], outputRange: [-(RAIL_LEFT + RAIL + space.md), 0] });
-  // The tags follow a beat behind the rail, like they slide out of it.
+  // The names follow a beat behind the rail, like they slide out of it.
   const tagsIn = slide.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 0, 1] });
   const plusY = slide.interpolate({ inputRange: [0, 1], outputRange: [PLAN_BUTTON_SPACE + 40, 0] });
-  const flyoutWidth = screenWidth - (RAIL_LEFT + RAIL + space.xs) - space.md;
   const youHere = current === 'you';
+  const names: Record<string, string> = {};
+  for (const squad of squads) names[`parea-${squad.id}`] = squad.name;
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={dismiss}>
       <Animated.View style={[styles.scrim, { opacity: slide }]}>
-        <Pressable
-          style={styles.fill}
-          onPress={dismiss}
-          accessibilityLabel={flyout ? 'Close your pareas' : 'Close the side rail'}
-        />
+        <Pressable style={styles.fill} onPress={dismiss} accessibilityLabel="Close the side rail" />
       </Animated.View>
 
       <SafeAreaView style={styles.safe} pointerEvents="box-none">
-        {/* The zone the rail centres in: below the menu button, above the + button. */}
+        {/* The zone the rail fills: below the menu button, down to the bottom. */}
         <View style={styles.zone} pointerEvents="box-none">
           <Animated.View style={[styles.rail, { transform: [{ translateX }] }]} pointerEvents="box-none">
-            <Glass radius={RAIL_RADIUS} sheen="rgba(255,255,255,0.9)" style={styles.glass}>
-              {/* Hugs its buttons; only a very short screen ever scrolls it. */}
+            <View style={styles.card}>
               <ScrollView
                 style={styles.body}
                 contentContainerStyle={styles.bodyContent}
@@ -261,25 +254,30 @@ export default function PareaSidebar({
                 scrollEventThrottle={16}
                 onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
               >
-                {active ? (
-                  <RailButton
-                    labelKey="parea"
-                    label={active.name}
-                    onPress={() => setFlyout((open) => !open)}
-                    onHold={flyout ? () => {} : onHold}
-                    onRow={placeRow}
-                    accessibilityState={{ expanded: flyout }}
-                    accessibilityLabel={`${active.name}, current parea. Switch parea${othersUnread > 0 ? `, ${othersUnread} unread in other pareas` : ''}`}
-                  >
-                    <View style={styles.parea}>
-                      <Monogram name={active.name} uri={active.avatarUrl} size={36} square />
-                    </View>
-                    {othersUnread > 0 ? <Badge count={othersUnread} style={styles.pareaBadge} /> : null}
-                    <View style={styles.more}>
-                      <Ionicons name={flyout ? 'chevron-back' : 'chevron-forward'} size={10} color={colors.ink} />
-                    </View>
-                  </RailButton>
-                ) : (
+                {/* Your pareas: squircles with what is new in each, the one you are in ringed. */}
+                <View style={styles.group}>
+                  {squads.map((squad) => {
+                    const on = squad.id === activeId;
+                    const count = unread[squad.id] ?? 0;
+                    return (
+                      <RailButton
+                        key={squad.id}
+                        labelKey={`parea-${squad.id}`}
+                        label={squad.name}
+                        extra={count > 0 ? `${count} new` : undefined}
+                        onPress={() => (on ? onClose() : onSelectSquad(squad.id))}
+                        onHold={onHold}
+                        onRow={placeRow}
+                        accessibilityState={{ selected: on }}
+                        accessibilityLabel={`${squad.name}${on ? ', current parea' : ''}${count > 0 ? `, ${count} unread` : ''}`}
+                      >
+                        <View style={[styles.ring, on && styles.ringOn]}>
+                          <Monogram name={squad.name} uri={squad.avatarUrl} size={PAREA} style={styles.parea} />
+                        </View>
+                        {count > 0 ? <Badge count={count} style={styles.pareaBadge} /> : null}
+                      </RailButton>
+                    );
+                  })}
                   <RailButton
                     labelKey="new-squad"
                     label="New parea"
@@ -288,19 +286,18 @@ export default function PareaSidebar({
                     onRow={placeRow}
                     accessibilityLabel="New parea or join with a code"
                   >
-                    <View style={styles.add}>
-                      <Ionicons name="add" size={18} color={colors.textSoft} />
+                    <View style={styles.ring}>
+                      <View style={styles.add}>
+                        <Ionicons name="add" size={22} color={colors.textSoft} />
+                      </View>
                     </View>
                   </RailButton>
-                )}
-
-                <View style={styles.sep} />
-                {screens.map(renderTool)}
+                </View>
 
                 <View style={styles.sep} />
                 {tools.map(renderTool)}
 
-                <View style={styles.sep} />
+                <View style={styles.spacer} />
                 <RailButton
                   labelKey="you"
                   label="You"
@@ -310,95 +307,45 @@ export default function PareaSidebar({
                   accessibilityState={{ selected: youHere }}
                   accessibilityLabel={`You, settings and your nights${youHere ? ', you are here' : ''}`}
                 >
-                  <View style={[styles.key, youHere && styles.keyHere]}>
-                    <View style={[styles.me, youHere && styles.meHere]}>
-                      <Monogram name={me.name || 'You'} uri={me.avatarUrl} size={BUTTON - 12} ring={2} />
-                    </View>
+                  <View style={[styles.tool, youHere && styles.toolHere]}>
+                    <Monogram name={me.name || 'You'} uri={me.avatarUrl} size={28} style={styles.me} />
+                    <Text style={[styles.toolText, youHere && styles.toolTextHere]}>You</Text>
                   </View>
                 </RailButton>
               </ScrollView>
-            </Glass>
+            </View>
 
-            {/* Beside the column, moving with it if it ever scrolls. Decoration
-                only: each button already says its name and whether you are here. */}
-            <Animated.View
-              style={[styles.side, { opacity: tagsIn, transform: [{ translateY: Animated.multiply(scrollY, -1) }] }]}
-              pointerEvents="box-none"
-            >
-              {flyout
-                ? null
-                : Object.keys(rows).map((key) => {
-                    const here = key === current;
-                    if ((!here && !words) || !names[key]) return null;
-                    const top = rows[key] + (BUTTON - TAG_HEIGHT) / 2;
-                    return (
-                      <View
-                        key={key}
-                        style={[styles.tag, here ? styles.hereTag : styles.word, { top }]}
-                        pointerEvents="none"
-                        // aria-hidden also hides it on the web; RN maps it to the native props.
-                        aria-hidden
-                        accessibilityElementsHidden
-                        importantForAccessibility="no-hide-descendants"
-                      >
-                        {here ? <View style={styles.hereDot} /> : null}
-                        <Text style={here ? styles.hereText : styles.wordText} numberOfLines={1}>
-                          {here ? names[key].toUpperCase() : names[key]}
-                        </Text>
-                      </View>
-                    );
-                  })}
-
-              {/* Your pareas, open beside the current one. */}
-              {flyout ? (
-                <View style={[styles.flyout, { top: (rows.parea ?? RAIL_PAD) - 2, maxWidth: flyoutWidth }]}>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.flyoutRow}
-                    accessibilityLabel="Your pareas"
-                  >
-                    {squads.map((squad) => {
-                      const on = squad.id === activeId;
-                      const count = unread[squad.id] ?? 0;
-                      return (
-                        <Pressable
-                          key={squad.id}
-                          onPress={() => (on ? setFlyout(false) : onSelectSquad(squad.id))}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: on }}
-                          accessibilityLabel={`${squad.name}${on ? ', current parea' : ''}${count > 0 ? `, ${count} unread` : ''}`}
-                          style={({ pressed }) => [styles.cell, pressed && styles.pressed]}
-                        >
-                          <View style={[styles.cellMono, on && styles.cellMonoOn]}>
-                            <Monogram name={squad.name} uri={squad.avatarUrl} size={44} />
-                          </View>
-                          {count > 0 && !on ? <Badge count={count} style={styles.cellBadge} /> : null}
-                          <Text style={styles.cellName} numberOfLines={1}>
-                            {squad.name.toUpperCase()}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                    <Pressable
-                      onPress={onNewSquad}
-                      accessibilityRole="button"
-                      accessibilityLabel="New parea or join with a code"
-                      style={({ pressed }) => [styles.cell, pressed && styles.pressed]}
+            {/* The pareas' names beside the column, the first few times the rail
+                opens. Decoration only: each button already says its name. */}
+            {words ? (
+              <Animated.View
+                style={[styles.side, { opacity: tagsIn, transform: [{ translateY: Animated.multiply(scrollY, -1) }] }]}
+                pointerEvents="none"
+              >
+                {Object.keys(rows).map((key) => {
+                  if (!names[key]) return null;
+                  const row = rows[key];
+                  return (
+                    <View
+                      key={key}
+                      style={[styles.name, { top: row.y + (row.h - NAME_HEIGHT) / 2 }]}
+                      // aria-hidden also hides it on the web; RN maps it to the native props.
+                      aria-hidden
+                      accessibilityElementsHidden
+                      importantForAccessibility="no-hide-descendants"
                     >
-                      <View style={styles.add}>
-                        <Ionicons name="add" size={18} color={colors.textSoft} />
-                      </View>
-                      <Text style={styles.cellName}>NEW</Text>
-                    </Pressable>
-                  </ScrollView>
-                </View>
-              ) : null}
-            </Animated.View>
+                      <Text style={styles.nameText} numberOfLines={1}>
+                        {names[key]}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </Animated.View>
+            ) : null}
           </Animated.View>
         </View>
 
-        {/* New plan: a plain + bottom-right, up with the rail on every screen. */}
+        {/* New plan: a blue ticket + bottom-right, up with the rail on every screen. */}
         <View style={styles.footer} pointerEvents="box-none">
           {active ? (
             <Animated.View style={{ transform: [{ translateY: plusY }] }}>
@@ -409,7 +356,7 @@ export default function PareaSidebar({
       </SafeAreaView>
 
       {label ? (
-        <View style={[styles.label, { top: label.y + (BUTTON - LABEL_HEIGHT) / 2 }]} pointerEvents="none">
+        <View style={[styles.label, { top: label.y + (label.h - LABEL_HEIGHT) / 2 }]} pointerEvents="none">
           <Text style={styles.labelText} numberOfLines={1}>
             {label.text}
           </Text>
@@ -437,7 +384,7 @@ type RailButtonProps = {
   // For a button that answers a tap with its label (things not built yet).
   tapShowsLabel?: boolean;
   onHold: (label: Label) => void;
-  onRow: (key: string, y: number) => void;
+  onRow: (key: string, y: number, h: number) => void;
   accessibilityLabel: string;
   accessibilityState?: { selected?: boolean; expanded?: boolean };
 };
@@ -458,7 +405,7 @@ function RailButton({
 
   // Measured on the screen, so the label lines up wherever the button sits.
   function hold() {
-    ref.current?.measureInWindow((_x, y) => onHold({ key: labelKey, text: label, extra, y }));
+    ref.current?.measureInWindow((_x, y, _w, h) => onHold({ key: labelKey, text: label, extra, y, h }));
   }
 
   return (
@@ -469,7 +416,7 @@ function RailButton({
       delayLongPress={300}
       // On the web a mouse can just point at an icon to see its name.
       onHoverIn={hold}
-      onLayout={(event) => onRow(labelKey, event.nativeEvent.layout.y)}
+      onLayout={(event) => onRow(labelKey, event.nativeEvent.layout.y, event.nativeEvent.layout.height)}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={accessibilityState}
@@ -482,80 +429,58 @@ function RailButton({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  scrim: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(12,25,38,0.38)' },
+  // The page behind really steps back.
+  scrim: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(14,26,39,0.48)' },
   safe: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
-  zone: { flex: 1, paddingTop: FAB_BOTTOM + space.sm, justifyContent: 'center' },
-  // As tall as its buttons, never taller than the zone. As wide as the screen,
-  // so the tags and pareas beside the column are inside it and take taps on Android.
-  rail: { maxHeight: '100%' },
-  glass: {
+  zone: { flex: 1, paddingTop: FAB_BOTTOM + space.sm, paddingBottom: space.lg },
+  // As tall as the zone. As wide as the screen, so the names beside the
+  // column are inside it.
+  rail: { flex: 1 },
+  card: {
+    flex: 1,
     width: RAIL,
     marginLeft: RAIL_LEFT,
-    flexShrink: 1,
-    borderColor: 'rgba(255,255,255,0.95)',
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.22,
-    shadowRadius: 40,
-  },
-  body: { flexGrow: 0, flexShrink: 1, borderRadius: RAIL_RADIUS },
-  bodyContent: { paddingVertical: RAIL_PAD, alignItems: 'center', gap: GAP },
-  button: { width: BUTTON, height: BUTTON, alignItems: 'center', justifyContent: 'center' },
-  // A press sinks the button a little, like a real key.
-  pressed: { transform: [{ scale: 0.9 }] },
-  // The current parea: a rounded square in a white and an ink ring.
-  parea: {
-    width: BUTTON,
-    height: BUTTON,
-    borderRadius: KEY_RADIUS + 2,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pareaBadge: { top: -6, right: -7 },
-  more: {
-    position: 'absolute',
-    bottom: -5,
-    width: 18,
-    height: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: RAIL_RADIUS,
     backgroundColor: colors.surface,
     shadowColor: colors.ink,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.18,
+    shadowRadius: 40,
+    elevation: 12,
   },
-  add: {
-    width: BUTTON,
-    height: BUTTON,
-    borderRadius: radius.pill,
+  body: { flex: 1, borderRadius: RAIL_RADIUS },
+  bodyContent: { flexGrow: 1, paddingVertical: RAIL_PAD, alignItems: 'center', gap: GAP },
+  group: { alignItems: 'center', gap: 4 },
+  button: { alignItems: 'center', justifyContent: 'center' },
+  // A press sinks the button a little, like a real key.
+  pressed: { transform: [{ scale: 0.94 }] },
+
+  // Room for the ring around the parea you are in.
+  ring: { width: PAREA + 8, height: PAREA + 8, borderRadius: 20, borderWidth: 2, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
+  ringOn: { borderColor: colors.primary },
+  parea: { borderRadius: 16 },
+  pareaBadge: { top: -1, right: -2 },
+  add: { width: PAREA, height: PAREA, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.sunk },
+  sep: { width: 34, height: 1.5, backgroundColor: colors.border, marginVertical: 6 },
+  spacer: { flex: 1 },
+
+  tool: {
+    width: 56,
+    paddingTop: 7,
+    paddingBottom: 6,
+    borderRadius: 14,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: colors.borderStrong,
+    gap: 3,
   },
-  sep: { width: 26, height: 2, borderRadius: radius.pill, backgroundColor: colors.border, marginVertical: 5 },
-  key: {
-    width: BUTTON,
-    height: BUTTON,
-    borderRadius: KEY_RADIUS,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // The screen you are on: an ink key and the filled icon.
-  keyHere: { backgroundColor: colors.ink },
-  // The icon whose label is showing.
-  keyHeld: { backgroundColor: 'rgba(12,25,38,0.06)' },
-  toolBadge: { right: -4, top: -3 },
+  // The screen you are on: a soft blue key, blue words.
+  toolHere: { backgroundColor: colors.accentSoft },
+  toolText: { color: colors.textSoft, ...typo.semi, fontSize: 10.5 },
+  toolTextHere: { color: colors.accentInk },
+  toolDot: { position: 'absolute', top: 2, right: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger },
   soonDot: {
     position: 'absolute',
     right: 7,
-    top: 7,
+    top: 4,
     width: 8,
     height: 8,
     borderRadius: 4,
@@ -563,82 +488,38 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.surface,
   },
+  me: { borderRadius: 9 },
   badge: {
     position: 'absolute',
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    borderRadius: radius.pill,
+    minWidth: 19,
+    height: 19,
+    paddingHorizontal: 5,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.danger,
     borderWidth: 2,
     borderColor: colors.surface,
   },
-  badgeText: { color: '#FFFFFF', ...typo.display, fontSize: 10 },
-  // You: a white ring inside a blue one; sun when you are there.
-  me: { borderRadius: radius.pill, borderWidth: 2, borderColor: colors.primary },
-  meHere: { borderColor: sun },
-  side: { position: 'absolute', top: 1, right: 0, bottom: 0, left: RAIL_LEFT },
-  tag: {
+  badgeText: { color: '#FFFFFF', ...typo.mono, fontSize: 10.5 },
+
+  side: { position: 'absolute', top: 0, right: 0, bottom: 0, left: RAIL_LEFT + RAIL + 10 },
+  // The first few times: each parea's name on a white card beside it.
+  name: {
     position: 'absolute',
-    height: TAG_HEIGHT,
-    maxWidth: 200,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  // You are here: an ink tab coming out of the rail's edge.
-  hereTag: {
-    left: RAIL,
-    paddingLeft: space.sm,
-    paddingRight: 12,
-    borderTopRightRadius: radius.sm,
-    borderBottomRightRadius: radius.sm,
-    backgroundColor: colors.ink,
-  },
-  hereDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: sun },
-  hereText: { color: colors.onInk, ...typo.mono, fontWeight: '600', fontSize: textSize.caption, letterSpacing: 1.5 },
-  // The first few times: each icon's name on a small white pill.
-  word: {
-    left: RAIL + space.xs,
-    paddingHorizontal: space.sm,
-    borderRadius: radius.sm,
+    left: 0,
+    height: NAME_HEIGHT,
+    maxWidth: 220,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 14,
     backgroundColor: colors.surface,
-    shadowColor: colors.ink,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    elevation: 4,
   },
-  wordText: { color: colors.text, ...typo.bold, fontSize: textSize.body, flexShrink: 1 },
-  flyout: {
-    position: 'absolute',
-    left: RAIL + space.xs,
-    padding: space.sm,
-    borderRadius: 22,
-    backgroundColor: colors.surface,
-    shadowColor: colors.ink,
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.25,
-    shadowRadius: 30,
-    elevation: 10,
-  },
-  flyoutRow: { gap: space.xs },
-  cell: { width: FLYOUT_CELL, minHeight: BUTTON, alignItems: 'center', gap: space.xs, paddingVertical: 4 },
-  cellMono: { borderRadius: radius.pill, borderWidth: 2, borderColor: 'transparent', padding: 2 },
-  cellMonoOn: { borderColor: colors.ink },
-  cellBadge: { top: 0, right: 2 },
-  cellName: {
-    maxWidth: FLYOUT_CELL - 4,
-    color: colors.ink,
-    ...typo.mono,
-    fontWeight: '600',
-    fontSize: textSize.micro,
-    letterSpacing: 0.4,
-    textAlign: 'center',
-  },
+  nameText: { color: colors.text, ...typo.semi, fontSize: textSize.base },
   footer: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
     height: PLAN_BUTTON_SPACE,
     justifyContent: 'flex-end',
     alignItems: 'flex-end',

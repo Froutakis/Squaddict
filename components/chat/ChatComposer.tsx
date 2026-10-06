@@ -1,7 +1,18 @@
-import { useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Animated,
+  Easing,
+  Image,
+  Keyboard,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import type { LocalImage } from './messageRows';
 import { applyMention, matchMembers, mentionQuery } from './mentions';
 import type { Person } from '../../lib/people';
@@ -212,9 +223,6 @@ export default function ChatComposer({
 
   return (
     <View style={styles.bar}>
-      {/* The messages fade out into the composer. */}
-      <LinearGradient colors={[`${paper.bg}00`, paper.bg]} style={styles.fade} pointerEvents="none" />
-
       {picking ? (
         <View style={styles.picker}>
           <ScrollView
@@ -251,9 +259,9 @@ export default function ChatComposer({
         </View>
       ) : null}
 
-      {/* A white ticket: what it is about above a tear, the field below. */}
-      <View style={[styles.ticket, focused && styles.ticketFocused]}>
-        <View style={styles.ticketInner}>
+      {/* What it is about above a tear, then + | the field | send. */}
+      <View>
+        <View>
           {banners.length > 0 ? (
             <>
               {banners}
@@ -262,21 +270,30 @@ export default function ChatComposer({
           ) : null}
 
           <View style={styles.box}>
-            {onPickImage && !editing ? (
+            {onToggleTray && !editing ? (
               <Pressable
-                onPress={onPickImage}
+                onPress={toggleTray}
                 disabled={disabled}
                 accessibilityRole="button"
-                accessibilityLabel="Add a photo"
+                accessibilityLabel={trayOpen ? 'Close' : 'More: photo, plan, question'}
+                accessibilityState={{ expanded: trayOpen, disabled }}
                 style={function ({ pressed }) {
-                  return [styles.attach, pressed && styles.attachPressed];
+                  return [styles.attach, trayOpen && styles.attachOpen, pressed && styles.attachPressed];
                 }}
               >
-                <Ionicons name="image-outline" size={22} color={paper.inkSoft} />
+                <Animated.View
+                  style={{
+                    transform: [{ rotate: turn.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] }) }],
+                  }}
+                >
+                  <Ionicons name="add" size={22} color={trayOpen ? paper.onMine : paper.ink} />
+                </Animated.View>
               </Pressable>
             ) : null}
             <TextInput
-              style={[styles.input, (editing || !onPickImage) && styles.inputAlone]}
+              ref={inputRef}
+              autoFocus={autoFocus}
+              style={[styles.input, (editing || !onToggleTray) && styles.inputAlone]}
               value={text}
               selection={forcedCursor === null ? undefined : { start: forcedCursor, end: forcedCursor }}
               onChangeText={function (next) {
@@ -296,6 +313,7 @@ export default function ChatComposer({
               onKeyPress={handleKeyPress}
               onFocus={function () {
                 setFocused(true);
+                onFocusInput?.();
               }}
               onBlur={function () {
                 setFocused(false);
@@ -322,7 +340,7 @@ export default function ChatComposer({
                   <View style={[styles.send, canSend ? styles.sendReady : styles.sendIdle, pressed && canSend && styles.pressed]}>
                     <Ionicons
                       name={editing ? "checkmark" : "arrow-up"}
-                      size={18}
+                      size={19}
                       color={canSend ? paper.onMine : paper.inkSoft}
                     />
                   </View>
@@ -398,35 +416,25 @@ function Tear() {
 }
 
 const TARGET = 44;
-const SEND = 36;
+// The +, the field and send are one height.
+const FIELD = 42;
 const NOTCH = 14;
 const TEAR_DASHES = 60;
 
 const styles = StyleSheet.create({
+  // A white bar across the bottom, a line above it.
   bar: {
     paddingHorizontal: space.sm + 2,
-    paddingTop: space.xs,
+    paddingTop: space.sm,
     paddingBottom: space.sm,
-    backgroundColor: paper.bg,
-  },
-  fade: { position: 'absolute', left: 0, right: 0, bottom: '100%', height: 18 },
-  ticket: {
-    borderRadius: 22,
     backgroundColor: paper.surface,
-    borderWidth: 1,
-    borderColor: paper.line,
-    shadowColor: paper.ink,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 14,
-    elevation: 3,
+    borderTopWidth: 1,
+    borderTopColor: paper.line,
   },
-  ticketFocused: { borderColor: colors.borderStrong },
-  ticketInner: { borderRadius: 21, overflow: 'hidden' },
   box: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 2,
+    gap: 8,
   },
 
   banner: {
@@ -459,7 +467,7 @@ const styles = StyleSheet.create({
     width: NOTCH,
     height: NOTCH,
     borderRadius: NOTCH / 2,
-    backgroundColor: paper.bg,
+    backgroundColor: paper.surface,
     borderWidth: 1,
     borderColor: paper.line,
   },
@@ -468,14 +476,17 @@ const styles = StyleSheet.create({
   tearDashes: { flex: 1, flexDirection: 'row', gap: 4, height: 2, marginHorizontal: NOTCH, overflow: 'hidden' },
   tearDash: { width: 5, height: 2, borderRadius: 1, backgroundColor: colors.borderStrong },
 
+  // The + is a square, so only its icon turns into the ×.
   attach: {
-    width: TARGET,
-    height: TARGET,
-    borderRadius: TARGET / 2,
+    width: FIELD,
+    height: FIELD,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: paper.bg,
   },
   attachPressed: { backgroundColor: paper.surfaceAlt },
+  attachOpen: { backgroundColor: paper.mine },
   picker: {
     marginBottom: space.xs + 2,
     backgroundColor: paper.surface,
@@ -509,26 +520,28 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     maxHeight: 112,
-    minHeight: TARGET,
-    paddingTop: 11,
-    paddingBottom: 11,
-    paddingHorizontal: 4,
+    minHeight: FIELD,
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingHorizontal: 14,
+    borderRadius: FIELD / 2,
+    backgroundColor: paper.bg,
     color: paper.ink,
     ...typo.regular,
     fontSize: 16,
     lineHeight: 22,
     outlineStyle: 'none',
   } as any,
-  inputAlone: { paddingLeft: 14 },
-  sendTarget: { width: TARGET, height: TARGET, alignItems: 'center', justifyContent: 'center' },
+  inputAlone: {},
+  sendTarget: { width: FIELD, height: FIELD, alignItems: 'center', justifyContent: 'center' },
   send: {
-    width: SEND,
-    height: SEND,
-    borderRadius: radius.pill,
+    width: FIELD,
+    height: FIELD,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   sendReady: { backgroundColor: paper.accent },
-  sendIdle: { backgroundColor: paper.surfaceAlt },
+  sendIdle: { backgroundColor: paper.bg },
   pressed: { opacity: 0.85 },
 });

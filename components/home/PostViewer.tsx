@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   Animated,
   Image,
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
+  type GestureResponderEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   useWindowDimensions,
@@ -16,23 +20,28 @@ import {
 } from 'react-native';
 import { getEventPhotos, type EventPhoto } from '../../services/serviceEvents';
 import type { FeedPhoto } from '../../services/servicePhotoFeed';
-import {
-  QUICK_REACTION,
-  REACTIONS,
-  postRatio,
-  reactorsLine,
-  tallyReactions,
-  type PhotoReaction,
-} from '../../lib/photoFeed';
+import { QUICK_REACTION, REACTIONS, reactorsLine, tallyReactions, type PhotoReaction } from '../../lib/photoFeed';
 import { parseDateKey } from '../../lib/datetime';
+import type { Person } from '../../lib/people';
 import type { SignedMap } from '../chat/media';
 import Monogram from '../general/Monogram';
 import { REACTION_ICONS, REACTION_NAMES } from '../general/reactionIcons';
 import { whyLabel } from './PhotoPost';
 import { shortPlace } from './LineTicket';
-import { colors, layout, radius, space, textSize, tint, typo } from '../../theme';
+import { colors, layout, onPhoto, radius, scrim, space, textSize, tint, typo } from '../../theme';
 
 const DOUBLE_TAP_MS = 260;
+// The left and right edges of a photo step back and forward.
+const TAP_EDGE = 0.35;
+const THUMB = 52;
+// The thumbnails ride up over the photo by this much.
+const THUMB_LIFT = 30;
+const FACES_SHOWN = 5;
+// Past this many photos the bars on top get too thin to read.
+const BARS_MAX = 20;
+// The modal draws under Android's status bar and SafeAreaView adds nothing
+// there, so the top bar steps down by the bar's height itself.
+const STATUS_GAP = Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 0;
 
 type PostViewerProps = {
   // The post that is open; null when closed.
@@ -43,14 +52,14 @@ type PostViewerProps = {
   signPaths: (paths: string[]) => void;
   onImageError: (path: string) => void;
   onReact: (emoji: string) => void;
-  onShowReactors?: () => void;
   onShare?: () => void;
   onOpenGroup?: () => void;
   onClose: () => void;
 };
 
-// A night opened like a post: the parea on top, every photo of the night to
-// swipe through, then the reactions, and what the night was.
+// A night opened full screen: its photos edge to edge (tap the sides to step,
+// swipe, or jump from the thumbnails; double tap for a fire), who took each
+// one, and below them what the night was, who went and the reactions.
 export default function PostViewer({
   item,
   reactions,
@@ -59,7 +68,6 @@ export default function PostViewer({
   signPaths,
   onImageError,
   onReact,
-  onShowReactors,
   onShare,
   onOpenGroup,
   onClose,
@@ -68,7 +76,13 @@ export default function PostViewer({
   const width = Math.min(screen, layout.column);
   const [photos, setPhotos] = useState<EventPhoto[]>([]);
   const [page, setPage] = useState(0);
+  const [stageHeight, setStageHeight] = useState(0);
+  // Everyone who reacted, in a sheet inside the viewer (a sheet of the feed
+  // behind it would only show once the viewer closed).
+  const [reactorsOpen, setReactorsOpen] = useState(false);
+  const pager = useRef<ScrollView>(null);
   const lastTap = useRef(0);
+  const stepTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const burst = useRef(new Animated.Value(0)).current;
 
   // The post's own photos right away; the whole night once it has loaded,
@@ -78,6 +92,7 @@ export default function PostViewer({
     let cancelled = false;
     setPhotos([item.photo, ...item.more]);
     setPage(0);
+    setReactorsOpen(false);
 
     getEventPhotos(item.event.id)
       .then((all) => {
@@ -97,27 +112,44 @@ export default function PostViewer({
     if (paths !== '') signPaths(paths.split('|'));
   }, [paths, signPaths]);
 
+  useEffect(
+    () => () => {
+      if (stepTimer.current) clearTimeout(stepTimer.current);
+    },
+    [],
+  );
+
   if (!item) return null;
 
   const tally = tallyReactions(reactions, userId);
   const line = reactorsLine(reactions, userId);
   const why = whyLabel(item.reason, item.via);
   const place = shortPlace(item.event.placeLabel ?? item.event.location);
-  const height = width / postRatio(item.photo.width, item.photo.height);
-  const total = Math.max(item.photoCount, photos.length);
-  const meta = [dateLabel(item.event.date), place, item.wentCount > 1 ? `${item.wentCount} went` : null]
-    .filter(Boolean)
-    .join(' · ');
+  const day = dateLabel(item.event.date);
+  const meta = [day, item.event.startTime, place].filter(Boolean).join(' · ');
+  const went = item.event.going;
+  const wentCount = Math.max(item.wentCount, went.length);
+  const current = photos[page];
+  const takenBy = current ? personOf(went, current.userId, userId) : null;
+
+  function goTo(next: number) {
+    const target = Math.max(0, Math.min(photos.length - 1, next));
+    setPage(target);
+    pager.current?.scrollTo({ x: target * width, animated: true });
+  }
 
   function onScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
     const next = Math.round(event.nativeEvent.contentOffset.x / width);
     if (next !== page) setPage(next);
   }
 
-  function tapPhoto() {
+  // One tap on an edge steps; two quick taps anywhere leave a fire. The step
+  // waits a beat, so a double tap never also steps.
+  function tapPhoto(event: GestureResponderEvent) {
     const now = Date.now();
     if (now - lastTap.current < DOUBLE_TAP_MS) {
       lastTap.current = 0;
+      if (stepTimer.current) clearTimeout(stepTimer.current);
       burst.setValue(0);
       Animated.sequence([
         Animated.spring(burst, { toValue: 1, friction: 5, tension: 140, useNativeDriver: true }),
@@ -127,47 +159,31 @@ export default function PostViewer({
       return;
     }
     lastTap.current = now;
+    // Phones give locationX; the web's mouse event has offsetX instead.
+    const native = event.nativeEvent as typeof event.nativeEvent & { offsetX?: number };
+    const x = native.locationX ?? native.offsetX ?? width / 2;
+    if (stepTimer.current) clearTimeout(stepTimer.current);
+    stepTimer.current = setTimeout(() => {
+      if (x < width * TAP_EDGE) goTo(page - 1);
+      else if (x > width * (1 - TAP_EDGE)) goTo(page + 1);
+    }, DOUBLE_TAP_MS);
   }
 
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
-      {/* Clear of the notch and the status bar on an iPhone. */}
-      <SafeAreaView style={styles.screen}>
+    <Modal
+      visible
+      animationType="slide"
+      // Back closes the reactions sheet first, then the viewer.
+      onRequestClose={() => (reactorsOpen ? setReactorsOpen(false) : onClose())}
+      statusBarTranslucent
+    >
+      <View style={styles.screen}>
         <View style={[styles.column, { width }]}>
-          <View style={styles.bar}>
-            <Pressable
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel="Back to the memories"
-              hitSlop={10}
-              style={({ pressed }) => [styles.back, pressed && styles.pressed]}
-            >
-              <Ionicons name="chevron-back" size={24} color={colors.text} />
-            </Pressable>
-            <Pressable
-              onPress={onOpenGroup}
-              disabled={!onOpenGroup}
-              accessibilityRole={onOpenGroup ? 'button' : undefined}
-              accessibilityLabel={onOpenGroup ? `Open ${item.group.name}` : undefined}
-              style={({ pressed }) => [styles.who, pressed && onOpenGroup && styles.pressed]}
-            >
-              <Monogram name={item.group.name} uri={item.group.avatarUrl} size={34} style={styles.avatar} />
-              <View style={styles.whoText}>
-                <Text style={styles.groupName} numberOfLines={1}>
-                  {item.group.name}
-                </Text>
-                {place ? (
-                  <Text style={styles.place} numberOfLines={1}>
-                    {place}
-                  </Text>
-                ) : null}
-              </View>
-            </Pressable>
-          </View>
-
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollBody}>
-            <View style={{ width, height }}>
+          {/* The photos, edge to edge. */}
+          <View style={styles.stage} onLayout={(event) => setStageHeight(event.nativeEvent.layout.height)}>
+            {stageHeight > 0 ? (
               <ScrollView
+                ref={pager}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
@@ -183,7 +199,7 @@ export default function PostViewer({
                       accessibilityRole="image"
                       accessibilityLabel={`Photo ${i + 1} of ${photos.length} from ${item.event.title}`}
                       accessibilityHint="Double tap to leave a fire"
-                      style={[styles.photo, { width, height }]}
+                      style={[styles.photo, { width, height: stageHeight }]}
                     >
                       {url ? (
                         <Image
@@ -197,34 +213,139 @@ export default function PostViewer({
                   );
                 })}
               </ScrollView>
+            ) : null}
 
-              {photos.length > 1 ? (
-                <Text style={styles.counter}>
-                  {page + 1}/{photos.length}
-                </Text>
-              ) : null}
-
-              <View style={styles.burstWrap} pointerEvents="none">
-                <Animated.View
-                  style={{
-                    opacity: burst,
-                    transform: [{ scale: burst.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }],
-                  }}
+            {/* The top: where you are in the night, back, what it is, share. */}
+            <LinearGradient
+              colors={[scrim.photoTop, scrim.photoClear]}
+              style={styles.topShade}
+              pointerEvents="none"
+            />
+            <SafeAreaView style={styles.top} pointerEvents="box-none">
+              {photos.length > 1 && photos.length <= BARS_MAX ? (
+                <View
+                  style={styles.bars}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
                 >
-                  <Ionicons name="flame" size={110} color={colors.danger} />
-                </Animated.View>
+                  {photos.map((photo, i) => (
+                    <View key={photo.id} style={[styles.barSeg, i <= page && styles.barSegOn]} />
+                  ))}
+                </View>
+              ) : null}
+              <View style={styles.topRow}>
+                <Pressable
+                  onPress={onClose}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to the memories"
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.round, pressed && styles.pressed]}
+                >
+                  <Ionicons name="chevron-back" size={22} color={colors.onInk} />
+                </Pressable>
+                <Pressable
+                  onPress={onOpenGroup}
+                  disabled={!onOpenGroup}
+                  accessibilityRole={onOpenGroup ? 'button' : undefined}
+                  accessibilityLabel={onOpenGroup ? `Open ${item.group.name}` : undefined}
+                  style={({ pressed }) => [styles.topText, pressed && onOpenGroup && styles.pressed]}
+                >
+                  <Text style={styles.topTitle} numberOfLines={1}>
+                    {item.event.title}
+                  </Text>
+                  <Text style={styles.topSub} numberOfLines={1}>
+                    {[item.group.name, shortDate(item.event.date)].filter(Boolean).join(' · ')}
+                  </Text>
+                </Pressable>
+                {onShare ? (
+                  <Pressable
+                    onPress={onShare}
+                    accessibilityRole="button"
+                    accessibilityLabel="Share this night as a ticket"
+                    hitSlop={8}
+                    style={({ pressed }) => [styles.round, pressed && styles.pressed]}
+                  >
+                    <Ionicons name="share-outline" size={19} color={colors.onInk} />
+                  </Pressable>
+                ) : null}
               </View>
-            </View>
+            </SafeAreaView>
 
-            {photos.length > 1 ? (
-              <View style={styles.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                {photos.slice(0, 12).map((photo, i) => (
-                  <View key={photo.id} style={[styles.dot, i === page && styles.dotOn]} />
-                ))}
+            {/* Who took this one, and when. */}
+            {takenBy && current ? (
+              <View style={styles.by} pointerEvents="none">
+                <Monogram name={takenBy.name} uri={takenBy.avatarUrl} size={22} />
+                <Text style={styles.byText} numberOfLines={1}>
+                  {takenBy.name} · {clock(current.createdAt)}
+                </Text>
               </View>
             ) : null}
 
-            <View style={styles.body}>
+            <View style={styles.burstWrap} pointerEvents="none">
+              <Animated.View
+                style={{
+                  opacity: burst,
+                  transform: [{ scale: burst.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }],
+                }}
+              >
+                <Ionicons name="flame" size={110} color={colors.danger} />
+              </Animated.View>
+            </View>
+          </View>
+
+          {/* What the night was, under the photos. */}
+          <SafeAreaView style={styles.panel}>
+            {photos.length > 1 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.thumbs}
+                contentContainerStyle={styles.thumbsInner}
+              >
+                {photos.map((photo, i) => {
+                  const url = signed[photo.path]?.url;
+                  return (
+                    <Pressable
+                      key={photo.id}
+                      onPress={() => goTo(i)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Photo ${i + 1} of ${photos.length}`}
+                      accessibilityState={{ selected: i === page }}
+                      style={[styles.thumb, i === page && styles.thumbOn]}
+                    >
+                      {url ? <Image source={{ uri: url }} style={styles.thumbImage} resizeMode="cover" /> : null}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            ) : null}
+
+            <ScrollView style={styles.panelScroll} contentContainerStyle={styles.panelBody}>
+              <View style={styles.titleRow}>
+                <Text style={styles.title}>{item.event.title}</Text>
+                {why ? <Text style={styles.why}>{why}</Text> : null}
+              </View>
+              {meta ? <Text style={styles.meta}>{meta}</Text> : null}
+
+              {wentCount > 0 ? (
+                <View style={styles.went}>
+                  {went.length > 0 ? (
+                    <View style={styles.faces}>
+                      {went.slice(0, FACES_SHOWN).map((person, i) => (
+                        <View key={person.id} style={[styles.face, i > 0 && styles.faceOver]}>
+                          <Monogram name={person.name} uri={person.avatarUrl} size={24} />
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                  <Text style={styles.wentText} numberOfLines={1}>
+                    {wentLine(went, wentCount, userId)}
+                  </Text>
+                </View>
+              ) : null}
+
+              {item.event.description ? <Text style={styles.description}>{item.event.description}</Text> : null}
+
               <View style={styles.actions}>
                 {REACTIONS.map((emoji) => {
                   const count = tally.counts[emoji] ?? 0;
@@ -249,96 +370,155 @@ export default function PostViewer({
                     </Pressable>
                   );
                 })}
-{onShare ? (
-                <Pressable
-                  onPress={onShare}
-                  accessibilityRole="button"
-                  accessibilityLabel="Share this night as a ticket"
-                  style={({ pressed }) => [styles.share, pressed && styles.pillPressed]}
-                >
-                  <Ionicons name="share-outline" size={16} color={colors.onInk} />
-                  <Text style={styles.shareText}>Share</Text>
-                </Pressable>
-                ) : null}
               </View>
 
               {line ? (
                 <Pressable
-                  onPress={onShowReactors}
-                  disabled={!onShowReactors}
-                  accessibilityRole={onShowReactors ? 'button' : 'text'}
+                  onPress={() => setReactorsOpen(true)}
+                  accessibilityRole="button"
                   accessibilityLabel={`Reactions from ${line}. See everyone.`}
                   hitSlop={6}
                 >
                   <Text style={styles.reactors} numberOfLines={2}>
-                    Reactions from <Text style={styles.strong}>{line}</Text>
+                    <Text style={styles.strong}>{capitalize(line)}</Text> reacted
+                    <Text style={styles.seeAll}> · See all</Text>
                   </Text>
                 </Pressable>
               ) : (
                 <Text style={styles.quiet}>Double tap a photo to leave the first fire.</Text>
               )}
-
-              <View style={styles.titleRow}>
-                <Text style={styles.title}>{item.event.title}</Text>
-                {why ? <Text style={styles.why}>{why}</Text> : null}
-              </View>
-              <Text style={styles.meta}>{meta}</Text>
-              {item.event.description ? <Text style={styles.description}>{item.event.description}</Text> : null}
-              <Text style={styles.count2}>
-                {total} {total === 1 ? 'photo' : 'photos'} from the night
-              </Text>
-            </View>
-          </ScrollView>
+            </ScrollView>
+          </SafeAreaView>
         </View>
-      </SafeAreaView>
+
+        {reactorsOpen ? (
+          <View style={styles.sheetLayer}>
+            <Pressable
+              style={styles.sheetBackdrop}
+              onPress={() => setReactorsOpen(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Close reactions"
+            />
+            <SafeAreaView style={[styles.sheet, { width }]}>
+              {/* Padding inside: an iPhone's SafeAreaView sets its own. */}
+              <View style={styles.sheetInner}>
+              <View style={styles.grabber} />
+              <Text style={styles.sheetTitle}>Reactions</Text>
+              <ScrollView contentContainerStyle={styles.sheetList}>
+                {[...reactions].reverse().map((one) => {
+                  const icons = REACTION_ICONS[one.emoji as keyof typeof REACTION_ICONS];
+                  return (
+                    <View key={one.userId} style={styles.reactor}>
+                      <Monogram name={one.name} uri={one.avatarUrl} size={40} />
+                      <View style={styles.reactorText}>
+                        <Text style={styles.reactorName} numberOfLines={1}>
+                          {one.userId === userId ? 'You' : one.name}
+                        </Text>
+                        {one.groupName ? (
+                          <Text style={styles.reactorSquad} numberOfLines={1}>
+                            {one.groupName}
+                          </Text>
+                        ) : null}
+                      </View>
+                      {icons ? (
+                        <Ionicons name={icons[1]} size={20} color={colors.danger} />
+                      ) : (
+                        <Text style={styles.reactorEmoji}>{one.emoji}</Text>
+                      )}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+              </View>
+            </SafeAreaView>
+          </View>
+        ) : null}
+      </View>
     </Modal>
   );
+}
+
+// The member who took a photo, when they are among those who went.
+function personOf(people: Person[], id: string, userId: string): Person | null {
+  const found = people.find((person) => person.id === id);
+  if (!found) return null;
+  return id === userId ? { ...found, name: 'You' } : { ...found, name: firstName(found.name) };
+}
+
+// "Μαρία, Νίκος +3 went"
+function wentLine(people: Person[], count: number, userId: string): string {
+  const named = people.slice(0, 2).map((person) => (person.id === userId ? 'You' : firstName(person.name)));
+  if (named.length === 0) return `${count} went`;
+  const rest = count - named.length;
+  return `${named.join(', ')}${rest > 0 ? ` +${rest}` : ''} went`;
+}
+
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] || name;
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+// "22:14"
+function clock(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 // "Friday 2 October"
 function dateLabel(dateStr: string): string | null {
   const d = parseDateKey(dateStr);
   if (!d) return null;
-  return d.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', '');
+  return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', '');
+}
+
+// "Sun 27 Sep"
+function shortDate(dateStr: string): string | null {
+  const d = parseDateKey(dateStr);
+  if (!d) return null;
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '');
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, alignItems: 'center', backgroundColor: colors.surface },
+  screen: { flex: 1, alignItems: 'center', backgroundColor: onPhoto.black },
   column: { flex: 1 },
   pressed: { opacity: 0.6 },
 
-  bar: {
+  stage: { flex: 1, backgroundColor: onPhoto.black },
+  photo: { backgroundColor: colors.ink, overflow: 'hidden' },
+  topShade: { position: 'absolute', top: 0, left: 0, right: 0, height: 150 },
+  top: { position: 'absolute', top: 0, left: 0, right: 0, paddingTop: STATUS_GAP },
+  bars: { flexDirection: 'row', gap: 4, paddingHorizontal: space.md, paddingTop: space.sm },
+  barSeg: { flex: 1, height: 3, borderRadius: 2, backgroundColor: onPhoto.track },
+  barSegOn: { backgroundColor: onPhoto.text },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.sm + 2,
+    paddingTop: space.sm,
+  },
+  round: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: onPhoto.glass },
+  topText: { flex: 1, minWidth: 0, minHeight: 44, justifyContent: 'center' },
+  topTitle: { color: colors.onInk, ...typo.display, fontSize: textSize.base },
+  topSub: { color: onPhoto.soft, ...typo.medium, fontSize: textSize.small },
+  by: {
+    position: 'absolute',
+    left: space.md,
+    bottom: THUMB_LIFT + space.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,
-    minHeight: 56,
-    paddingHorizontal: space.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  back: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  who: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 44 },
-  avatar: { borderRadius: 11 },
-  whoText: { flex: 1, minWidth: 0 },
-  groupName: { color: colors.text, ...typo.display, fontSize: textSize.base },
-  place: { color: colors.textSoft, ...typo.medium, fontSize: textSize.small },
-
-  scroll: { flex: 1 },
-  scrollBody: { paddingBottom: space.xl },
-  photo: { backgroundColor: colors.surfaceAlt, overflow: 'hidden' },
-  counter: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    overflow: 'hidden',
-    color: '#FFFFFF',
-    backgroundColor: 'rgba(12,25,38,0.55)',
-    ...typo.semi,
-    fontSize: textSize.small,
-    paddingHorizontal: 9,
+    maxWidth: '70%',
     paddingVertical: 4,
+    paddingLeft: 4,
+    paddingRight: space.sm,
     borderRadius: radius.pill,
+    backgroundColor: scrim.inkStrong,
   },
+  byText: { flexShrink: 1, color: colors.onInk, ...typo.semi, fontSize: textSize.small },
   burstWrap: {
     position: 'absolute',
     top: 0,
@@ -348,12 +528,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 4, paddingTop: space.sm },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.borderStrong },
-  dotOn: { backgroundColor: colors.primary },
 
-  body: { paddingHorizontal: space.md, paddingTop: space.sm, gap: space.xs },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  panel: {
+    marginTop: -22,
+    maxHeight: '46%',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    backgroundColor: colors.surface,
+  },
+  thumbs: { flexGrow: 0, marginTop: -THUMB_LIFT },
+  thumbsInner: { gap: space.xs, paddingHorizontal: space.md },
+  thumb: {
+    width: THUMB,
+    height: THUMB,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
+  },
+  thumbOn: { borderColor: colors.primary },
+  thumbImage: { width: '100%', height: '100%' },
+  panelScroll: { flexGrow: 0 },
+  panelBody: { paddingHorizontal: space.md, paddingTop: space.sm, paddingBottom: space.lg, gap: space.xs },
+
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.xs },
+  title: { flex: 1, color: colors.text, ...typo.display, fontSize: textSize.heading, letterSpacing: -0.3 },
+  why: {
+    overflow: 'hidden',
+    marginTop: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: '#E8EDFD',
+    color: colors.primary,
+    ...typo.bold,
+    fontSize: textSize.caption,
+  },
+  meta: { color: colors.textSoft, ...typo.semi, fontSize: textSize.body },
+  went: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.xxs },
+  faces: { flexDirection: 'row' },
+  face: { borderRadius: 14, borderWidth: 2, borderColor: colors.surface },
+  faceOver: { marginLeft: -8 },
+  wentText: { flexShrink: 1, color: colors.textSoft, ...typo.medium, fontSize: textSize.body },
+  description: { color: colors.text, ...typo.regular, fontSize: textSize.base, lineHeight: 20 },
+
+  actions: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.sm },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -371,35 +591,26 @@ const styles = StyleSheet.create({
   pillPressed: { transform: [{ scale: 0.94 }] },
   count: { color: colors.text, ...typo.bold, fontSize: textSize.body },
   countMine: { color: colors.danger, ...typo.display },
-  share: {
-    marginLeft: 'auto',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    height: 40,
-    paddingHorizontal: 14,
-    borderRadius: radius.pill,
-    backgroundColor: colors.ink,
-  },
-  shareText: { color: colors.onInk, ...typo.bold, fontSize: textSize.body },
-  reactors: { color: colors.text, ...typo.regular, fontSize: textSize.body },
-  strong: { ...typo.display },
-  quiet: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body },
+  reactors: { color: colors.textSoft, ...typo.regular, fontSize: textSize.body, marginTop: space.xxs },
+  strong: { color: colors.text, ...typo.display },
+  seeAll: { color: colors.primary, ...typo.bold },
+  quiet: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body, marginTop: space.xxs },
 
-  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.xs, marginTop: space.xs },
-  title: { flex: 1, color: colors.text, ...typo.display, fontSize: textSize.heading, letterSpacing: -0.3 },
-  why: {
-    overflow: 'hidden',
-    marginTop: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-    backgroundColor: '#E8EDFD',
-    color: colors.primary,
-    ...typo.bold,
-    fontSize: textSize.caption,
+  sheetLayer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'flex-end' },
+  sheetBackdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: scrim.sheet },
+  sheet: {
+    maxHeight: '70%',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    backgroundColor: colors.surface,
   },
-  meta: { color: colors.textSoft, ...typo.semi, fontSize: textSize.body },
-  description: { color: colors.text, ...typo.regular, fontSize: textSize.base, lineHeight: 20, marginTop: space.xxs },
-  count2: { color: colors.textFaint, ...typo.medium, fontSize: textSize.small, marginTop: space.xxs },
+  sheetInner: { flexShrink: 1, paddingHorizontal: space.md, paddingTop: space.sm },
+  grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong },
+  sheetTitle: { color: colors.text, ...typo.display, fontSize: textSize.lead, marginTop: space.sm, marginBottom: space.xs },
+  sheetList: { paddingBottom: space.lg },
+  reactor: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: space.xs + 2 },
+  reactorText: { flex: 1, minWidth: 0 },
+  reactorName: { color: colors.text, ...typo.bold, fontSize: textSize.base },
+  reactorSquad: { color: colors.textSoft, ...typo.medium, fontSize: textSize.small },
+  reactorEmoji: { fontSize: 20 },
 });

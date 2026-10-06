@@ -19,6 +19,10 @@ import {
 import ChatComposer from '../components/chat/ChatComposer';
 import ChatTray, { trayHeight } from '../components/chat/ChatTray';
 import ChatHeader from '../components/chat/ChatHeader';
+import TicketBackdrop from '../components/general/TicketBackdrop';
+import ChatVotesBar, { type ChatFilter } from '../components/chat/ChatVotesBar';
+import VoteCard from '../components/votes/VoteCard';
+import { voteQuestion } from '../lib/squadVote';
 import MessageBubble, { DateSeparator } from '../components/chat/MessageBubble';
 import MessageMenu from '../components/chat/MessageMenu';
 import {
@@ -103,15 +107,42 @@ import {
 } from '../services/serviceMedia';
 import { closeGroupChat, sendCardsChanged, sendTyping, startChat } from '../services/serviceRealtime';
 import { getUserById } from '../services/serviceUser';
-import { layout, paper, typo, space, textSize } from '../theme';
+import { colors, layout, paper, scrim, typo, space, textSize } from '../theme';
 import GroupScreen from './GroupScreen';
 import PlanCard from '../components/chat/PlanCard';
-import ChatEvent, { PlanDraftTicket } from '../components/chat/ChatEvent';
+import ChatEvent from '../components/chat/ChatEvent';
 import { pickChatEvents } from '../components/chat/chatEvents';
 import { useChatEvents } from '../components/chat/useChatEvents';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
-import { clearRsvp, setRsvp, type MyEvent, type RsvpStatus } from '../services/serviceEvents';
+import {
+  clearRsvp,
+  getMyAnswers,
+  getMyEvents,
+  setRsvp,
+  type MyEvent,
+  type RsvpStatus,
+} from '../services/serviceEvents';
 import { getSuggestions, type PlanSuggestion } from '../services/serviceSuggestions';
+import EventFormSheet from '../components/events/EventFormSheet';
+import NewVoteSheet, { type Step as VoteStep, type VoteStart } from '../components/votes/NewVoteSheet';
+import { eventWindow, isHappeningNow, keyOf, parseLocal } from '../lib/datetime';
+import ChatVoteCard from '../components/chat/ChatVoteCard';
+import { castOption, castVote, getChatVotes, getVoteMessageId, type SquadVote } from '../services/serviceVotes';
+import { errorText } from '../lib/postgres';
+import { voteEventToSheet } from '../components/votes/VoteCard';
+import { features } from '../lib/features';
+import OnMyWayCard from '../components/chat/OnMyWayCard';
+import ChatEmpty from '../components/chat/ChatEmpty';
+import OnMyWaySheet from '../components/chat/OnMyWaySheet';
+import {
+  getOnMyWay,
+  openLiveMap,
+  stopOnMyWay,
+  type LivePerson,
+  type OnMyWay,
+} from '../services/serviceLiveLocation';
+import { useLiveLocations } from '../components/events/useLiveLocations';
+
 import {
   clearPhotoReaction,
   getPhotoReactions,
@@ -119,12 +150,27 @@ import {
   type FeedPhoto,
 } from '../services/servicePhotoFeed';
 import { applyReaction, type PhotoReaction } from '../lib/photoFeed';
-import { keyOf } from '../lib/datetime';
 import PostViewer from '../components/home/PostViewer';
 import { useSignedImages } from '../components/home/useSignedImages';
 
-// Three ways to start an empty chat, one tap each.
-const STARTERS = ["Who's out this week?", 'Drinks Friday?', 'Photos from last time?'];
+// What a vote asks, in a line: the plan's title, or its question.
+function voteTitle(vote: SquadVote | undefined): string | null {
+  if (!vote) return null;
+  if (vote.target.type === 'plan') return vote.target.event.title;
+  return voteQuestion(vote.kind, vote.targetName);
+}
+
+// Long enough for one sheet to slide away before the next one opens.
+const SHEET_SWAP_MS = 350;
+
+// The text of the messages that carry a card (chat_cards.sql), so the chat
+// knows which ones to read the card for.
+const VOTE_PREFIXES = ['Put to the parea: ', 'Asks the parea: ', 'Puts to a vote: '];
+const ON_MY_WAY_PREFIX = 'On my way to ';
+
+function carriesVote(content: string): boolean {
+  return VOTE_PREFIXES.some((prefix) => content.startsWith(prefix));
+}
 
 const CATCH_UP_LIMIT = 300;
 
@@ -136,8 +182,10 @@ type GroupChatScreenProps = {
   // When set, leaving the thread goes back to where it was opened from,
   // instead of to the list of squads.
   onExit?: () => void;
-  // Opens the Votes page (votes start only there).
-  onOpenVotes: (groupId?: string) => void;
+  // Votes live in the chat: 'votes' opens it narrowed to them.
+  initialFilter?: ChatFilter;
+  // A vote another screen asked for (Invite, Follow): its sheet opens at once.
+  initialVoteStart?: VoteStart;
   // Opens New plan for this squad. Without it the empty chat offers no plan.
   onNewPlan?: (groupId: string) => void;
 };
@@ -148,7 +196,8 @@ export default function GroupChatScreen({
   onBack,
   onThreadChange,
   onExit,
-  onOpenVotes,
+  initialFilter = 'all',
+  initialVoteStart,
   onNewPlan,
 }: GroupChatScreenProps) {
   const [groups, setGroups] = useState<Group[]>([]);
@@ -190,6 +239,41 @@ export default function GroupChatScreen({
   const [openPlan, setOpenPlan] = useState<SheetEvent | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [groupScreen, setGroupScreen] = useState(false);
+  // All of the chat, or only its votes (what the Votes page was).
+  const [filter, setFilter] = useState<ChatFilter>(initialFilter);
+  // A pinned vote whose card is not loaded in the chat yet, answered in a sheet.
+  const [pinnedVote, setPinnedVote] = useState<SquadVote | null>(null);
+  const [pinnedBusy, setPinnedBusy] = useState(false);
+  const [pinnedError, setPinnedError] = useState<string | null>(null);
+  // The parea a follow / unfollow vote is about, opened from its card.
+  const [aboutGroup, setAboutGroup] = useState<Group | null>(null);
+  const listRef = useRef<FlatList<Row>>(null);
+  // The talk under a vote: the messages that reply to its card.
+  const [repliesFor, setRepliesFor] = useState<ChatMessage | null>(null);
+  // The + tray, in the keyboard's place, and what it opens.
+  const [trayOpen, setTrayOpen] = useState(false);
+  const [planFormOpen, setPlanFormOpen] = useState(false);
+  // The new-vote sheet, open at this step (the + and the empty chat start votes).
+  const [voteStep, setVoteStep] = useState<VoteStep | null>(initialVoteStart?.step ?? null);
+  // The parea a follow / unfollow vote is about, when it came picked already.
+  const [votePick, setVotePick] = useState<{ id: string; name: string } | null>(initialVoteStart?.pick ?? null);
+  // Votes posted in this chat, by the message that carries each card, and
+  // your answer on the plans the passed ones made.
+  const [chatVotes, setChatVotes] = useState<Record<string, SquadVote>>({});
+  const [answers, setAnswers] = useState<Record<string, RsvpStatus>>({});
+  const [cardSaving, setCardSaving] = useState<string | null>(null);
+  const [justPassed, setJustPassed] = useState<Record<string, boolean>>({});
+  // This parea's plans (for tonight's On my way, and the empty chat), and
+  // the "on my way" cards by their message.
+  const [groupPlans, setGroupPlans] = useState<MyEvent[]>([]);
+  const [onMyWay, setOnMyWay] = useState<Record<string, OnMyWay>>({});
+  const [wayFor, setWayFor] = useState<MyEvent | null>(null);
+  const [watchEventId, setWatchEventId] = useState<string | null>(null);
+  const [watchedPeople, setWatchedPeople] = useState<LivePerson[]>([]);
+  // Text put in the message field for you ("Who's in tonight?"); a new nonce
+  // starts the field again with it.
+  const [prefill, setPrefill] = useState({ text: '', nonce: 0 });
+  const { height: windowHeight } = useWindowDimensions();
   // The parea's plans, votes and memories, shown in the chat as tickets.
   const chatEvents = useChatEvents(activeId, user.id);
   const [eventSaving, setEventSaving] = useState<string | null>(null);
@@ -992,11 +1076,16 @@ export default function GroupChatScreen({
         return [];
       }
       const now = new Date();
+      // A vote with its own card in the chat (and the plan it made) shows
+      // there, not twice.
+      const carded = Object.values(chatVotes);
+      const cardedVotes = new Set(carded.map((vote) => vote.id));
+      const cardedPlans = new Set(carded.map((vote) => vote.payload.event_id).filter(Boolean));
       return pickChatEvents({
         groupId: activeId,
-        plans: chatEvents.plans,
-        openVotes: chatEvents.openVotes,
-        decidedVotes: chatEvents.decidedVotes,
+        plans: chatEvents.plans.filter((plan) => !cardedPlans.has(plan.id)),
+        openVotes: chatEvents.openVotes.filter((vote) => !cardedVotes.has(vote.id)),
+        decidedVotes: chatEvents.decidedVotes.filter((vote) => !cardedVotes.has(vote.id)),
         memories: chatEvents.memories,
         since: hasMore ? oldestLoaded : null,
         now,
@@ -1011,6 +1100,7 @@ export default function GroupChatScreen({
       chatEvents.openVotes,
       chatEvents.decidedVotes,
       chatEvents.memories,
+      chatVotes,
     ],
   );
 
@@ -1031,12 +1121,128 @@ export default function GroupChatScreen({
     if (memoryPaths !== '') signPhotos(memoryPaths.split('|'));
   }, [memoryPaths, signPhotos]);
 
+  // The Votes tab: the vote cards and vote tickets only, each day's date kept
+  // above the first one left.
+  const shownRows = useMemo(
+    function () {
+      if (filter === 'all') return rows;
+      const kept: Row[] = [];
+      let day: Row | null = null;
+      for (const row of rows) {
+        if (row.kind === 'date') {
+          day = row;
+          continue;
+        }
+        const isVote =
+          (row.kind === 'message' && chatVotes[row.message.id] !== undefined) ||
+          (row.kind === 'event' && row.event.kind === 'vote');
+        if (!isVote) continue;
+        if (day) {
+          kept.push(day);
+          day = null;
+        }
+        kept.push(row);
+      }
+      return kept;
+    },
+    [rows, filter, chatVotes],
+  );
+
   const invertedRows = useMemo(
     function () {
-      return rows.slice().reverse();
+      return shownRows.slice().reverse();
     },
-    [rows],
+    [shownRows],
   );
+
+  // How many messages answer each one, for "2 replies" under a vote.
+  const repliesTo = useMemo(
+    function () {
+      const byMessage: Record<string, ChatMessage[]> = {};
+      for (const message of messages) {
+        if (!message.replyTo || message.deletedAt) continue;
+        (byMessage[message.replyTo] ??= []).push(message);
+      }
+      return byMessage;
+    },
+    [messages],
+  );
+
+  // The parea's open votes, pinned above the chat, newest first.
+  const openVotes = useMemo(
+    function () {
+      return chatEvents.openVotes
+        .filter((vote) => vote.groupId === activeId && vote.status === 'open')
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+    },
+    [chatEvents.openVotes, activeId],
+  );
+
+  const filterFor = useRef(activeId);
+  useEffect(() => {
+    if (filterFor.current === activeId) return;
+    filterFor.current = activeId;
+    setFilter('all');
+  }, [activeId]);
+
+  function showVotes() {
+    setGroupScreen(false);
+    setFilter('votes');
+  }
+
+  // What a vote is about: the parea to follow, or the plan it made.
+  function voteOpener(vote: SquadVote): (() => void) | undefined {
+    const target = vote.target;
+    if (target.type === 'squad') {
+      return function () {
+        setAboutGroup(target.group);
+      };
+    }
+    if (target.type === 'plan' && target.created) {
+      return function () {
+        setOpenPlan(voteEventToSheet(target.event));
+      };
+    }
+    return undefined;
+  }
+
+  // A pinned vote: to its card when it is loaded, else into a sheet.
+  function jumpToVote(vote: SquadVote) {
+    const index = invertedRows.findIndex(
+      (row) =>
+        (row.kind === 'message' && chatVotes[row.message.id]?.id === vote.id) ||
+        (row.kind === 'event' && row.event.kind === 'vote' && row.event.vote.id === vote.id),
+    );
+    if (index === -1) {
+      setPinnedError(null);
+      setPinnedVote(vote);
+      return;
+    }
+    listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
+  }
+
+  async function answerPinned(choice: { approve: boolean } | { optionId: string }) {
+    if (!pinnedVote || pinnedBusy) return;
+    setPinnedBusy(true);
+    setPinnedError(null);
+    const voteId = pinnedVote.id;
+    try {
+      if ('approve' in choice) await castVote(voteId, choice.approve);
+      else await castOption(voteId, choice.optionId);
+      setPinnedVote(null);
+      chatEvents.reload();
+      // Its card, wherever it is loaded, reads the new count.
+      const messageId = await getVoteMessageId(voteId);
+      if (messageId) {
+        loadChatVotes([messageId]);
+        cardsChanged([messageId]);
+      }
+    } catch (problem) {
+      setPinnedError(errorText(problem, 'Could not save your vote. Try again.'));
+    } finally {
+      setPinnedBusy(false);
+    }
+  }
 
   // A suggested plan's message reads "Suggests: …" (suggest_plan): when one
   // comes in, the cards are read again. Without plans_by_vote.sql there are
@@ -1364,9 +1570,13 @@ export default function GroupChatScreen({
   );
 
   // Back, Android's back button and Esc on the web: a reply or an edit is
-  // let go first, then the chat closes.
+  // let go first, then the tray, then the Votes tab, then the chat closes.
   const backRef = useRef<() => boolean>(() => false);
   backRef.current = function back() {
+    if (aboutGroup) {
+      setAboutGroup(null);
+      return true;
+    }
     if (groupScreen) {
       setGroupScreen(false);
       return true;
@@ -1374,6 +1584,14 @@ export default function GroupChatScreen({
     if (editing || replyingTo) {
       setEditing(null);
       setReplyingTo(null);
+      return true;
+    }
+    if (trayOpen) {
+      setTrayOpen(false);
+      return true;
+    }
+    if (filter === 'votes') {
+      setFilter('all');
       return true;
     }
     if (activeId !== null || onExit) {
@@ -1385,7 +1603,16 @@ export default function GroupChatScreen({
   // Esc that a sheet or the photo viewer is open for is theirs, not ours.
   const overlayOpenRef = useRef(false);
   overlayOpenRef.current =
-    menuFor !== null || viewing !== null || searchOpen || openPlan !== null || openMemory !== null;
+    menuFor !== null ||
+    viewing !== null ||
+    searchOpen ||
+    openPlan !== null ||
+    openMemory !== null ||
+    repliesFor !== null ||
+    pinnedVote !== null ||
+    voteStep !== null ||
+    planFormOpen ||
+    wayFor !== null;
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', function () {
@@ -1463,6 +1690,36 @@ export default function GroupChatScreen({
       setPlanError('Could not save your answer. Try again.');
     } finally {
       setPlanSaving(null);
+    }
+  }
+
+  // I'm in / Pass on the next plan, from the empty chat.
+  async function answerNextPlan(plan: MyEvent, status: RsvpStatus | null) {
+    setPlanError(null);
+    setGroupPlans(function (prev) {
+      return prev.map((event) => (event.id === plan.id ? { ...event, myStatus: status ?? undefined } : event));
+    });
+    try {
+      if (status) await setRsvp(plan.id, status);
+      else await clearRsvp(plan.id);
+    } catch {
+      setPlanError('Could not save your answer. Try again.');
+    }
+    loadGroupPlans();
+  }
+
+  async function stopSharing(messageId: string) {
+    if (cardSaving) return;
+    setCardSaving(messageId);
+    setPlanError(null);
+    try {
+      await stopOnMyWay(messageId);
+      await loadOnMyWay([messageId]);
+      cardsChanged([messageId]);
+    } catch (problem) {
+      setPlanError(errorText(problem, 'Could not stop sharing. Try again.'));
+    } finally {
+      setCardSaving(null);
     }
   }
 
@@ -1552,9 +1809,7 @@ export default function GroupChatScreen({
           onOpenPlan={function (plan) {
             setOpenPlan(plan);
           }}
-          onOpenVotes={function () {
-            onOpenVotes(activeId ?? undefined);
-          }}
+          onOpenVotes={showVotes}
           onOpenMemory={openMemoryPost}
         />
       );
@@ -1574,7 +1829,7 @@ export default function GroupChatScreen({
           setMenuFor(message);
         };
 
-    return (
+    const bubble = (
       <MessageBubble
         content={message.content}
         senderName={message.senderName}
@@ -1652,6 +1907,10 @@ export default function GroupChatScreen({
                 }
               }}
               onLongPress={cardMenu}
+              onOpen={voteOpener(vote)}
+              onStale={function () {
+                loadChatVotes([message.id]);
+              }}
               onOpenPlan={
                 vote.target.type === 'plan' && vote.target.event.id
                   ? function () {
@@ -1681,51 +1940,27 @@ export default function GroupChatScreen({
         }
       />
     );
-  }
+    if (!vote || item.status) return bubble;
 
-  // A new chat: today on the line, a nudge, three openers to send with one
-  // tap, and a plan to make if there is none.
-  function renderEmptyChat(groupId: string) {
+    // Under a vote: its talk, a tap away.
+    const replies = repliesTo[message.id] ?? [];
     return (
-      <ScrollView
-        style={styles.chat}
-        contentContainerStyle={styles.emptyPage}
-        keyboardShouldPersistTaps="handled"
-      >
-        <DateSeparator label="Today" today />
-        <View style={styles.emptyBody}>
-          <Text style={styles.emptyTitle} accessibilityRole="header">
-            Not a word yet.
+      <View>
+        {bubble}
+        <Pressable
+          onPress={function () {
+            setRepliesFor(message);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={replies.length > 0 ? `${replies.length} ${replies.length === 1 ? 'reply' : 'replies'} to this vote` : 'Reply to this vote'}
+          hitSlop={6}
+          style={({ pressed }) => [styles.voteTalk, isMine && styles.voteTalkMine, pressed && styles.voteTalkPressed]}
+        >
+          <Text style={styles.voteTalkText}>
+            {replies.length > 0 ? `${replies.length} ${replies.length === 1 ? 'reply' : 'replies'} ›` : 'Reply ›'}
           </Text>
-          <Text style={styles.emptyText}>Someone has to go first. Might as well be you.</Text>
-          <View style={styles.starters}>
-            {STARTERS.map(function (starter) {
-              return (
-                <Pressable
-                  key={starter}
-                  onPress={function () {
-                    handleSend(starter);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Send "${starter}"`}
-                  style={function ({ pressed }) {
-                    return [styles.starter, pressed && styles.starterPressed];
-                  }}
-                >
-                  <Text style={styles.starterText}>{starter}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          {onNewPlan ? (
-            <PlanDraftTicket
-              onNewPlan={function () {
-                onNewPlan(groupId);
-              }}
-            />
-          ) : null}
-        </View>
-      </ScrollView>
+        </Pressable>
+      </View>
     );
   }
 
@@ -1757,13 +1992,29 @@ export default function GroupChatScreen({
       </SafeAreaView>
     );
   }
+  if (aboutGroup) {
+    return (
+      <GroupScreen
+        group={aboutGroup}
+        userId={user.id}
+        backLabel="Chat"
+        onOpenVotes={showVotes}
+        onBack={function () {
+          setAboutGroup(null);
+        }}
+        onLeave={function () {
+          setAboutGroup(null);
+        }}
+      />
+    );
+  }
   if (groupScreen) {
     return (
       <GroupScreen
         group={activeGroup}
         userId={user.id}
         backLabel="Chat"
-        onOpenVotes={onOpenVotes}
+        onOpenVotes={showVotes}
         onBack={function () {
           setGroupScreen(false);
         }}
@@ -1799,11 +2050,23 @@ export default function GroupChatScreen({
           }}
         />
 
+        {rows.length > 0 || openVotes.length > 0 ? (
+          <ChatVotesBar
+            filter={filter}
+            onFilter={setFilter}
+            open={openVotes}
+            members={memberCount}
+            onJump={jumpToVote}
+          />
+        ) : null}
+
         <KeyboardAvoidingView
           style={styles.chat}
           behavior={keyboardBehavior}
           keyboardVerticalOffset={keyboardOffset}
         >
+          {/* Faint ticket stubs behind the messages. */}
+          <TicketBackdrop />
           {error ? (
             <Text style={styles.error} accessibilityLiveRegion="polite">
               {error}
@@ -1820,10 +2083,50 @@ export default function GroupChatScreen({
               <ActivityIndicator color={paper.accent} />
             </View>
           ) : rows.length === 0 ? (
-            error ? <View style={styles.empty} /> : renderEmptyChat(activeGroup.id)
+            error ? (
+              <View style={styles.empty} />
+            ) : (
+              <ChatEmpty
+                plan={nextPlan}
+                meId={user.id}
+                compact={windowHeight < 720}
+                onOnMyWay={
+                  features.liveLocation && tonightPlan
+                    ? function () {
+                        setWayFor(tonightPlan);
+                      }
+                    : undefined
+                }
+                onOpenPlan={function (plan) {
+                  setOpenPlan(plan);
+                }}
+                onAnswer={answerNextPlan}
+                onAsk={askWhosIn}
+                onProposePlan={function () {
+                  setTrayOpen(false);
+                  setPlanFormOpen(true);
+                }}
+                onAskParea={function () {
+                  setTrayOpen(false);
+                  setVoteStep('poll');
+                }}
+                onSharePhoto={function () {
+                  setTrayOpen(true);
+                }}
+              />
+            )
+          ) : filter === 'votes' && invertedRows.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.votesEmptyTitle}>No votes here yet.</Text>
+              <Text style={styles.votesEmptyText}>Start one from the + below. More than half decides.</Text>
+            </View>
           ) : (
             <FlatList
+              ref={listRef}
               inverted
+              onScrollToIndexFailed={function (info) {
+                listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
+              }}
               keyboardShouldPersistTaps="handled"
               onScrollBeginDrag={function () {
                 setTrayOpen(false);
@@ -1842,8 +2145,9 @@ export default function GroupChatScreen({
 
           <ChatComposer
             placeholder={`Message ${activeGroup.name}`}
-            key={editing ? 'edit-' + editing.id : 'new'}
-            initialText={editing ? editing.content : ''}
+            key={editing ? 'edit-' + editing.id : 'new-' + prefill.nonce}
+            initialText={editing ? editing.content : prefill.text}
+            autoFocus={!editing && prefill.text !== ''}
             editing={editing !== null}
             replyTo={replyingTo ? quoteOf(replyingTo) : null}
             onCancel={function () {
@@ -1852,7 +2156,6 @@ export default function GroupChatScreen({
             }}
             onSend={handleComposerSend}
             onTyping={handleTypingActivity}
-            placeholder="Message the parea"
             members={members}
             meId={user.id}
             attachment={pendingImage}
@@ -1919,16 +2222,13 @@ export default function GroupChatScreen({
               }}
               onAskParea={function () {
                 setTrayOpen(false);
-                setPollOpen(true);
+                setVoteStep('poll');
               }}
-              onSuggestPlan={
-                features.explore
-                  ? function () {
-                      setTrayOpen(false);
-                      setSuggestOpen(true);
-                    }
-                  : undefined
-              }
+              onStartVote={function (step) {
+                setTrayOpen(false);
+                setVoteStep(step);
+              }}
+              canFollow={features.squadFollows}
             />
           ) : null}
 
@@ -2014,7 +2314,178 @@ export default function GroupChatScreen({
             }}
             onChanged={function () {
               loadPlanCards();
+              loadGroupPlans();
               chatEvents.reload();
+            }}
+          />
+
+          <EventFormSheet
+            visible={planFormOpen}
+            groups={groups}
+            defaultGroupId={activeGroup.id}
+            defaultDate={keyOf(new Date())}
+            onClose={function () {
+              setPlanFormOpen(false);
+            }}
+            onSaved={function () {
+              // The vote's card in the chat is the confirmation.
+              setPlanFormOpen(false);
+              pullNew();
+            }}
+            onOpenVotes={showVotes}
+          />
+
+          {features.liveLocation ? (
+            <OnMyWaySheet
+              plan={wayFor}
+              onClose={function () {
+                setWayFor(null);
+              }}
+              onShared={function () {
+                setWayFor(null);
+                pullNew();
+              }}
+            />
+          ) : null}
+
+          {/* The talk under a vote. */}
+          <Modal
+            visible={repliesFor !== null}
+            transparent
+            animationType="slide"
+            onRequestClose={function () {
+              setRepliesFor(null);
+            }}
+          >
+            <Pressable
+              style={styles.pinnedBackdrop}
+              onPress={function () {
+                setRepliesFor(null);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <Pressable style={styles.pinnedSheet} onPress={function () {}}>
+                <View style={styles.pinnedGrabber} />
+                <Text style={styles.talkTitle}>About this vote</Text>
+                {repliesFor ? (
+                  <View style={styles.talkQuote}>
+                    <Text style={styles.talkQuoteText} numberOfLines={2}>
+                      {voteTitle(chatVotes[repliesFor.id]) ?? repliesFor.content}
+                    </Text>
+                  </View>
+                ) : null}
+                <ScrollView style={styles.talkList} contentContainerStyle={styles.talkListInner}>
+                  {repliesFor && (repliesTo[repliesFor.id] ?? []).length > 0 ? (
+                    (repliesTo[repliesFor.id] ?? []).map(function (reply) {
+                      return (
+                        <View key={reply.id} style={styles.talkRow}>
+                          <Text style={styles.talkWho}>{reply.senderId === user.id ? 'You' : reply.senderName || 'Someone'}</Text>
+                          <Text style={styles.talkText}>{reply.content}</Text>
+                        </View>
+                      );
+                    })
+                  ) : (
+                    <Text style={styles.votesEmptyText}>Nothing said about it yet. Start the talk.</Text>
+                  )}
+                </ScrollView>
+                <Pressable
+                  onPress={function () {
+                    const target = repliesFor;
+                    setRepliesFor(null);
+                    if (target) {
+                      setEditing(null);
+                      setTrayOpen(false);
+                      setReplyingTo(target);
+                    }
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reply to this vote"
+                  style={({ pressed }) => [styles.talkReply, pressed && styles.voteTalkPressed]}
+                >
+                  <Text style={styles.talkReplyText}>Reply</Text>
+                </Pressable>
+              </Pressable>
+            </Pressable>
+          </Modal>
+
+          {/* A pinned vote further up than the chat has loaded. */}
+          <Modal
+            visible={pinnedVote !== null}
+            transparent
+            animationType="slide"
+            onRequestClose={function () {
+              setPinnedVote(null);
+            }}
+          >
+            <Pressable
+              style={styles.pinnedBackdrop}
+              onPress={function () {
+                setPinnedVote(null);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <Pressable style={styles.pinnedSheet} onPress={function () {}}>
+                <View style={styles.pinnedGrabber} />
+                {pinnedVote ? (
+                  <VoteCard
+                    vote={pinnedVote}
+                    members={memberCount}
+                    userId={user.id}
+                    busy={pinnedBusy}
+                    onYes={function () {
+                      answerPinned({ approve: true });
+                    }}
+                    onNo={function () {
+                      answerPinned({ approve: false });
+                    }}
+                    onPick={function (optionId) {
+                      answerPinned({ optionId });
+                    }}
+                    onStale={chatEvents.reload}
+                    onOpen={(function () {
+                      const open = voteOpener(pinnedVote);
+                      return open
+                        ? function () {
+                            setPinnedVote(null);
+                            setTimeout(open, SHEET_SWAP_MS);
+                          }
+                        : undefined;
+                    })()}
+                  />
+                ) : null}
+                {pinnedError ? (
+                  <Text style={styles.error} accessibilityLiveRegion="polite">
+                    {pinnedError}
+                  </Text>
+                ) : null}
+              </Pressable>
+            </Pressable>
+          </Modal>
+
+          <NewVoteSheet
+            visible={voteStep !== null}
+            group={activeGroup}
+            userId={user.id}
+            initialStep={voteStep ?? 'menu'}
+            initialPick={votePick}
+            onClose={function () {
+              setVoteStep(null);
+              setVotePick(null);
+            }}
+            onStarted={function () {
+              setVoteStep(null);
+              setVotePick(null);
+              pullNew();
+            }}
+            onNewPlan={function () {
+              setVoteStep(null);
+              setVotePick(null);
+              // iOS can't open a sheet while another one is still closing.
+              setTimeout(function () {
+                setPlanFormOpen(true);
+              }, SHEET_SWAP_MS);
             }}
           />
 
@@ -2063,28 +2534,46 @@ const styles = StyleSheet.create({
   olderSpinner: { paddingVertical: space.md, alignItems: 'center' },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 4, padding: space.lg },
-  emptyPage: { flexGrow: 1, paddingHorizontal: space.md, paddingBottom: space.lg },
-  emptyBody: { gap: space.md, paddingTop: 28, paddingHorizontal: 2 },
-  emptyTitle: { color: paper.ink, ...typo.display, fontSize: 28, lineHeight: 30, letterSpacing: -0.8 },
-  emptyText: {
-    marginTop: -space.xs,
-    color: paper.inkSoft,
-    ...typo.regular,
-    fontSize: textSize.lead,
-    lineHeight: 22,
+  votesEmptyTitle: { color: paper.ink, ...typo.display, fontSize: 20, letterSpacing: -0.4, textAlign: 'center' },
+  votesEmptyText: { color: paper.inkSoft, ...typo.regular, fontSize: textSize.base, textAlign: 'center' },
+  pinnedBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: scrim.sheet },
+  pinnedSheet: {
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingTop: space.sm,
+    paddingBottom: space.xl,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    backgroundColor: paper.bg,
   },
-  starters: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs + 2 },
-  starter: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-    borderRadius: 999,
+  voteTalk: { alignSelf: 'flex-start', marginLeft: 36, marginTop: 2, paddingVertical: 4, paddingHorizontal: 2 },
+  voteTalkMine: { alignSelf: 'flex-end', marginLeft: 0, marginRight: 2 },
+  voteTalkPressed: { opacity: 0.6 },
+  voteTalkText: { color: paper.accent, ...typo.bold, fontSize: textSize.small },
+  talkTitle: { color: paper.ink, ...typo.display, fontSize: 18, letterSpacing: -0.3 },
+  talkQuote: {
+    paddingVertical: space.xs + 2,
+    paddingHorizontal: space.sm + 1,
+    borderLeftWidth: 3,
+    borderLeftColor: paper.accent,
+    borderRadius: 10,
     backgroundColor: paper.surface,
-    borderWidth: 1,
-    borderColor: paper.line,
   },
-  starterPressed: { transform: [{ scale: 0.97 }] },
-  starterText: { color: paper.ink, ...typo.semi, fontSize: 14.5 },
+  talkQuoteText: { color: paper.ink, ...typo.semi, fontSize: textSize.base },
+  talkList: { maxHeight: 320 },
+  talkListInner: { gap: space.sm, paddingVertical: space.xs },
+  talkRow: { gap: 2 },
+  talkWho: { color: paper.inkSoft, ...typo.bold, fontSize: textSize.small },
+  talkText: { color: paper.ink, ...typo.regular, fontSize: textSize.base, lineHeight: 20 },
+  talkReply: {
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: paper.ink,
+  },
+  talkReplyText: { color: paper.onMine, ...typo.bold, fontSize: textSize.base },
+  pinnedGrabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong },
   error: {
     paddingHorizontal: space.md,
     paddingVertical: space.xs,

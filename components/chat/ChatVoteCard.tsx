@@ -4,18 +4,16 @@ import { ActivityIndicator, Animated, Easing, Platform, Pressable, StyleSheet, T
 import type { SquadVote } from '../../services/serviceVotes';
 import type { RsvpStatus } from '../../services/serviceEvents';
 import type { Person } from '../../lib/people';
-import { formatDateTime } from '../../lib/datetime';
+import { formatDateTime, keyOf, parseDateKey } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import { membersWhoVote, votesNeeded } from '../../lib/squadVote';
 import Ticket from '../general/Ticket';
 import Monogram from '../general/Monogram';
+import VoteCard from '../votes/VoteCard';
 import { colors, paper, radius, space, textSize, tint, typo } from '../../theme';
 
 // Cards in the chat are a ticket wide, not a bubble.
 export const CARD_WIDTH = 286;
-
-const ON_BRAND_SOFT = 'rgba(255,255,255,0.78)';
-const ON_BRAND_FAINT = 'rgba(255,255,255,0.2)';
 
 type ChatVoteCardProps = {
   vote: SquadVote;
@@ -34,14 +32,32 @@ type ChatVoteCardProps = {
   onOpenPlan?: () => void;
   // The message menu (reply, react), from the parts of the card that open.
   onLongPress?: () => void;
+  // Opens what a vote is about: the parea to follow, the plan.
+  onOpen?: () => void;
+  // Something moved under the card (an invite got used): load it again.
+  onStale?: () => void;
 };
 
-// A vote put to the parea from the chat, answered right on its stub: a new
-// plan (Yes / No, then I'm in / Pass once it is made) or a question.
+// A vote in the parea's chat, answered right on the card: a new plan (Yes /
+// No, then I'm in / Pass once it is made), a question, or anything else the
+// parea decides (follow a parea, invite, remove, its name and photo).
 export default function ChatVoteCard(props: ChatVoteCardProps) {
   if (props.vote.target.type === 'poll') return <PollCard {...props} />;
   if (props.vote.target.type === 'plan') return <PlanVoteCard {...props} />;
-  return null;
+  return (
+    <View style={styles.other}>
+      <VoteCard
+        vote={props.vote}
+        members={props.members}
+        userId={props.userId}
+        busy={props.busy}
+        onYes={() => props.onVote(true)}
+        onNo={() => props.onVote(false)}
+        onOpen={props.onOpen}
+        onStale={props.onStale}
+      />
+    </View>
+  );
 }
 
 function askerOf(vote: SquadVote, userId: string): string {
@@ -59,7 +75,6 @@ function PlanVoteCard({ vote, members, userId, busy, going, justPassed = false, 
   const deciding = membersWhoVote('plan', members);
   const needed = votesNeeded(deciding);
   const asker = askerOf(vote, userId);
-  const wants = asker === 'You' ? 'You want to throw a plan' : `${asker} wants to throw a plan`;
 
   if (vote.status === 'passed') {
     return (
@@ -143,12 +158,13 @@ function PlanVoteCard({ vote, members, userId, busy, going, justPassed = false, 
   }
 
   const answering = vote.myVote === null || changing;
+  const startedBy = asker === 'You' ? 'Plan vote, started by you' : `Plan vote, started by ${asker}`;
+  const when = event.date ? formatDateTime(event.date, event.startTime) : null;
 
   return (
     <Ticket
-      tone="brand"
       style={styles.card}
-      accessibilityLabel={`Vote on a new plan: ${event.title}. ${vote.yes} of ${deciding} said yes, needs ${needed}`}
+      accessibilityLabel={`Vote on a new plan: ${event.title}. ${vote.yes} yes so far, ${needed} needed. ${closesLabel(event.date)}`}
       stub={
         <View>
           <View style={styles.tally} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -163,26 +179,13 @@ function PlanVoteCard({ vote, members, userId, busy, going, justPassed = false, 
             ))}
           </View>
           <View style={styles.countRow}>
-            <Text style={styles.countOnBrand}>{`${vote.yes} of ${deciding} yes`}</Text>
-            <Text style={styles.countOnBrand}>{`needs ${needed}`}</Text>
+            <Text style={styles.countPlain}>{`${vote.yes} yes so far, ${needed} needed`}</Text>
+            <Text style={styles.countPlain}>{closesLabel(event.date)}</Text>
           </View>
           {busy ? (
-            <ActivityIndicator color={colors.onInk} style={styles.spinner} />
+            <ActivityIndicator color={colors.primary} style={styles.spinner} />
           ) : answering ? (
             <View style={styles.buttons}>
-              <Pressable
-                onPress={() => {
-                  setChanging(false);
-                  onVote(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Yes to ${event.title}`}
-                accessibilityState={{ selected: vote.myVote === true }}
-                style={({ pressed }) => [styles.button, styles.strong, pressed && styles.pressed]}
-              >
-                <Ionicons name="checkmark" size={16} color={colors.primary} />
-                <Text style={[styles.buttonText, styles.strongText]}>Yes</Text>
-              </Pressable>
               <Pressable
                 onPress={() => {
                   setChanging(false);
@@ -191,14 +194,26 @@ function PlanVoteCard({ vote, members, userId, busy, going, justPassed = false, 
                 accessibilityRole="button"
                 accessibilityLabel={`No to ${event.title}`}
                 accessibilityState={{ selected: vote.myVote === false }}
-                style={({ pressed }) => [styles.button, styles.soft, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.button, styles.pill, styles.grey, pressed && styles.pressed]}
               >
-                <Text style={[styles.buttonText, styles.onDark]}>No</Text>
+                <Text style={[styles.buttonText, styles.pillText]}>No</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  setChanging(false);
+                  onVote(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Yes to ${event.title}`}
+                accessibilityState={{ selected: vote.myVote === true }}
+                style={({ pressed }) => [styles.button, styles.pill, styles.accent, pressed && styles.pressed]}
+              >
+                <Text style={[styles.buttonText, styles.pillText, styles.onDark]}>Yes</Text>
               </Pressable>
             </View>
           ) : (
             <View style={styles.voted}>
-              <Ionicons name={vote.myVote ? 'checkmark-circle' : 'close-circle'} size={18} color={colors.onInk} />
+              <Ionicons name={vote.myVote ? 'checkmark-circle' : 'close-circle'} size={18} color={vote.myVote ? colors.primary : colors.textSoft} />
               <Text style={styles.votedText}>{vote.myVote ? 'You said yes' : 'You said no'}</Text>
               <Pressable
                 onPress={() => setChanging(true)}
@@ -215,16 +230,24 @@ function PlanVoteCard({ vote, members, userId, busy, going, justPassed = false, 
       }
     >
       <View style={styles.kickerRow}>
-        <Ionicons name="ticket" size={13} color={ON_BRAND_SOFT} />
-        <Text style={[styles.kicker, styles.kickerOnBrand]}>Vote · new plan</Text>
+        <Ionicons name="ticket-outline" size={14} color={colors.textFaint} />
+        <Text style={styles.kickerPlain} numberOfLines={1}>{startedBy}</Text>
       </View>
-      <Text style={[styles.title, styles.onDark]} numberOfLines={2}>
+      <Text style={[styles.title, styles.titleVote]} numberOfLines={2}>
         {event.title}
       </Text>
-      {line ? <Text style={[styles.line, styles.lineOnBrand]} numberOfLines={2}>{line}</Text> : null}
-      <Text style={[styles.by, styles.byOnBrand]}>{wants}</Text>
+      {when ? <Text style={styles.meta} numberOfLines={1}>{when}</Text> : null}
+      {where ? <Text style={styles.metaWhere} numberOfLines={1}>{where}</Text> : null}
     </Ticket>
   );
+}
+
+// A plan vote stays open until its day is over, then it expires.
+function closesLabel(date?: string): string {
+  if (!date) return 'Open';
+  if (date === keyOf(new Date())) return 'Closes tonight';
+  const d = parseDateKey(date);
+  return d ? `Closes after ${d.toLocaleDateString('en-US', { weekday: 'short' })} ${d.getDate()}` : 'Open';
 }
 
 function PollCard({ vote, members, people, userId, busy, onPick }: ChatVoteCardProps) {
@@ -343,6 +366,7 @@ function Stamp({ label, animate }: { label: string; animate: boolean }) {
 }
 
 const styles = StyleSheet.create({
+  other: { width: CARD_WIDTH },
   card: { width: CARD_WIDTH },
   pressed: { opacity: 0.8 },
   spinner: { height: 44 },
@@ -357,7 +381,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     textTransform: 'uppercase',
   },
-  kickerOnBrand: { color: ON_BRAND_SOFT },
   kickerGreen: { color: colors.success },
   kickerSoft: { color: colors.textSoft },
   title: {
@@ -381,22 +404,21 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
-  lineOnBrand: { color: ON_BRAND_SOFT },
   by: { marginTop: 6, color: colors.textSoft, ...typo.semi, fontSize: 12.5 },
-  byOnBrand: { color: ON_BRAND_SOFT },
 
-  tally: { flexDirection: 'row', gap: 4, marginBottom: space.xs + 2 },
-  segment: { flex: 1, height: 6, borderRadius: 3, backgroundColor: ON_BRAND_FAINT },
-  segmentYes: { backgroundColor: colors.onInk },
+  tally: { flexDirection: 'row', gap: 3, marginTop: 2, marginBottom: space.xs },
+  segment: { flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.sunk },
+  segmentYes: { backgroundColor: colors.primary },
   segmentNo: { backgroundColor: colors.danger },
   countRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: space.sm },
-  countOnBrand: {
-    color: ON_BRAND_SOFT,
-    ...typo.mono,
-    fontSize: 10.5,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
+  countPlain: { color: colors.textFaint, ...typo.medium, fontSize: textSize.small },
+  kickerPlain: { flexShrink: 1, color: colors.textFaint, ...typo.medium, fontSize: textSize.small },
+  titleVote: { fontSize: 17, lineHeight: 21, letterSpacing: -0.4, marginBottom: 2, ...typo.bold },
+  meta: { color: colors.textSoft, ...typo.mono, fontSize: textSize.body },
+  metaWhere: { marginTop: 1, color: colors.textSoft, ...typo.medium, fontSize: textSize.small },
+  pill: { minHeight: 42, borderRadius: radius.pill },
+  pillText: { ...typo.semi, fontSize: 14.5 },
+  accent: { backgroundColor: colors.primary },
   count: {
     color: colors.textSoft,
     ...typo.mono,
@@ -418,11 +440,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm + 2,
   },
   buttonText: { color: colors.ink, ...typo.display, fontSize: textSize.base },
-  strong: { backgroundColor: colors.surface },
-  strongText: { color: colors.primary },
-  soft: { backgroundColor: 'rgba(255,255,255,0.14)' },
-  ink: { backgroundColor: colors.ink },
-  grey: { backgroundColor: colors.surfaceAlt },
+  ink: { backgroundColor: colors.primary },
+  grey: { backgroundColor: colors.sunk },
   inChip: { backgroundColor: tint.success },
   inText: { color: colors.success },
   outChip: { backgroundColor: tint.danger },
@@ -436,12 +455,12 @@ const styles = StyleSheet.create({
     gap: space.xs + 2,
     paddingLeft: 12,
     borderRadius: radius.sm + 2,
-    backgroundColor: 'rgba(255,255,255,0.14)',
+    backgroundColor: colors.bg,
   },
-  votedText: { flex: 1, color: colors.onInk, ...typo.bold, fontSize: 13.5 },
+  votedText: { flex: 1, color: colors.text, ...typo.bold, fontSize: 13.5 },
   change: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 },
   changeText: {
-    color: ON_BRAND_SOFT,
+    color: colors.primary,
     ...typo.mono,
     fontSize: 10.5,
     letterSpacing: 1,

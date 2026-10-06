@@ -30,8 +30,8 @@ import {
   setRsvp,
 } from '../services/serviceEvents';
 import { colors, typo, layout, space, textSize } from '../theme';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
+import TicketBackdrop from '../components/general/TicketBackdrop';
+import EdgeFades, { EDGE_FADE_IN } from '../components/general/EdgeFades';
 import {
   addDays,
   dayFilterLabel,
@@ -42,9 +42,7 @@ import {
 } from '../lib/datetime';
 import HomeHeader from '../components/home/HomeHeader';
 import { getPendingVoteCounts } from '../services/serviceVotes';
-import VotesScreen from './VotesScreen';
-import { voteEventToSheet } from '../components/votes/VoteCard';
-import CalendarScreen from './CalendarScreen';
+import CalendarScreen, { type CalendarNight } from './CalendarScreen';
 import { useNow } from '../components/home/useNow';
 import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
@@ -52,7 +50,6 @@ import PhotoPrompt from '../components/home/PhotoPrompt';
 import PhotoFeed from '../components/home/PhotoFeed';
 import PlanLine, { type OtherPlan } from '../components/home/PlanLine';
 import { TimelineRow } from '../components/home/Timeline';
-import type { FeedPhoto } from '../services/servicePhotoFeed';
 import GroupScreen from './GroupScreen';
 import { MEMORY_LIMIT, toMemoryNights, type MemoryNight } from '../components/home/memories';
 import DayPlansSheet from '../components/home/DayPlansSheet';
@@ -70,6 +67,7 @@ import { useLiveLocations } from '../components/events/useLiveLocations';
 import EventFormSheet from '../components/events/EventFormSheet';
 import GroupFormSheet from '../components/group/GroupFormSheet';
 import { features } from '../lib/features';
+import type { VoteStart } from '../components/votes/NewVoteSheet';
 
 const RENEW_TICK_MS = 5 * 60 * 1000;
 // Coming back to the app refreshes the week, at most once a minute.
@@ -77,10 +75,8 @@ const RESUME_REFRESH_MS = 60 * 1000;
 // The line above NOW reaches this far ahead, with at most this many plans.
 const AHEAD_DAYS = 45;
 const AHEAD_PLANS = 20;
-// How tall the soft top and bottom edges of the memories page are.
-const EDGE = 110;
-const BG_CLEAR = 'rgba(237,240,245,0)';
-const BG_HALF = 'rgba(237,240,245,0.7)';
+// Home opens with today at the top, this much room above it.
+const TODAY_ROOM = 60;
 
 type HomeScreenProps = {
   user: AuthUser;
@@ -92,8 +88,8 @@ type HomeScreenProps = {
   onUnreadChange?: (total: number) => void;
   // Set from the side rail (or You) to open Parea on one squad.
   selectGroup?: { id: string; nonce: number } | null;
-  // Bumped by a vote push: open the Votes sheet.
-  openVotesNonce?: number;
+  // Votes live in the parea's chat: opens it on its Votes tab.
+  onOpenVotes?: (groupId?: string, start?: VoteStart) => void;
   // Asks from the side rail, which lives in App: bump to open.
   calendarNonce?: number;
   newSquadNonce?: number;
@@ -107,7 +103,7 @@ type HomeScreenProps = {
   onOverlayChange?: (overlay: HomeOverlay) => void;
 };
 
-export type HomeOverlay = 'votes' | 'calendar' | 'squad' | null;
+export type HomeOverlay = 'calendar' | 'squad' | null;
 
 export type RailData = {
   squads: Group[];
@@ -149,7 +145,7 @@ export default function HomeScreen({
   onOpenRail,
   onRailData,
   onOverlayChange,
-  openVotesNonce = 0,
+  onOpenVotes,
 }: HomeScreenProps) {
   const { signed, signPaths, dropSigned } = useSignedImages();
   const [displayName, setDisplayName] = useState('');
@@ -171,7 +167,6 @@ export default function HomeScreen({
   const [suggestedNonce, setSuggestedNonce] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
-  const [votesOpen, setVotesOpen] = useState(false);
   const [pendingVotes, setPendingVotes] = useState<Record<string, number>>({});
   const [votesNonce, setVotesNonce] = useState(0);
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
@@ -244,18 +239,21 @@ export default function HomeScreen({
   const contentRef = useRef<View>(null);
   const nowRef = useRef<View>(null);
   const [nowAt, setNowAt] = useState<number | null>(null);
+  // Where today starts: Home always opens there.
+  const todayRef = useRef<View>(null);
+  const [todayAt, setTodayAt] = useState<number | null>(null);
   const [awayFromNow, setAwayFromNow] = useState<'up' | 'down' | null>(null);
   const anchoredFor = useRef<string | null>(null);
   const topEdge = useRef(new Animated.Value(0)).current;
 
   // Once per parea (and each time Home mounts), open on NOW.
   useEffect(() => {
-    if (loading || nowAt === null || viewHeight === 0) return;
+    if (loading || todayAt === null || viewHeight === 0) return;
     const key = groupId ?? 'all';
     if (anchoredFor.current === key) return;
     anchoredFor.current = key;
-    scrollRef.current?.scrollTo({ y: Math.max(0, nowAt - viewHeight * 0.45), animated: false });
-  }, [loading, nowAt, viewHeight, groupId]);
+    scrollRef.current?.scrollTo({ y: Math.max(0, todayAt - TODAY_ROOM), animated: false });
+  }, [loading, todayAt, viewHeight, groupId]);
   const lastLoad = useRef(0);
 
   // `quiet` keeps what is on screen while it reloads (pull to refresh, coming back).
@@ -412,31 +410,23 @@ export default function HomeScreen({
     if (createNonce > 0) openNewEvent(null);
   }, [createNonce]);
 
-  useEffect(() => {
-    if (openVotesNonce > 0) openVotes();
-  }, [openVotesNonce]);
-
-  // Votes open on top of Home. A squad page shown in Home's place steps aside
-  // first, and the squad deciding (one of yours) becomes the current one.
-  function openVotes(id?: string) {
+  // Votes live in the chat of the parea deciding (this one, unless told).
+  function openVotes(id?: string, start?: VoteStart) {
     setProfileGroup(null);
-    if (id && id !== groupId && groups.some((group) => group.id === id)) chooseSquad(id);
-    setVotesOpen(true);
+    onOpenVotes?.(id ?? groupId ?? undefined, start);
   }
 
   useEffect(() => {
     if (selectGroup) chooseSquad(selectGroup.id);
   }, [selectGroup?.nonce]);
 
-  // Votes has no Back of its own: the rail is the way out, like everywhere
-  // else. Only a bump while Parea is up counts, not the value it mounts with.
-  // The calendar and a squad page step aside too, so Home means Home, and the
-  // page goes back to NOW.
+  // Only a bump while Parea is up counts, not the value it mounts with. The
+  // calendar and a squad page step aside, so Home means Home, and the page goes
+  // back to NOW.
   const railHomeSeen = useRef(railHomeNonce);
   useEffect(() => {
     if (railHomeNonce === railHomeSeen.current) return;
     railHomeSeen.current = railHomeNonce;
-    setVotesOpen(false);
     setFullCalendar(false);
     setProfileGroup(null);
     scrollToNow(false);
@@ -462,14 +452,7 @@ export default function HomeScreen({
   }, [groups, groupId, unread, pendingVotes, displayName, avatarUrl, onRailData]);
 
   // The page on top of Parea, for the rail's "you are here".
-  // Votes sits above the calendar when both are open.
-  const overlay: HomeOverlay = votesOpen && groups.some((group) => group.id === groupId)
-    ? 'votes'
-    : fullCalendar
-      ? 'calendar'
-      : profileGroup
-        ? 'squad'
-        : null;
+  const overlay: HomeOverlay = fullCalendar ? 'calendar' : profileGroup ? 'squad' : null;
   useEffect(() => {
     onOverlayChange?.(overlay);
   }, [overlay, onOverlayChange]);
@@ -646,16 +629,18 @@ export default function HomeScreen({
   }, [coverPhotos, signed, clock, signPaths]);
 
   const covers = useMemo(() => {
-    const byDate: Record<string, string> = {};
+    const byDate: Record<string, CalendarNight> = {};
 
-    for (const event of events) {
+    for (const event of visible) {
       const photo = coverPhotos[event.id];
       const url = photo ? signed[photo.path]?.url : undefined;
-      if (url && !byDate[event.date]) byDate[event.date] = url;
+      if (photo && url && !byDate[event.date]) {
+        byDate[event.date] = { url, event, count: photo.count, photoIds: photo.photoIds };
+      }
     }
 
     return byDate;
-  }, [events, coverPhotos, signed]);
+  }, [visible, coverPhotos, signed]);
 
   const ignoreSeen = useCallback(() => {}, []);
 
@@ -725,6 +710,8 @@ export default function HomeScreen({
             onThrowPlan={() => openNewEvent(today)}
             nowRef={nowRef}
             onNowLayout={measureNow}
+            todayRef={todayRef}
+            onTodayLayout={measureNow}
             error={rsvpError ?? (wantsPhoto ? null : photoError)}
           />
 
@@ -834,18 +821,21 @@ export default function HomeScreen({
     const page = contentRef.current;
     if (!node || !page) return;
     node.measureLayout(page, (_x, y) => setNowAt((was) => (was === y ? was : y)), () => {});
+    const mark = todayRef.current;
+    if (mark) mark.measureLayout(page, (_x, y) => setTodayAt((was) => (was === y ? was : y)), () => {});
   }
 
+  // Today at the top of the page, a little room above it.
   function scrollToNow(animated: boolean) {
-    if (nowAt === null || viewHeight === 0) return;
-    scrollRef.current?.scrollTo({ y: Math.max(0, nowAt - viewHeight * 0.45), animated });
+    if (todayAt === null || viewHeight === 0) return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, todayAt - TODAY_ROOM), animated });
   }
 
   // Edges and the "Back to today" pill follow the scroll; state only changes
   // when the pill has to show, hide or flip.
   function onPageScroll(event: { nativeEvent: { contentOffset: { y: number } } }) {
     const y = event.nativeEvent.contentOffset.y;
-    topEdge.setValue(Math.min(1, Math.max(0, y / 60)));
+    topEdge.setValue(Math.min(1, Math.max(0, y / EDGE_FADE_IN)));
     if (nowAt === null) return;
     const away = nowAt < y ? 'up' : nowAt > y + viewHeight ? 'down' : null;
     if (away !== awayFromNow) setAwayFromNow(away);
@@ -853,6 +843,7 @@ export default function HomeScreen({
 
   return (
     <SafeAreaView style={styles.screen}>
+      <TicketBackdrop />
       <View style={styles.page}>
       <ScrollView
         ref={scrollRef}
@@ -875,14 +866,7 @@ export default function HomeScreen({
         </View>
       </ScrollView>
 
-      <Animated.View pointerEvents="none" style={[styles.edgeTop, { opacity: topEdge }]}>
-        <BlurView intensity={10} tint="light" style={styles.edgeBlurTop} />
-        <LinearGradient colors={[colors.bg, BG_HALF, BG_CLEAR]} locations={[0, 0.35, 1]} style={StyleSheet.absoluteFill} />
-      </Animated.View>
-      <View pointerEvents="none" style={styles.edgeBottom}>
-        <BlurView intensity={10} tint="light" style={styles.edgeBlurBottom} />
-        <LinearGradient colors={[BG_CLEAR, BG_HALF, colors.bg]} locations={[0, 0.65, 1]} style={StyleSheet.absoluteFill} />
-      </View>
+      <EdgeFades top={topEdge} />
       {awayFromNow ? (
         <Pressable
           onPress={() => scrollToNow(true)}
@@ -1003,28 +987,14 @@ export default function HomeScreen({
           squadName={groups.find((group) => group.id === groupId)?.name}
           events={visible}
           covers={covers}
+          now={now}
           onBack={() => setFullCalendar(false)}
           onSelectDate={openDay}
+          onOpenPlan={setOpenEvent}
+          onThrowPlan={openNewEvent}
         />
       ) : null}
 
-      {/* Votes are a page of their own too, on top of Home. */}
-      {votesOpen && groups.some((group) => group.id === groupId) ? (
-        <VotesScreen
-          group={groups.find((group) => group.id === groupId)!}
-          userId={user.id}
-          reloadKey={votesNonce}
-          onBack={() => setVotesOpen(false)}
-          onOpenRail={() => onOpenRail?.()}
-          onOpenSquad={setProfileGroup}
-          onOpenEvent={(event) => setOpenEvent(voteEventToSheet(event))}
-          onNewPlan={() => openNewEvent(null)}
-          onChanged={() => {
-            setVotesNonce((n) => n + 1);
-            load(true);
-          }}
-        />
-      ) : null}
     </SafeAreaView>
   );
 }
@@ -1043,10 +1013,6 @@ function nextSameWeekday(dateStr: string): string {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   page: { flex: 1 },
-  edgeTop: { position: 'absolute', top: 0, left: 0, right: 0, height: EDGE },
-  edgeBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: EDGE },
-  edgeBlurTop: { position: 'absolute', top: 0, left: 0, right: 0, height: EDGE * 0.35 },
-  edgeBlurBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: EDGE * 0.35 },
   backToday: {
     position: 'absolute',
     alignSelf: 'center',

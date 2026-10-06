@@ -13,6 +13,8 @@ import { membersWhoVote, votesNeeded } from '../../lib/squadVote';
 import type { Place } from '../../services/servicePlaces';
 import { EVENT_TAGS, tagLabel, type EventTag } from '../../lib/tags';
 import { colors, typo, radius, space, textSize } from '../../theme';
+import { fieldStyles } from '../../fieldStyles';
+import { addDays, keyOf } from '../../lib/datetime';
 import AuthField from '../general/AuthField';
 import Button from '../general/Button';
 import Chip from '../general/Chip';
@@ -42,8 +44,14 @@ function placeOf(event?: MyEvent | null): Place | null {
 }
 
 function Label({ children }: { children: string }) {
-  return <Text style={styles.microLabel}>{children}</Text>;
+  return <Text style={[fieldStyles.label, styles.label]}>{children}</Text>;
 }
+
+// The days the chips offer: two weeks from today.
+const DAY_CHIPS = 14;
+
+// Which field a problem belongs under.
+type Problem = { at: 'title' | 'date' | 'group' | 'place' | 'form'; text: string };
 
 export default function EventFormSheet({
   visible,
@@ -67,7 +75,9 @@ export default function EventFormSheet({
   const [tags, setTags] = useState<EventTag[]>([]);
   const [targetGroup, setTargetGroup] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [problem, setProblem] = useState<Problem | null>(null);
+  // Another day than the chips: the date picker.
+  const [otherDay, setOtherDay] = useState(false);
   // A new plan that went to the vote: where it went, and how it stands.
   const [sent, setSent] = useState<{ groupId: string; status: VoteStatus } | null>(null);
 
@@ -86,8 +96,9 @@ export default function EventFormSheet({
       setIsPublic(from?.isPublic ?? false);
       setTags(from?.tags ?? []);
       setTargetGroup(defaultGroupId ?? groups[0]?.id ?? null);
-      setFormError(null);
+      setProblem(null);
       setSent(null);
+      setOtherDay(false);
     },
     [visible, defaultDate, event?.id, draft?.id],
   );
@@ -108,11 +119,19 @@ export default function EventFormSheet({
     });
   }
 
+  // Today and the next two weeks, as chips; the picker for any other day.
+  const today = new Date();
+  const days = Array.from({ length: DAY_CHIPS }, (_, i) => addDays(today, i));
+  const dayKeys = days.map(keyOf);
+  const showPicker = otherDay || (eventDate !== '' && !dayKeys.includes(eventDate));
+
+  const errorAt = (at: Problem['at']) => (problem && problem.at === at ? problem.text : undefined);
+
   async function handleSave() {
-    if (!title.trim()) { setFormError('Give your plan a title.'); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) { setFormError('Use the format YYYY-MM-DD.'); return; }
-    if (!editing && !targetGroup) { setFormError('Pick a squad.'); return; }
-    if (placeRequired && !place) { setFormError('Pick the spot on the map so people can find it.'); return; }
+    if (!title.trim()) { setProblem({ at: 'title', text: 'Give your plan a title.' }); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) { setProblem({ at: 'date', text: 'Pick a day.' }); return; }
+    if (!editing && !targetGroup) { setProblem({ at: 'group', text: 'Pick a squad.' }); return; }
+    if (placeRequired && !place) { setProblem({ at: 'place', text: 'Pick a place from the list so it shows on the map.' }); return; }
 
     const input: NewEvent = {
       title: title.trim(),
@@ -129,7 +148,7 @@ export default function EventFormSheet({
     };
 
     setSaving(true);
-    setFormError(null);
+    setProblem(null);
 
     // A new plan goes to the parea's vote; the database makes it when it passes.
     if (!event) {
@@ -138,7 +157,7 @@ export default function EventFormSheet({
         setSent({ groupId: targetGroup!, status });
         await onSaved();
       } catch (problem) {
-        setFormError(errorText(problem, 'Could not put it to the vote. Try again.'));
+        setProblem({ at: 'form', text: errorText(problem, 'Could not put it to the vote. Try again.') });
       } finally {
         setSaving(false);
       }
@@ -150,7 +169,7 @@ export default function EventFormSheet({
       await onSaved();
       onClose();
     } catch {
-      setFormError('Could not save the changes. Try again.');
+      setProblem({ at: 'form', text: 'Could not save the changes. Try again.' });
     } finally {
       setSaving(false);
     }
@@ -194,6 +213,7 @@ export default function EventFormSheet({
         >
           <Pressable style={styles.sheet} onPress={() => {}}>
             <View style={styles.head}>
+              <View style={styles.grab} />
               <View style={styles.topRow}>
                 <Pressable
                   onPress={onClose}
@@ -217,57 +237,108 @@ export default function EventFormSheet({
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.form}
             >
-              <View>
-                <Label>Calling it</Label>
-                <TextInput
-                  value={title}
-                  onChangeText={setTitle}
-                  placeholder=""
-                  placeholderTextColor={colors.textFaint}
-                  editable={!saving}
-                  selectionColor={colors.primary}
-                  accessibilityLabel="Plan title"
-                  style={styles.titleInput}
-                />
-                <View style={styles.underline} />
-              </View>
+              <AuthField
+                label="What"
+                value={title}
+                onChangeText={(value) => {
+                  setTitle(value);
+                  if (problem?.at === 'title') setProblem(null);
+                }}
+                placeholder="Souvlaki then cinema"
+                loading={saving}
+                error={errorAt('title')}
+              />
+
+              {editing ? null : (
+                <View>
+                  <Label>Parea</Label>
+                  <GroupBar
+                    groups={groups}
+                    activeId={targetGroup}
+                    onSelect={setTargetGroup}
+                    showAll={false}
+                  />
+                  {errorAt('group') ? <Text style={fieldStyles.error}>{errorAt('group')}</Text> : null}
+                </View>
+              )}
 
               <View>
-                <Label>With which parea</Label>
-                <GroupBar
-                  groups={groups}
-                  activeId={targetGroup}
-                  onSelect={setTargetGroup}
-                  showAll={false}
+                <Label>Day</Label>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.days} keyboardShouldPersistTaps="handled">
+                  {days.map((day, i) => {
+                    const key = dayKeys[i];
+                    const on = key === eventDate && !showPicker;
+                    const weekday = day.toLocaleDateString('en-US', { weekday: 'short' });
+                    return (
+                      <Pressable
+                        key={key}
+                        onPress={() => {
+                          setEventDate(key);
+                          setOtherDay(false);
+                          if (problem?.at === 'date') setProblem(null);
+                        }}
+                        disabled={saving}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: on, disabled: saving }}
+                        accessibilityLabel={i === 0 ? `Today, ${day.toDateString()}` : day.toDateString()}
+                        style={({ pressed }) => [styles.day, on && styles.dayOn, pressed && styles.pressed]}
+                      >
+                        <Text style={[styles.dayWeek, on && styles.dayWeekOn]}>{weekday}</Text>
+                        <Text style={[styles.dayNum, on && styles.dayNumOn]}>{day.getDate()}</Text>
+                      </Pressable>
+                    );
+                  })}
+                  <Pressable
+                    onPress={() => setOtherDay(true)}
+                    disabled={saving}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: showPicker, disabled: saving }}
+                    accessibilityLabel="Another day"
+                    style={({ pressed }) => [styles.day, showPicker && styles.dayOn, pressed && styles.pressed]}
+                  >
+                    <Ionicons name="calendar-outline" size={18} color={showPicker ? colors.onInk : colors.text} />
+                    <Text style={[styles.dayWeek, showPicker && styles.dayWeekOn]}>Other</Text>
+                  </Pressable>
+                </ScrollView>
+                {showPicker ? (
+                  <DateField value={eventDate} onChange={setEventDate} style={styles.picker} error={errorAt('date')} />
+                ) : errorAt('date') ? (
+                  <Text style={[fieldStyles.error, styles.dayError]}>{errorAt('date')}</Text>
+                ) : null}
+              </View>
+
+              <View style={styles.row}>
+                <AuthField
+                  label="From"
+                  value={startTime}
+                  onChangeText={setStartTime}
+                  placeholder="20:30"
+                  mono
+                  loading={saving}
+                  style={styles.half}
+                />
+                <AuthField
+                  label="Until"
+                  value={endTime}
+                  onChangeText={setEndTime}
+                  placeholder="Optional"
+                  mono
+                  loading={saving}
+                  style={styles.half}
                 />
               </View>
 
               <View style={styles.section}>
-                <Label>When</Label>
-                <View style={styles.row}>
-                  <DateField value={eventDate} onChange={setEventDate} style={styles.dateColumn}/>
-                  <AuthField
-                    value={startTime}
-                    onChangeText={setStartTime}
-                    placeholder="Start"
-                    mono
-                    loading={saving}
-                    style={styles.timeColumn}
-                  />
-                  <AuthField
-                    value={endTime}
-                    onChangeText={setEndTime}
-                    placeholder="End"
-                    mono
-                    loading={saving}
-                    style={styles.timeColumn}
-                  />
-                  </View>
-              </View>
-
-              <View style={styles.section}>
-                <Label>Spot</Label>
-                <PlaceField place={place} onChange={setPlace} loading={saving} />
+                <PlaceField
+                  label="Where"
+                  place={place}
+                  onChange={(next) => {
+                    setPlace(next);
+                    if (problem?.at === 'place') setProblem(null);
+                  }}
+                  loading={saving}
+                  error={errorAt('place')}
+                />
                 <AuthField
                   icon="pricetag-outline"
                   value={nickname}
@@ -320,7 +391,7 @@ export default function EventFormSheet({
                   value={isPublic}
                   onValueChange={setIsPublic}
                   disabled={saving}
-                  trackColor={{ false: colors.border, true: colors.success }}
+                  trackColor={{ false: colors.border, true: colors.primary }}
                   thumbColor={colors.surface}
                 />
               </View>
@@ -348,16 +419,19 @@ export default function EventFormSheet({
                 </>
               ) : (
                 <>
-                  {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+                  {problem?.at === 'form' ? <Text style={styles.formError}>{problem.text}</Text> : null}
                   {!editing && chosenGroup ? (
-                    <Text style={styles.voteNote}>
-                      {deciding === 1
-                        ? `It's just you in ${chosenGroup.name}, so it goes straight on.`
-                        : `Goes to a vote in ${chosenGroup.name}: ${needed} of ${deciding} decide. Your yes counts.`}
-                    </Text>
+                    <View style={styles.voteNote}>
+                      <Ionicons name="people-outline" size={18} color={colors.accentInk} />
+                      <Text style={styles.voteNoteText}>
+                        {deciding === 1
+                          ? `It's just you in ${chosenGroup.name}, so it goes straight on.`
+                          : `Goes to ${chosenGroup.name} as a vote. It becomes a plan when ${needed} of ${deciding} say yes.`}
+                      </Text>
+                    </View>
                   ) : null}
                   <Button
-                    title={editing ? 'Save changes' : 'Put to the parea'}
+                    title={editing ? 'Save changes' : 'Put it to the parea'}
                     onPress={handleSave}
                     loading={saving}
                   />
@@ -377,40 +451,41 @@ const styles = StyleSheet.create({
   sheet: {
     maxHeight: '90%',
     backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
   },
 
-  head: { paddingHorizontal: space.lg, paddingTop: space.lg },
+  head: { paddingHorizontal: 20, paddingTop: space.sm },
+  grab: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, marginBottom: space.sm, backgroundColor: colors.border },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cancel: { color: colors.textSoft, ...typo.medium, fontSize: 15 },
   ghost: { color: 'transparent' },
-  sheetTitle: { color: colors.text, ...typo.semi, fontSize: 15 },
+  sheetTitle: { color: colors.text, ...typo.bold, fontSize: 16 },
 
   scroll: { flexShrink: 1 },
-  form: { gap: space.lg, padding: space.lg },
+  form: { gap: 14, paddingHorizontal: 20, paddingTop: space.sm, paddingBottom: space.lg },
   section: { gap: space.sm },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
   half: { flex: 1 },
-  dateColumn: { flex: 1.6 },
-  timeColumn: { flex: 1 },
-  microLabel: {
-    color: colors.textFaint,
-    ...typo.mono,
-    fontSize: 10,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
-    marginBottom: space.xs,
-  },
+  label: { marginBottom: 6 },
 
-  titleInput: {
-    color: colors.text,
-    ...typo.display,
-    fontSize: textSize.display,
-    letterSpacing: -0.6,
-    paddingVertical: space.xs,
+  // Day chips: the weekday small, the date big in mono; the chosen one blue.
+  days: { gap: 6 },
+  day: {
+    width: 56,
+    height: 52,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bg,
   },
-  underline: { height: 1, backgroundColor: colors.border, marginTop: space.xs },
+  dayOn: { backgroundColor: colors.primary },
+  dayWeek: { color: colors.textFaint, ...typo.medium, fontSize: 11.5 },
+  dayWeekOn: { color: 'rgba(255,255,255,0.75)' },
+  dayNum: { color: colors.text, ...typo.mono, fontWeight: '600', fontSize: 16 },
+  dayNumOn: { color: colors.onInk },
+  dayError: { marginTop: 6 },
+  picker: { marginTop: space.sm },
 
   note: {
     minHeight: 84,
@@ -441,14 +516,22 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
 
   actionBar: {
-    padding: space.lg,
+    paddingHorizontal: 20,
+    paddingTop: space.xs,
     paddingBottom: space.xl,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: space.sm,
+    gap: 14,
   },
   formError: { color: colors.danger, ...typo.medium, fontSize: 13 },
-  voteNote: { color: colors.textSoft, ...typo.medium, fontSize: textSize.small, textAlign: 'center' },
+  // The plan is the parea's call, said before you send it.
+  voteNote: {
+    flexDirection: 'row',
+    gap: 9,
+    paddingVertical: 11,
+    paddingHorizontal: 13,
+    borderRadius: 14,
+    backgroundColor: colors.accentSoft,
+  },
+  voteNoteText: { flex: 1, color: colors.accentInk, ...typo.medium, fontSize: 13, lineHeight: 18 },
   seeVote: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: space.md },
   seeVoteText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
 

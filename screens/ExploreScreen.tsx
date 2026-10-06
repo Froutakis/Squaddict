@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
+  Animated,
   AppState,
   FlatList,
   Pressable,
@@ -19,46 +20,50 @@ import {
   getHighlights,
   getPareaGoing,
   type FeedEvent,
-  type FeedGroup,
   type FeedHighlight,
   type FeedWhen,
 } from '../services/serviceFeed';
-import { isHappeningNow } from '../lib/datetime';
+import { suggestPlan } from '../services/serviceSuggestions';
+import { errorText } from '../lib/postgres';
+import { isHappeningNow, keyOf } from '../lib/datetime';
 import { useNow } from '../components/home/useNow';
 import { getGroupById, getGroupsForUser, searchGroups, type Group } from '../services/serviceGroup';
 import { getActingSquad, getUserById } from '../services/serviceUser';
 import { getFollowing } from '../services/serviceFollow';
 import { clearRsvp, getMyEvents, setRsvp, type MyEvent, type RsvpStatus } from '../services/serviceEvents';
 import { getCurrentCoords, type Coords, type LocationState } from '../services/serviceLocation';
-import { EVENT_TAGS, tagLabel, type EventTag } from '../lib/tags';
+import { tagLabel, type EventTag } from '../lib/tags';
 import EventCard, { type CardEvent } from '../components/events/EventCard';
 import RsvpButtons from '../components/events/RsvpButtons';
 import type { Person } from '../lib/people';
-import { colors, typo, layout, radius, shadow, solidFor, space, textSize } from '../theme';
-import Chip from '../components/general/Chip';
+import { alpha, colors, typo, layout, radius, shadow, solidFor, space, textSize } from '../theme';
+import TicketBackdrop from '../components/general/TicketBackdrop';
 import SectionHead from '../components/general/SectionHead';
 import ListEmpty from '../components/home/ListEmpty';
 import GroupCard, { type CardGroup } from '../components/group/GroupCard';
+import EdgeFades, { EDGE_FADE_IN } from '../components/general/EdgeFades';
 import GroupScreen from './GroupScreen';
 import Monogram, { initialsFor } from '../components/general/Monogram';
 import { useLivePeopleAround } from '../components/events/useLivePeopleAround';
 import type { MapPin } from '../components/general/mapShared';
 import Glass from '../components/general/Glass';
 import PopIn from '../components/general/PopIn';
-import DropdownChip from '../components/general/DropdownChip';
 import MapView from '../components/general/Map';
 import EventSheet, { type SheetEvent } from '../components/events/EventSheet';
 import MemoriesBar from '../components/home/MemoriesBar';
 import { useSignedImages } from '../components/home/useSignedImages';
-import { FAB_CENTER_Y, FAB_INSET } from '../components/general/MenuFab';
+import { FAB_CENTER_Y } from '../components/general/MenuFab';
 import { features } from '../lib/features';
 import CityLine from '../components/explore/CityLine';
+import ExploreHero, { HERO_HEIGHT } from '../components/explore/ExploreHero';
+import { ExploreApplied, ExploreTabs, ExploreTitleRow, ExploreTools, type ExploreTab } from '../components/explore/ExploreBar';
+import FilterSheet from '../components/explore/FilterSheet';
+import { getCrossings } from '../services/serviceCrossed';
 import { getCityNights, type FeedPhoto } from '../services/servicePhotoFeed';
 
 const RADII = [5, 10, 25, 50, 100];
 // Where the map looks before we know where you are: Thessaloniki.
 const DEFAULT_MAP_CENTER = { lat: 40.6401, lng: 22.9444 };
-const RADIUS_OPTIONS = RADII.map((km) => ({ key: String(km), label: `${km} km` }));
 
 const MIN_VISIBLE = 6;
 
@@ -77,10 +82,14 @@ const NAV_CLEARANCE = 110;
 const GLASS_BORDER = 1;
 const ISLAND_PAD = space.md;
 const TITLE_TOP = space.sm + space.sm + GLASS_BORDER;
-const TITLE_ROW = 36;
+const TITLE_ROW = 40;
 // How far the floating menu button drops on Explore to sit level with the title.
 export const EXPLORE_FAB_DROP = TITLE_TOP + TITLE_ROW / 2 - FAB_CENTER_Y;
 const SEARCH_DELAY_MS = 300;
+// The folded bar shows a little before the big header has fully gone.
+const FOLD_EARLY = 60;
+// Room above today when the line opens on it: the folded bar (title + tabs).
+const TODAY_ROOM = TITLE_TOP + TITLE_ROW + 56;
 
 function toCardData(event: FeedEvent, friendsGoing?: Person[]): CardEvent {
   return {
@@ -97,6 +106,29 @@ function toCardData(event: FeedEvent, friendsGoing?: Person[]): CardEvent {
     goingCount: event.goingCount,
     distanceKm: event.distanceKm,
   };
+}
+
+// The city the plans around you are in: the most common last part of their
+// place ("Μπιτ Παζάρ, Θεσσαλονίκη"), when at least two plans share it.
+// Without one, where the line is.
+function cityOf(events: FeedEvent[]): string | null {
+  const counts = new Map<string, number>();
+  for (const event of events) {
+    const parts = (event.placeLabel ?? '').split(',').map((part) => part.trim()).filter(Boolean);
+    if (parts.length === 0) continue;
+    const town = parts[parts.length - 1].replace(/\s*\d{3}\s?\d{2}$/, '');
+    // A street number or a postcode is not a city.
+    if (town && !/\d/.test(town)) counts.set(town, (counts.get(town) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let most = 0;
+  for (const [town, n] of counts) {
+    if (n > most) {
+      best = town;
+      most = n;
+    }
+  }
+  return best && most >= 2 ? best : null;
 }
 
 function applyRsvp(event: FeedEvent, status: RsvpStatus | null): FeedEvent {
@@ -127,17 +159,6 @@ function toSheetEvent(event: FeedEvent): SheetEvent {
   };
 }
 
-function mergeGroups(current: FeedGroup[], more: FeedGroup[]): FeedGroup[] {
-  const byId = new Map(current.map((group) => [group.id, group]));
-
-  for (const group of more) {
-    const seen = byId.get(group.id);
-    byId.set(group.id, seen ? { ...seen, openEvents: seen.openEvents + group.openEvents } : group);
-  }
-
-  return [...byId.values()];
-}
-
 type ExploreScreenProps = {
   userId: string;
   // Following a parea and going to its plans are votes, and votes start on
@@ -160,14 +181,39 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
   const [myGroupIds, setMyGroupIds] = useState<Set<string>>(new Set());
 
   const [events, setEvents] = useState<FeedEvent[]>([]);
-  const [groups, setGroups] = useState<FeedGroup[]>([]);
   // Follows belong to the acting squad, not to the person.
   const [acting, setActing] = useState<Group | null>(null);
   const [following, setFollowing] = useState<Record<string, true>>({});
   const [followsNonce, setFollowsNonce] = useState(0);
   const [profileGroup, setProfileGroup] = useState<Group | null>(null);
-  // The map is the front page of Explore; the list is one tap away.
-  const [mode, setMode] = useState<ViewMode>('map');
+  // The city's line is the front page of Explore; the map is one tap away.
+  const [mode, setMode] = useState<ViewMode>('list');
+
+  // The line opens on NOW, like Home: the plans ahead above, the city's
+  // nights below. Measured against the list's header, which holds the line.
+  const listRef = useRef<FlatList<FeedEvent>>(null);
+  const lineRef = useRef<View>(null);
+  const nowRef = useRef<View>(null);
+  const [nowAt, setNowAt] = useState<number | null>(null);
+  const [listHeight, setListHeight] = useState(0);
+  const anchored = useRef(false);
+  // Where today starts on the line: the list always opens there.
+  const todayRef = useRef<View>(null);
+  const [todayAt, setTodayAt] = useState<number | null>(null);
+  const topEdge = useRef(new Animated.Value(0)).current;
+  // Plans, or only the city's nights; People is the map's other layer.
+  const [tab, setTab] = useState<'plans' | 'nights'>('plans');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // The big header folds into a glass bar once it has scrolled away.
+  const [folded, setFolded] = useState(false);
+  // The full-screen spinner is for the first load only: later loads keep the
+  // page (and the search field, and the filters sheet) where they are.
+  const loadedOnce = useRef(false);
+  // The city keeps its last good name, so a search that finds nothing does
+  // not turn the title into "Everywhere".
+  const lastCity = useRef<string | null>(null);
+  // The parea yours crossed most lately, between the plans.
+  const [crossing, setCrossing] = useState<{ id: string; name: string; avatarUrl: string | null; times: number } | null>(null);
   // What the map shows: open plans, or the people and pareas out right now.
   const [chosenLayer, setLayer] = useState<'plans' | 'people'>('plans');
   const layer = features.liveLocation ? chosenLayer : 'plans';
@@ -300,6 +346,21 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
     };
   }, [userId, followsNonce]);
 
+  useEffect(() => {
+    if (!acting) return;
+    let cancelled = false;
+    getCrossings(acting.id)
+      .then((all) => {
+        if (cancelled) return;
+        const best = [...all].sort((a, b) => b.times - a.times)[0];
+        setCrossing(best ? { id: best.otherGroupId, name: best.otherName, avatarUrl: best.otherAvatarUrl, times: best.times } : null);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [acting]);
+
   const loadFriendsGoing = useCallback(function loadFriendsGoing() {
     getPareaGoing()
       .then((plans) =>
@@ -333,12 +394,12 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
         );
 
         setEvents((current) => (append ? [...current, ...feed.events] : feed.events));
-        setGroups((current) => (append ? mergeGroups(current, feed.groups) : feed.groups));
         setHasMore(feed.hasMore);
         setPage(nextPage);
       } catch {
         setError('Could not load what is happening nearby.');
       } finally {
+        loadedOnce.current = true;
         setLoading(false);
         setLoadingMore(false);
         setRefreshing(false);
@@ -439,6 +500,36 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
     setRadiusKm(RADII.find((km) => km > radiusKm) ?? RADII[RADII.length - 1]);
   }
 
+  // Suggesting a public plan to the parea you act as: it lands in its chat.
+  const [suggestingId, setSuggestingId] = useState<string | null>(null);
+  const [suggestNote, setSuggestNote] = useState<string | null>(null);
+
+  function canSuggest(plan: FeedEvent): boolean {
+    return acting !== null && plan.groupId !== acting.id && plan.date >= keyOf(new Date());
+  }
+
+  async function handleSuggest(plan: FeedEvent) {
+    if (!acting || suggestingId) return;
+    const to = acting;
+    setSuggestingId(plan.id);
+    setSuggestNote(null);
+    setError(null);
+    try {
+      const posted = await suggestPlan(to.id, plan.id);
+      setSuggestNote(posted ? `Suggested in ${to.name}'s chat.` : `Already suggested in ${to.name}.`);
+    } catch (problem) {
+      setError(errorText(problem, 'Could not suggest it. Try again.'));
+    } finally {
+      setSuggestingId(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!suggestNote) return;
+    const timer = setTimeout(() => setSuggestNote(null), 2600);
+    return () => clearTimeout(timer);
+  }, [suggestNote]);
+
   async function handleRsvp(eventId: string, status: RsvpStatus | null) {
     setSavingId(eventId);
     setError(null);
@@ -494,7 +585,7 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
     if (activeSearch !== '') return 'Try another word, or clear your filters.';
     if (liveOnly) return 'No public plans are happening near you at the moment.';
     if (followingOnly && followedIds === '') {
-      return `${acting?.name ?? 'Your squad'} does not follow any pareas yet. Follow one from Pareas you crossed.`;
+      return `${acting?.name ?? 'Your squad'} does not follow any pareas yet. Follow one from its page.`;
     }
     if (hasFilters) return 'No public plans match those filters yet. Try clearing them.';
     return 'No public plans in range. Try a wider radius.';
@@ -570,83 +661,7 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
       .catch(() => {});
   }
 
-  function layerSwitch() {
-    return (
-      <View style={styles.layers} accessibilityRole="tablist">
-        {(['plans', 'people'] as const).map((option) => {
-          const on = layer === option;
-          return (
-            <Pressable
-              key={option}
-              onPress={() => {
-                setLayer(option);
-                setSelectedId(null);
-              }}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: on }}
-              accessibilityLabel={option === 'plans' ? 'Show plans' : `Show people and pareas${livePeople.length ? `, ${livePeople.length} sharing now` : ''}`}
-              style={[styles.layer, on && styles.layerOn]}
-            >
-              <Ionicons
-                name={option === 'plans' ? 'ticket-outline' : 'people-outline'}
-                size={15}
-                color={on ? colors.text : colors.textSoft}
-              />
-              <Text style={[styles.layerText, on && styles.layerTextOn]}>{option === 'plans' ? 'Plans' : 'People'}</Text>
-              {option === 'people' && livePeople.length > 0 ? (
-                <View style={styles.layerDot} />
-              ) : null}
-            </Pressable>
-          );
-        })}
-      </View>
-    );
-  }
-
   const selected = onMap.find((event) => event.id === selectedId);
-
-  function titleRow(floating: boolean) {
-    return (
-      <View style={[styles.titleRow, floating && styles.flush]}>
-        <Text style={styles.screenTitle}>Explore</Text>
-        <View style={styles.titleActions}>
-        {floating ? (
-          <Pressable
-            onPress={() => setMapSearching(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Search the map"
-            hitSlop={6}
-            style={({ pressed }) => [styles.searchButton, pressed && styles.pressed]}
-          >
-            <Ionicons name="search" size={17} color={colors.text} />
-          </Pressable>
-        ) : null}
-        <View style={styles.toggle}>
-          {(['map', 'list'] as const).map((option) => (
-            <Pressable
-              key={option}
-              onPress={() => {
-                setMode(option);
-                // A search typed in the list stays visible on the map.
-                if (option === 'map') setMapSearching(query !== '');
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={option === 'list' ? 'Show as a line' : 'Show on a map'}
-              accessibilityState={{ selected: mode === option }}
-              style={[styles.toggleItem, mode === option && styles.toggleItemActive]}
-            >
-              <Ionicons
-                name={option === 'list' ? 'list' : 'map-outline'}
-                size={17}
-                color={mode === option ? colors.textOnBrand : colors.textSoft}
-              />
-            </Pressable>
-          ))}
-        </View>
-        </View>
-      </View>
-    );
-  }
 
   function closeMapSearch() {
     setMapSearching(false);
@@ -683,99 +698,80 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
     );
   }
 
-  function locationInfo(floating: boolean) {
-    if (locationState === 'on') {
-      return (
-        <View style={[styles.locationRow, floating && styles.flush]}>
-          <Ionicons name="location" size={14} color={colors.primary} />
-          <Text style={styles.locationText}>Within {radiusKm} km of you</Text>
-        </View>
-      );
-    }
+  const today = new Date();
+  const kicker = `EXPLORE · ${today
+    .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+    .replace(',', '')
+    .toUpperCase()}`;
+  const foundCity = search === '' ? cityOf(events) : null;
+  if (foundCity) lastCity.current = foundCity;
+  const city = lastCity.current ?? (locationState === 'on' ? 'Around you' : 'Everywhere');
+  const timeOfDay = today.getHours() >= 17 ? 'tonight' : 'today';
+  const filtersOn =
+    (locationState === 'on' && radiusKm !== DEFAULT_RADIUS_KM ? 1 : 0) +
+    (when ? 1 : 0) +
+    tags.length +
+    (liveOnly ? 1 : 0) +
+    (followingOnly ? 1 : 0);
+  const appliedText = [
+    locationState === 'on' ? `Within ${radiusKm} km` : 'Everywhere (location is off)',
+    liveOnly ? 'live now' : when ? WHEN_OPTIONS.find((option) => option.key === when)?.label.toLowerCase() : 'any day',
+    tags.length === 1 ? tagLabel(tags[0]).toLowerCase() : tags.length > 1 ? `${tags.length} kinds` : null,
+    followingOnly ? 'following' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const upcoming = linePlans.filter((plan) => plan.date >= keyOf(now)).length;
+  const tabCounts = { plans: upcoming, people: livePeople.length, nights: cityNights.length };
 
-    if (locationState === 'off') {
-      return (
-        <Pressable
-          onPress={askLocation}
-          accessibilityRole="button"
-          accessibilityLabel="Turn on location"
-          style={({ pressed }) => [
-            styles.banner,
-            floating && styles.bannerFloating,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Ionicons name="location-outline" size={16} color={colors.textSoft} />
-          <Text style={styles.bannerText}>
-            Showing everything. Turn on location to see what is near you.
-          </Text>
-          <Text style={styles.bannerAction}>Retry</Text>
-        </Pressable>
-      );
+  function chooseTab(next: ExploreTab) {
+    if (next === 'people') {
+      setLayer('people');
+      setSelectedId(null);
+      setMode('map');
+      return;
     }
-
-    return null;
+    if (mode === 'map' && next === 'plans' && layer !== 'plans') {
+      setLayer('plans');
+      setSelectedId(null);
+      return;
+    }
+    setTab(next);
+    setLayer('plans');
+    setMode('list');
   }
 
-  function chipRow(floating: boolean) {
-    return (
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[styles.chips, floating && styles.chipsFloating]}
-      >
-        <DropdownChip
-          value={String(radiusKm)}
-          options={RADIUS_OPTIONS}
-          placeholder={`${radiusKm} km`}
-          icon="resize-outline"
-          clearable={false}
-          onChange={(km) => {
-            if (km) setRadiusKm(Number(km));
-          }}
-        />
-        <Chip
-          label="Live"
-          icon={liveOnly ? 'radio' : 'radio-outline'}
-          active={liveOnly}
-          onPress={() => setLiveOnly(!liveOnly)}
-        />
-        {liveOnly ? null : (
-          <DropdownChip
-            value={when}
-            options={WHEN_OPTIONS}
-            placeholder="Any day"
-            icon="calendar-outline"
-            onChange={setWhen}
-          />
-        )}
-        {features.squadFollows ? (
-          <Chip
-            label="Following"
-            icon={followingOnly ? 'heart' : 'heart-outline'}
-            active={followingOnly}
-            onPress={() => setFollowingOnly(!followingOnly)}
-          />
-        ) : null}
-        {EVENT_TAGS.map((tag) => (
-          <Chip
-            key={tag}
-            label={tagLabel(tag)}
-            active={tags.includes(tag)}
-            onPress={() => toggleTag(tag)}
-          />
-        ))}
-      </ScrollView>
-    );
+  function toggleMode() {
+    if (mode === 'list') {
+      setLayer('plans');
+      setMode('map');
+      // A search typed in the list stays visible on the map.
+      setMapSearching(query !== '');
+    } else {
+      setMode('list');
+    }
   }
 
   const controls = (
     <>
-      {titleRow(false)}
-      {searchBar()}
-      {locationInfo(false)}
-      {chipRow(false)}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <ExploreHero
+        kicker={kicker}
+        city={city}
+        when={timeOfDay}
+        liveCount={live.length}
+        rowCenter={FAB_CENTER_Y + EXPLORE_FAB_DROP}
+        onPressLive={() => setLiveOnly(!liveOnly)}
+      />
+      <ExploreTools
+        query={query}
+        onQuery={setQuery}
+        filtersOn={filtersOn}
+        onFilters={() => setFiltersOpen(true)}
+        mode="list"
+        onMode={toggleMode}
+      />
+      <ExploreApplied text={appliedText} onChange={() => setFiltersOpen(true)} />
+      {search === '' ? <ExploreTabs tab={tab} counts={tabCounts} onTab={chooseTab} tabs={features.liveLocation ? ['plans', 'people', 'nights'] : ['plans', 'nights']} /> : null}
     </>
   );
 
@@ -801,29 +797,6 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
         />
       ) : null}
 
-      {live.length > 0 && !liveOnly ? (
-        <View>
-          <SectionHead title="Happening now" live count={live.length} />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.groupRow}
-          >
-            {live.map((event) => (
-              <View key={event.id} style={styles.liveCard}>
-                <EventCard
-                  {...cardProps(event)}
-                  action="rsvp"
-                  saving={savingId === event.id}
-                  onPress={() => setOpenEvent(toSheetEvent(event))}
-                  onRsvp={(status) => handleRsvp(event.id, status)}
-                />
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      ) : null}
-
       {search !== '' ? (
         foundGroups.length > 0 ? (
           <View>
@@ -847,35 +820,82 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
             </ScrollView>
           </View>
         ) : null
-      ) : groups.length > 0 && features.publicProfiles ? (
-        <View>
-          <SectionHead title="Pareas you crossed" meta="Where you met" />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.groupRow}
-          >
-            {groups.map((group) => (
-              <GroupCard
-                key={group.id}
-                group={group}
-                following={following[group.id] === true}
-                member={myGroupIds.has(group.id)}
-                onPress={() => openProfile(group)}
-                onFollow={features.squadFollows ? followHandler(group.id) : undefined}
-              />
-            ))}
-          </ScrollView>
-        </View>
       ) : null}
 
-      {visible.length > 0 ? (
+      {search !== '' && visible.length > 0 ? (
         <SectionHead
           title={liveOnly ? 'Happening now' : search !== '' ? 'Plans' : center ? 'Closest to you' : 'Open to Parea'}
           live={liveOnly}
         />
       ) : null}
     </View>
+  );
+
+  function measureNow() {
+    const node = nowRef.current;
+    const line = lineRef.current;
+    if (!node || !line) return;
+    node.measureLayout(line, (_x, y) => setNowAt((was) => (was === y ? was : y)), () => {});
+    const mark = todayRef.current;
+    if (mark) mark.measureLayout(line, (_x, y) => setTodayAt((was) => (was === y ? was : y)), () => {});
+  }
+
+  // Each time the line shows (opening Explore, coming back from the map), it
+  // starts on NOW.
+  const onLine = mode === 'list' && search === '';
+  useEffect(() => {
+    anchored.current = false;
+  }, [tab]);
+  useEffect(() => {
+    if (!onLine) {
+      anchored.current = false;
+      return;
+    }
+    // The plans above NOW have to be in first, or NOW would move after.
+    if (anchored.current || loading || todayAt === null || listHeight === 0) return;
+    anchored.current = true;
+    listRef.current?.scrollToOffset({ offset: Math.max(0, todayAt - TODAY_ROOM), animated: false });
+  }, [onLine, loading, todayAt, listHeight]);
+
+  // A list that mounts again starts at its top: unfold, and find NOW again.
+  function listMounted() {
+    setFolded(false);
+    topEdge.setValue(0);
+    anchored.current = false;
+  }
+
+  function onListScroll(event: { nativeEvent: { contentOffset: { y: number } } }) {
+    const y = event.nativeEvent.contentOffset.y;
+    topEdge.setValue(Math.min(1, Math.max(0, y / EDGE_FADE_IN)));
+    const fold = y > HERO_HEIGHT - FOLD_EARLY;
+    if (fold !== folded) setFolded(fold);
+  }
+
+  const filterSheet = (
+    <FilterSheet
+      visible={filtersOpen}
+      radii={RADII}
+      radiusKm={radiusKm}
+      onRadius={setRadiusKm}
+      locationOn={locationState === 'on'}
+      onTurnOnLocation={askLocation}
+      when={when}
+      onWhen={setWhen}
+      tags={tags}
+      onToggleTag={toggleTag}
+      liveOnly={liveOnly}
+      onLiveOnly={setLiveOnly}
+      followingOnly={features.squadFollows ? followingOnly : undefined}
+      onFollowingOnly={features.squadFollows ? setFollowingOnly : undefined}
+      followingNote={acting ? `Pareas ${acting.name} follows` : undefined}
+      count={mode === 'map' ? onMap.length : upcoming}
+      loading={loading}
+      onReset={() => {
+        clearFilters();
+        setRadiusKm(DEFAULT_RADIUS_KM);
+      }}
+      onClose={() => setFiltersOpen(false)}
+    />
   );
 
   if (profileGroup) {
@@ -888,10 +908,12 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
         onBack={() => {
           // The profile can follow or unfollow; pick that up on the cards.
           setProfileGroup(null);
+          listMounted();
           setFollowsNonce((n) => n + 1);
         }}
         onLeave={() => {
           setProfileGroup(null);
+          listMounted();
           setFollowsNonce((n) => n + 1);
           load(0, false);
         }}
@@ -899,7 +921,7 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
     );
   }
 
-  if (loading && events.length === 0) {
+  if (loading && !loadedOnce.current) {
     return (
       <SafeAreaView style={styles.center}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -968,9 +990,22 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
                 </View>
               ) : (
                 <>
-                  {titleRow(true)}
-                  {features.liveLocation ? layerSwitch() : null}
-                  {layer === 'plans' ? locationInfo(true) : null}
+                  <ExploreTitleRow
+                    kicker={layer === 'people' ? 'EXPLORE · RIGHT NOW' : `EXPLORE · ${timeOfDay.toUpperCase()}`}
+                    title={layer === 'people' ? "Who's out" : city}
+                    onSearch={layer === 'plans' ? () => setMapSearching(true) : undefined}
+                    filtersOn={filtersOn}
+                    onFilters={layer === 'plans' ? () => setFiltersOpen(true) : undefined}
+                    mode="map"
+                    onMode={toggleMode}
+                  />
+                  <ExploreTabs
+                    tab={layer === 'people' ? 'people' : 'plans'}
+                    counts={tabCounts}
+                    onTab={chooseTab}
+                    tabs={features.liveLocation ? ['plans', 'people', 'nights'] : ['plans', 'nights']}
+                    compact
+                  />
                 </>
               )}
               {nothingFound ? (
@@ -1011,15 +1046,17 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
               </Glass>
             ) : null}
 
-            {layer === 'plans' ? (
-              <Glass radius={radius.pill} style={styles.chipIsland}>
-                {chipRow(true)}
-              </Glass>
-            ) : null}
 
             {error ? (
               <Glass radius={radius.lg} style={styles.island}>
                 <Text style={[styles.error, styles.flush]}>{error}</Text>
+              </Glass>
+            ) : null}
+            {suggestNote ? (
+              <Glass radius={radius.lg} style={styles.island}>
+                <Text style={[styles.suggested, styles.flush]} accessibilityLiveRegion="polite">
+                  {suggestNote}
+                </Text>
               </Glass>
             ) : null}
           </View>
@@ -1035,103 +1072,202 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
                 onPress={() => setOpenEvent(toSheetEvent(selected))}
                 onRsvp={(status) => handleRsvp(selected.id, status)}
               />
+              {acting && canSuggest(selected) ? (
+                <Pressable
+                  onPress={() => handleSuggest(selected)}
+                  disabled={suggestingId === selected.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Suggest ${selected.title} to ${acting.name}`}
+                  style={({ pressed }) => [styles.suggestPill, pressed && styles.pressed]}
+                >
+                  <Ionicons name="paper-plane-outline" size={15} color={colors.primary} />
+                  <Text style={styles.suggestPillText} numberOfLines={1}>
+                    {suggestingId === selected.id ? 'Suggesting…' : `Suggest to ${acting.name}`}
+                  </Text>
+                </Pressable>
+              ) : null}
             </PopIn>
           </View>
         ) : null}
 
         {sheet}
+        {filterSheet}
       </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.screen}>
-      <FlatList
-        keyboardShouldPersistTaps="handled"
-        data={search === '' ? [] : visible}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.content}
-        ListHeaderComponent={
-          search === '' ? (
-            <>
-              {header}
-              <CityLine
-                plans={linePlans}
-                nights={cityNights}
-                nightsLoading={cityLoading}
-                now={now}
-                center={center}
-                me={{ id: userId, name: myName, avatarUrl: null }}
-                acting={acting}
-                savingId={savingId}
-                signed={signed}
-                signPaths={signPaths}
-                onImageError={dropSigned}
-                onOpenPlan={(plan) => setOpenEvent(toSheetEvent(plan))}
-                onRsvp={(plan, status) => handleRsvp(plan.id, status)}
-                onOpenGroup={(id) => {
-                  getGroupById(id)
-                    .then((group) => {
-                      if (group) setProfileGroup(group);
-                    })
-                    .catch(() => {});
-                }}
-                onShowMap={() => setMode('map')}
-                onClearFilters={hasFilters ? clearFilters : undefined}
-              />
-            </>
-          ) : (
-            header
-          )
-        }
-        ListEmptyComponent={
-          search === '' ? null : 
-          <View style={styles.empty}>
-            {events.length > 0 ? (
-              <ListEmpty
-                title="That is everything, for now"
-                body="You have answered every open plan around here. Widen the radius or come back later."
-                actionLabel="Search wider"
-                onAction={widenRadius}
-              />
+      <TicketBackdrop />
+      <View style={styles.listPage} onLayout={(event) => setListHeight(event.nativeEvent.layout.height)}>
+        <FlatList
+          ref={listRef}
+          onScroll={onListScroll}
+          scrollEventThrottle={32}
+          onContentSizeChange={onLine ? measureNow : undefined}
+          keyboardShouldPersistTaps="handled"
+          data={search === '' ? [] : visible}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.content}
+          ListHeaderComponent={
+            search === '' ? (
+              <View ref={lineRef} collapsable={false}>
+                {header}
+                <CityLine
+                  plans={linePlans}
+                  nights={cityNights}
+                  nightsLoading={cityLoading}
+                  now={now}
+                  center={center}
+                  me={{ id: userId, name: myName, avatarUrl: null }}
+                  acting={acting}
+                  savingId={savingId}
+                  signed={signed}
+                  signPaths={signPaths}
+                  onImageError={dropSigned}
+                  onOpenPlan={(plan) => setOpenEvent(toSheetEvent(plan))}
+                  onRsvp={(plan, status) => handleRsvp(plan.id, status)}
+                  onOpenGroup={(id) => {
+                    getGroupById(id)
+                      .then((group) => {
+                        if (group) setProfileGroup(group);
+                      })
+                      .catch(() => {});
+                  }}
+                  onShowMap={() => setMode('map')}
+                  onClearFilters={hasFilters ? clearFilters : undefined}
+                  suggestTo={acting?.name ?? null}
+                  canSuggest={canSuggest}
+                  onSuggest={handleSuggest}
+                  suggestingId={suggestingId}
+                  nowRef={nowRef}
+                  onNowLayout={measureNow}
+                  todayRef={todayRef}
+                  onTodayLayout={measureNow}
+                  show={tab === 'nights' ? 'nights' : 'all'}
+                  crossing={
+                    crossing
+                      ? {
+                          name: crossing.name,
+                          avatarUrl: crossing.avatarUrl,
+                          times: crossing.times,
+                          onPress: () => {
+                            getGroupById(crossing.id)
+                              .then((group) => {
+                                if (group) setProfileGroup(group);
+                              })
+                              .catch(() => {});
+                          },
+                        }
+                      : null
+                  }
+                />
+              </View>
             ) : (
-              nothingOpen
-            )}
-          </View>
-        }
-        renderItem={({ item }) => (
-          <View style={styles.item}>
-            <EventCard
-              {...cardProps(item)}
-              action="rsvp"
-              saving={savingId === item.id}
-              onPress={() => setOpenEvent(toSheetEvent(item))}
-              onRsvp={(status) => handleRsvp(item.id, status)}
+              header
+            )
+          }
+          ListEmptyComponent={
+            search === '' ? null : 
+            <View style={styles.empty}>
+              {events.length > 0 ? (
+                <ListEmpty
+                  title="That is everything, for now"
+                  body="You have answered every open plan around here. Widen the radius or come back later."
+                  actionLabel="Search wider"
+                  onAction={widenRadius}
+                />
+              ) : (
+                nothingOpen
+              )}
+            </View>
+          }
+          renderItem={({ item }) => (
+            <View style={styles.item}>
+              <EventCard
+                {...cardProps(item)}
+                action="rsvp"
+                saving={savingId === item.id}
+                onPress={() => setOpenEvent(toSheetEvent(item))}
+                onRsvp={(status) => handleRsvp(item.id, status)}
+              />
+            </View>
+          )}
+          onEndReached={search === '' ? undefined : loadMore}
+          onEndReachedThreshold={0.5}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                load(0, false);
+                loadFriendsGoing();
+              }}
+              tintColor={colors.primary}
             />
+          }
+        />
+        {onLine ? <EdgeFades top={topEdge} /> : null}
+
+        {/* What Suggest did, or what went wrong, over the line where you are. */}
+        {error || suggestNote ? (
+          <View style={styles.toastWrap} pointerEvents="none">
+            <Text
+              style={[styles.toast, error ? styles.toastError : null]}
+              accessibilityLiveRegion="polite"
+            >
+              {error ?? suggestNote}
+            </Text>
           </View>
-        )}
-        onEndReached={search === '' ? undefined : loadMore}
-        onEndReachedThreshold={0.5}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              load(0, false);
-              loadFriendsGoing();
-            }}
-            tintColor={colors.primary}
-          />
-        }
-      />
+        ) : null}
+
+        {/* The header, folded into a glass bar once it has scrolled away. */}
+        {folded ? (
+          <Glass radius={0} sheen={alpha(colors.bg, 0.86)} style={styles.folded}>
+            <ExploreTitleRow
+              kicker={`EXPLORE · ${timeOfDay.toUpperCase()}`}
+              title={city}
+              onSearch={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
+              filtersOn={filtersOn}
+              onFilters={() => setFiltersOpen(true)}
+              mode="list"
+              onMode={toggleMode}
+            />
+            {search === '' ? (
+              <ExploreTabs
+                tab={tab}
+                counts={tabCounts}
+                onTab={chooseTab}
+                tabs={features.liveLocation ? ['plans', 'people', 'nights'] : ['plans', 'nights']}
+                compact
+              />
+            ) : null}
+          </Glass>
+        ) : null}
+      </View>
 
       {sheet}
+      {filterSheet}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
+  listPage: { flex: 1 },
+  toastWrap: { position: 'absolute', left: space.md, right: space.md, bottom: space.xl, alignItems: 'center' },
+  toast: {
+    overflow: 'hidden',
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.ink,
+    color: colors.onInk,
+    ...typo.semi,
+    fontSize: textSize.body,
+    textAlign: 'center',
+  },
+  toastError: { backgroundColor: colors.danger },
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
   content: {
     width: '100%',
@@ -1140,59 +1276,24 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
   },
 
-  header: { gap: space.sm, paddingTop: TITLE_TOP, paddingBottom: space.sm },
+  header: { gap: space.sm, paddingBottom: space.sm },
+  folded: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    paddingTop: TITLE_TOP,
+    paddingHorizontal: space.md,
+    borderWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: alpha(colors.borderStrong, 0.7),
+  },
   column: { width: '100%', maxWidth: layout.column, alignSelf: 'center' },
-  // Starts right of the floating menu button.
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingLeft: FAB_INSET,
-    paddingRight: space.lg,
-  },
-  toggle: {
-    flexDirection: 'row',
-    padding: 3,
-    gap: 2,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceAlt,
-  },
-  toggleItem: {
-    width: 38,
-    height: 30,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toggleItemActive: { backgroundColor: colors.primary },
-  titleActions: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  searchButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceAlt,
-  },
   mapSearchRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   mapSearchField: { flex: 1 },
   searchFloating: { marginHorizontal: 0 },
   cancelText: { color: colors.primary, ...typo.semi, fontSize: textSize.base },
   nothingFound: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body },
-  layers: { flexDirection: 'row', padding: 3, gap: 2, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt },
-  layer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    height: 34,
-    borderRadius: radius.pill,
-  },
-  layerOn: { backgroundColor: colors.surface, ...shadow.bubble },
-  layerText: { color: colors.textSoft, ...typo.semi, fontSize: textSize.body },
-  layerTextOn: { color: colors.text, ...typo.bold },
-  layerDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
   foundSquad: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1234,35 +1335,9 @@ const styles = StyleSheet.create({
   chipIsland: { paddingVertical: space.xs },
   chipsFloating: { paddingHorizontal: space.sm },
   flush: { paddingHorizontal: 0 },
-  bannerFloating: { marginHorizontal: 0, padding: 0, backgroundColor: 'transparent' },
-  screenTitle: {
-    color: colors.text,
-    ...typo.display,
-    fontSize: textSize.hero,
-    letterSpacing: -0.5,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: space.lg,
-  },
-  locationText: { color: colors.textSoft, ...typo.medium, fontSize: textSize.body },
 
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    marginHorizontal: space.lg,
-    padding: space.sm,
-    borderRadius: 12,
-    backgroundColor: colors.surfaceAlt,
-  },
-  bannerText: { flex: 1, color: colors.textSoft, ...typo.medium, fontSize: textSize.small },
-  bannerAction: { color: colors.primary, ...typo.semi, fontSize: textSize.small },
   pressed: { opacity: 0.7 },
 
-  chips: { gap: space.xs, paddingHorizontal: space.lg, paddingVertical: 2 },
   search: {
     height: 44,
     flexDirection: 'row',
@@ -1277,8 +1352,26 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, height: 44, color: colors.text, ...typo.medium, fontSize: 15 },
   groupRow: { gap: space.sm, paddingHorizontal: space.lg },
-  liveCard: { width: 300 },
 
+  suggestPill: {
+    alignSelf: 'center',
+    marginTop: space.xs + 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 40,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    ...shadow.card,
+  },
+  suggestPillText: { color: colors.primary, ...typo.bold, fontSize: textSize.body },
+  suggested: {
+    paddingHorizontal: space.lg,
+    color: colors.success,
+    ...typo.semi,
+    fontSize: textSize.body,
+  },
   error: {
     paddingHorizontal: space.lg,
     color: colors.danger,

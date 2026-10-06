@@ -2,15 +2,20 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import Monogram from '../general/Monogram';
 import { parseDateKey } from '../../lib/datetime';
-import { colors, radius, space, textSize, typo } from '../../theme';
+import { colors, rail, space, sun, sunInk, sunOn, textSize, typo } from '../../theme';
 
-// The memories page is one line through time: the dates down the left, a
-// dashed perforation joining them, and each night hanging off its date. Coming
-// plans sit above TODAY, the nights that happened below it.
+// The memories page is one line through time: a dashed cobalt rail, the times
+// and dates in mono to its left, a dot on it for each row. Coming plans sit
+// above NOW, the nights that happened below it.
 
-export const RAIL_WIDTH = 72;
-const LINE = '#B9C6F3';
+export const RAIL_WIDTH = 70;
+// Where the line runs, from the left edge. Labels sit to its left, dots on it.
+export const LINE_X = 46;
 const DASHES = 120;
+const DOT = 12;
+// Every node is this wide, centred on the line; labels hang off its left.
+const NODE_W = 24;
+const LABEL_W = LINE_X - DOT / 2 - 5;
 
 type RowProps = {
   // What sits on the line for this row: a date, TODAY, a group marker.
@@ -20,7 +25,7 @@ type RowProps = {
   first?: boolean;
   // Rows come in one after another on the first load.
   enterIndex?: number;
-  // Below NOW the line is solid: that part happened. Above it, still dashed.
+  // Below NOW the line is fainter: that part happened. Above it, full cobalt.
   solid?: boolean;
 };
 
@@ -49,49 +54,49 @@ export function TimelineRow({ node, children, first = false, enterIndex, solid =
       ]}
     >
       <View style={styles.rail}>
-        {solid ? (
-          <View style={[styles.line, styles.lineSolid, first && styles.lineFromNode]} pointerEvents="none" />
-        ) : (
-          <View style={[styles.line, first && styles.lineFromNode]} pointerEvents="none">
-            {Array.from({ length: DASHES }, (_, i) => (
-              <View key={i} style={styles.dash} />
-            ))}
-          </View>
-        )}
-        {node}
+        <View style={[styles.line, first && styles.lineFromNode]} pointerEvents="none">
+          {Array.from({ length: DASHES }, (_, i) => (
+            <View key={i} style={[styles.dash, solid && styles.dashHappened]} />
+          ))}
+        </View>
+        <View style={styles.nodeBox} pointerEvents="box-none">
+          {node}
+        </View>
       </View>
       <View style={styles.content}>{children}</View>
     </Animated.View>
   );
 }
 
-// "WED 30" on the line. A night you haven't seen yet gets a filled, breathing
-// hole; one you have, an outlined hole; another parea's night, its avatar;
-// a night still to come, a dashed hole.
+// "Sat 10" on the line, to the left of its dot. A night you haven't seen yet
+// gets a filled, breathing dot; one you have, a grey hollow one; another
+// parea's night, its avatar; a night still to come, a hollow blue one.
 export function DateNode({
   date,
   kind,
   parea,
 }: {
   date: string;
-  kind: 'new' | 'seen' | 'future' | 'ask' | 'parea';
+  kind: 'new' | 'seen' | 'future' | 'ask' | 'parea' | 'selected';
   parea?: { name: string; avatarUrl: string | null };
 }) {
   const d = parseDateKey(date);
-  const weekday = d ? d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase() : '';
-  const day = d ? String(d.getDate()).padStart(2, '0') : '';
+  const weekday = d ? d.toLocaleDateString('en-US', { weekday: 'short' }) : '';
+  const day = d ? String(d.getDate()) : '';
 
   return (
     <View style={styles.node} accessibilityLabel={d ? d.toDateString() : undefined}>
+      <View style={styles.label}>
+        <Text style={[styles.labelText, kind === 'seen' && styles.labelOver]}>{weekday}</Text>
+        <Text style={[styles.labelDay, kind === 'seen' && styles.labelOver]}>{day}</Text>
+      </View>
       {kind === 'new' ? <NewHole /> : null}
-      {kind === 'seen' ? <View style={[styles.hole, styles.holeSeen]} /> : null}
-      {kind === 'future' ? <View style={[styles.hole, styles.holeFuture]} /> : null}
-      {kind === 'ask' ? <View style={[styles.hole, styles.holeAsk]} /> : null}
+      {kind === 'seen' ? <View style={[styles.dot, styles.dotOver]} /> : null}
+      {kind === 'future' || kind === 'ask' ? <View style={styles.dot} /> : null}
+      {kind === 'selected' ? <View style={[styles.dot, styles.dotSelected]} /> : null}
       {kind === 'parea' && parea ? (
-        <Monogram name={parea.name} uri={parea.avatarUrl} size={24} style={styles.face} />
+        <Monogram name={parea.name} uri={parea.avatarUrl} size={22} style={styles.face} />
       ) : null}
-      <Text style={styles.weekday}>{weekday}</Text>
-      <Text style={styles.day}>{day}</Text>
     </View>
   );
 }
@@ -122,44 +127,54 @@ function NewHole() {
           },
         ]}
       />
-      <View style={[styles.hole, styles.holeNew]} />
+      <View style={[styles.dot, styles.dotSelected]} />
     </View>
   );
 }
 
-// "2 tonight" under it when today has more than one plan.
+// The yellow NOW tag across the line; "2 to go" under it when today has plans left.
 export function TodayNode({ note }: { note?: string }) {
   return (
     <View style={styles.node}>
-      <Text style={styles.today}>TODAY</Text>
+      <View style={styles.nowTag}>
+        <Text style={styles.nowTagText}>NOW</Text>
+      </View>
       {note ? <Text style={styles.todayCount}>{note}</Text> : null}
     </View>
   );
 }
 
-// Inside today the rail gives the hour instead of the day: "17:00".
-export function TimeNode({ time, kind }: { time?: string; kind: 'later' | 'ask' | 'live' | 'over' }) {
+// Inside today the rail gives the hour instead of the day: "17:00" in mono,
+// left of a hollow blue dot. Sun while it is on, filled blue when chosen,
+// grey once it is over.
+export function TimeNode({
+  time,
+  kind,
+}: {
+  time?: string;
+  kind: 'later' | 'ask' | 'live' | 'over' | 'selected';
+}) {
   return (
     <View style={styles.node}>
+      <View style={styles.label}>
+        <Text style={[styles.labelText, kind === 'over' && styles.labelOver]}>{time ?? 'Day'}</Text>
+      </View>
       <View
         style={[
-          styles.hole,
-          styles.holeSmall,
-          kind === 'later' && styles.holeFuture,
-          kind === 'ask' && styles.holeAsk,
-          kind === 'live' && styles.holeLive,
-          kind === 'over' && styles.holeOver,
+          styles.dot,
+          kind === 'live' && styles.dotLive,
+          kind === 'over' && styles.dotOver,
+          kind === 'selected' && styles.dotSelected,
         ]}
       />
-      <Text style={[styles.time, kind === 'over' && styles.timeOver]}>{time ?? 'DAY'}</Text>
     </View>
   );
 }
 
 // Two short lines on the line where Home would put a date: "YES" over "2/3"
 // on Votes, "LEFT" over "3d" on an invite, or a weekday over its day when the
-// date isn't a plan's. The hole says whose move it is: yours (ask), the
-// others' (wait), or nobody's any more (over, with the value greyed).
+// date isn't a plan's. The dot says whose move it is: yours (ask, filled),
+// the others' (wait), or nobody's any more (over, greyed).
 export function TallyNode({
   label,
   value,
@@ -173,107 +188,127 @@ export function TallyNode({
 }) {
   return (
     <View style={styles.node} accessible={accessibilityLabel !== undefined} accessibilityLabel={accessibilityLabel}>
-      <View
-        style={[
-          styles.hole,
-          kind === 'ask' && styles.holeAsk,
-          kind === 'wait' && styles.holeFuture,
-          kind === 'over' && [styles.holeOver, styles.holeTally],
-        ]}
-      />
-      <Text style={styles.tallyLabel}>{label.toUpperCase()}</Text>
-      <Text style={[styles.tallyValue, kind === 'over' && styles.timeOver]}>{value}</Text>
+      <View style={styles.label}>
+        <Text style={[styles.labelText, kind === 'over' && styles.labelOver]}>{label}</Text>
+        <Text style={[styles.labelDay, kind === 'over' && styles.labelOver]}>{value}</Text>
+      </View>
+      <View style={[styles.dot, kind === 'ask' && styles.dotSelected, kind === 'over' && styles.dotOver]} />
     </View>
   );
 }
 
-// A black pill across the line, like TODAY: on Votes, "DECIDED" above the
+// A small tag across the line, like NOW: on Votes, "DECIDED" above the
 // votes that are over.
 export function MarkerNode({ label }: { label: string }) {
   return (
     <View style={styles.node}>
-      <Text style={[styles.today, styles.marker]}>{label.toUpperCase()}</Text>
+      <View style={[styles.nowTag, styles.marker]}>
+        <Text style={[styles.nowTagText, styles.markerText]}>{label.toUpperCase()}</Text>
+      </View>
     </View>
   );
 }
 
-// A diamond on the line where a stretch of time starts: "This week". Hollow
-// above NOW (coming), filled below (happened).
+// A tiny blue ticket on the line where a stretch of time starts: "This week".
+// Stretches still to come are filled, ones that happened an outline.
 export function GroupNode({ hollow = false }: { hollow?: boolean }) {
   return (
-    <View style={styles.groupNode}>
-      <View style={[styles.diamond, hollow && styles.diamondHollow]} />
+    <View style={[styles.node, styles.groupNode]}>
+      <View style={styles.stub}>
+        <View style={[styles.stubLeft, hollow ? styles.stubHollow : styles.stubFilled]} />
+        <View style={[styles.stubRight, hollow ? styles.stubHollow : styles.stubFilled]} />
+      </View>
     </View>
   );
 }
 
+// "This weekend" in blue, with what is in it in small grey after it.
 export function GroupTitle({ kicker, title, meta }: { kicker: string; title: string; meta?: string }) {
   return (
     <View style={styles.group} accessibilityRole="header">
-      <Text style={styles.kicker}>{kicker.toUpperCase()}</Text>
-      <Text style={styles.groupTitle}>{title}</Text>
-      {meta ? <Text style={styles.groupMeta}>{meta}</Text> : null}
+      <Text style={styles.kicker}>{kicker}</Text>
+      <Text style={styles.groupMeta} numberOfLines={1}>
+        {[title, meta].filter(Boolean).join(', ')}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', paddingRight: space.md },
-  rail: { width: RAIL_WIDTH, alignItems: 'center' },
+  rail: { width: RAIL_WIDTH },
   line: {
     position: 'absolute',
     top: 0,
     bottom: 0,
-    left: RAIL_WIDTH / 2 - 1,
+    left: LINE_X - 1,
     width: 2,
     overflow: 'hidden',
     gap: 4,
   },
   lineFromNode: { top: 14 },
-  lineSolid: { gap: 0, backgroundColor: colors.primary, opacity: 0.3 },
-  dash: { width: 2, height: 5, borderRadius: 1, backgroundColor: LINE },
-  content: { flex: 1, minWidth: 0, paddingBottom: space.md },
+  dash: { width: 2, height: 7, borderRadius: 1, backgroundColor: rail },
+  // The part of the line that already happened, a little quieter.
+  dashHappened: { opacity: 0.55 },
+  // Nodes are centred on the line, not on the rail.
+  nodeBox: { position: 'absolute', top: 0, left: LINE_X - NODE_W / 2, width: NODE_W, alignItems: 'center' },
+  content: { flex: 1, minWidth: 0, paddingBottom: space.sm + 2 },
 
-  node: { alignItems: 'center', paddingTop: 4, backgroundColor: colors.bg, paddingBottom: 2 },
-  hole: { width: 16, height: 16, borderRadius: 8, marginBottom: 6, backgroundColor: colors.bg },
-  holeSeen: { borderWidth: 2.5, borderColor: colors.primary },
-  holeFuture: { borderWidth: 2, borderStyle: 'dashed', borderColor: colors.primary },
-  holeNew: { backgroundColor: colors.primary },
-  holeAsk: { borderWidth: 2, borderColor: '#E8A400', backgroundColor: '#FFC53D' },
-  holeLive: { backgroundColor: colors.danger },
-  holeOver: { backgroundColor: LINE },
-  holeSmall: { width: 14, height: 14, borderRadius: 7, marginBottom: 4 },
-  time: { color: colors.text, ...typo.display, fontSize: 13 },
-  timeOver: { color: colors.textSoft },
-  newWrap: { width: 16, height: 16, marginBottom: 6, alignItems: 'center', justifyContent: 'center' },
-  halo: { position: 'absolute', width: 16, height: 16, borderRadius: 8, backgroundColor: colors.primary },
-  face: { borderRadius: 8, marginBottom: 4, borderWidth: 2, borderColor: colors.bg },
-  weekday: { color: colors.textSoft, ...typo.mono, fontSize: textSize.micro, letterSpacing: 1.2 },
-  day: { color: colors.text, ...typo.display, fontSize: 20, lineHeight: 22 },
-
-  today: {
-    overflow: 'hidden',
-    color: colors.onInk,
-    backgroundColor: colors.ink,
-    ...typo.mono,
-    fontSize: textSize.micro,
-    letterSpacing: 1.2,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
+  node: { width: NODE_W, alignItems: 'center', paddingTop: 14 },
+  label: { position: 'absolute', top: 11, right: NODE_W / 2 + DOT / 2 + 5, width: LABEL_W + 10, alignItems: 'flex-end' },
+  labelText: { color: colors.accentInk, ...typo.mono, fontWeight: '600', fontSize: textSize.caption },
+  labelDay: { color: colors.accentInk, ...typo.mono, fontWeight: '700', fontSize: textSize.small, marginTop: 1 },
+  labelOver: { color: colors.textFaint },
+  dot: {
+    width: DOT,
+    height: DOT,
+    borderRadius: DOT / 2,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.surface,
   },
-  todayCount: { marginTop: 6, color: colors.textSoft, ...typo.semi, fontSize: textSize.caption },
-  marker: { fontSize: 10.5, letterSpacing: 0.8, paddingHorizontal: 6 },
+  dotLive: { borderColor: sun, backgroundColor: sun },
+  dotOver: { borderColor: colors.textFaint },
+  dotSelected: { backgroundColor: colors.primary },
+  newWrap: { width: DOT, height: DOT, alignItems: 'center', justifyContent: 'center' },
+  halo: { position: 'absolute', width: DOT, height: DOT, borderRadius: DOT / 2, backgroundColor: colors.primary },
+  face: { borderRadius: 7, borderWidth: 2, borderColor: colors.bg, marginTop: -4 },
 
-  holeTally: { width: 12, height: 12, borderRadius: 6, marginTop: 2 },
-  tallyLabel: { color: colors.textSoft, ...typo.mono, fontSize: 10.5, letterSpacing: 1.2 },
-  tallyValue: { color: colors.text, ...typo.display, fontSize: 19, lineHeight: 22, letterSpacing: -0.3 },
+  // NOW reads across the line: its right edge just past the rail.
+  nowTag: {
+    position: 'absolute',
+    top: 4,
+    right: NODE_W / 2 - 4,
+    height: 20,
+    minWidth: 32,
+    paddingHorizontal: 5,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: sun,
+  },
+  nowTagText: { color: sunOn, ...typo.mono, fontWeight: '700', fontSize: textSize.micro },
+  todayCount: {
+    position: 'absolute',
+    top: 28,
+    right: NODE_W / 2 + 6,
+    width: 60,
+    textAlign: 'right',
+    color: sunInk,
+    ...typo.semi,
+    fontSize: textSize.micro,
+  },
+  marker: { backgroundColor: colors.ink },
+  markerText: { color: colors.onInk, letterSpacing: 0.6 },
 
-  groupNode: { paddingTop: 8, backgroundColor: colors.bg, paddingBottom: 4 },
-  diamond: { width: 13, height: 13, borderRadius: 3, backgroundColor: colors.primary, transform: [{ rotate: '45deg' }] },
-  diamondHollow: { backgroundColor: colors.bg, borderWidth: 2, borderColor: colors.primary },
-  group: { gap: 1, paddingTop: 2 },
-  kicker: { color: colors.primary, ...typo.mono, fontSize: textSize.micro, letterSpacing: 1.4 },
-  groupTitle: { color: colors.text, ...typo.display, fontSize: 18, letterSpacing: -0.3 },
-  groupMeta: { color: colors.textSoft, ...typo.semi, fontSize: textSize.small },
+  groupNode: { paddingTop: 6 },
+  // A 16 by 11 ticket with a tear a little past the middle.
+  stub: { width: 16, height: 11, flexDirection: 'row', gap: 1.5 },
+  stubLeft: { width: 10, height: 11, borderTopLeftRadius: 2.5, borderBottomLeftRadius: 2.5 },
+  stubRight: { width: 4.5, height: 11, borderTopRightRadius: 2.5, borderBottomRightRadius: 2.5 },
+  stubFilled: { backgroundColor: colors.primary },
+  stubHollow: { borderWidth: 1.5, borderColor: colors.primary, backgroundColor: colors.bg },
+  group: { flexDirection: 'row', alignItems: 'baseline', gap: space.xs, paddingTop: 2, minHeight: 24 },
+  kicker: { color: colors.accentInk, ...typo.bold, fontSize: textSize.lead, letterSpacing: -0.3 },
+  groupMeta: { flexShrink: 1, color: colors.textFaint, ...typo.medium, fontSize: textSize.small },
 });

@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   idle: { backgroundColor: colors.surface, borderColor: colors.border },
-  active: { backgroundColor: colors.ink, borderColor: colors.ink },
+  active: { backgroundColor: colors.primary, borderColor: colors.primary },
   pressed: { opacity: 0.7 },
   disabled: { opacity: 0.5 },
 

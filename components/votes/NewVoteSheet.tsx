@@ -30,6 +30,10 @@ import { brand, colors, radius, space, textSize, typo } from '../../theme';
 // A plan is put to the vote from the plan form, not from a step here.
 export type Step = 'menu' | Exclude<VoteKind, 'plan'>;
 
+// A vote another screen asks the chat to start: the step, and for following
+// or unfollowing, the parea it is about (picked already).
+export type VoteStart = { step: Step; pick?: { id: string; name: string } };
+
 // A row to pick in the list steps: a squad or a member.
 type Choice = { id: string; title: string; detail?: string; avatarUrl?: string | null; square?: boolean };
 
@@ -50,6 +54,8 @@ type NewVoteSheetProps = {
   // Opens straight on one kind (a quick start on Votes); Back still leads to
   // every kind.
   initialStep?: Step;
+  // On follow / unfollow: the parea already picked (searched for by name).
+  initialPick?: { id: string; name: string } | null;
   // "Throw a plan": closes this and opens the plan form.
   onNewPlan?: () => void;
 };
@@ -63,6 +69,7 @@ export default function NewVoteSheet({
   onClose,
   onStarted,
   initialStep = 'menu',
+  initialPick = null,
   onNewPlan,
 }: NewVoteSheetProps) {
   const [step, setStep] = useState<Step>('menu');
@@ -91,6 +98,10 @@ export default function NewVoteSheet({
     const hidden = (initialStep === 'follow' || initialStep === 'unfollow') && !features.squadFollows;
     setStep(hidden ? 'menu' : initialStep);
     resetStep();
+    if (!hidden && initialPick && (initialStep === 'follow' || initialStep === 'unfollow')) {
+      if (initialStep === 'follow') setQuery(initialPick.name);
+      setPicked(initialPick.id);
+    }
   }, [visible]);
 
   function resetStep() {

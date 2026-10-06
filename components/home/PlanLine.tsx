@@ -3,8 +3,11 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import type { MyEvent, RsvpStatus } from '../../services/serviceEvents';
 import { addDays, eventWindow, keyOf, parseLocal, startOfWeek } from '../../lib/datetime';
 import { DateNode, GroupNode, GroupTitle, TimeNode, TimelineRow, TodayNode } from './Timeline';
-import LineTicket, { shortPlace, type DayPhase } from './LineTicket';
-import { colors, radius, space, textSize, typo } from '../../theme';
+import { shortPlace, type DayPhase } from './LineTicket';
+import PlanTicket, { TicketActions, type TicketPill } from './PlanTicket';
+import AnswerSeg, { toStatus, type Answer } from '../general/AnswerSeg';
+import AttendeeStack from '../events/Attendee';
+import { colors, radius, space, sunInk, sun, textSize, typo } from '../../theme';
 
 // Another parea's public plan you haven't answered, that your parea is
 // looking at: suggested to it, or members of it are going.
@@ -34,6 +37,10 @@ type PlanLineProps = {
   // Where the NOW row sits inside the line, so Home can open on it.
   // The NOW row, so the page can measure where it sits; onNowLayout says when it moved.
   nowRef?: RefObject<View | null>;
+  // Where today starts on the line (its plans, or the empty day), so the page
+  // opens on today; onTodayLayout says when it moved.
+  todayRef?: RefObject<View | null>;
+  onTodayLayout?: () => void;
   onNowLayout?: () => void;
   // A problem saving an answer, a check-in or a photo; shown under NOW.
   error?: string | null;
@@ -42,8 +49,8 @@ type PlanLineProps = {
 // The upper half of the memories line, read like the rest of the page: later
 // is higher. The coming days on top, grouped into stretches; then today, hour
 // by hour; then NOW. The rail always says when (the day, or today the hour);
-// the content says what. One plan is a ticket, the one that matters now; tap
-// any other row and it becomes the ticket instead.
+// the content says what. Every plan is a ticket. The first tap chooses one
+// (blue, with In | Maybe | Out) or grows the one on now; the second opens it.
 export default function PlanLine({
   plans,
   others = [],
@@ -58,10 +65,16 @@ export default function PlanLine({
   onAddPhoto,
   onThrowPlan,
   nowRef,
+  todayRef,
+  onTodayLayout,
   onNowLayout,
   error = null,
 }: PlanLineProps) {
+  // One plan chosen on the line at a time.
   const [chosen, setChosen] = useState<string | null>(null);
+  // Plans you said Maybe to here. Only in and out are saved, so Maybe clears
+  // your answer and is remembered for as long as the line is open.
+  const [maybes, setMaybes] = useState<Set<string>>(new Set());
   const todayKey = keyOf(now);
 
   const phaseOf = (plan: MyEvent): DayPhase => {
@@ -74,117 +87,166 @@ export default function PlanLine({
   const today = plans.filter((plan) => plan.date <= todayKey);
   const ahead = today.filter((plan) => phaseOf(plan) !== 'past');
   const over = today.filter((plan) => phaseOf(plan) === 'past');
-  // Other pareas' plans join the rows, not the ticket: one already over is gone.
+  // Other pareas' plans join the rows: one already over is gone.
   const otherById = new Map(others.map((one) => [one.event.id, one]));
   const otherPlans = others.map((one) => one.event).filter((plan) => plan.date > todayKey || phaseOf(plan) !== 'past');
   const futureRows = [...future, ...otherPlans.filter((plan) => plan.date > todayKey)].sort(soonestFirst);
   const aheadRows = [...ahead, ...otherPlans.filter((plan) => plan.date <= todayKey)];
-
-  // On now first (one with a start time before an all-day one), else the next
-  // one still to come, today or later; never one you passed on.
-  const live = ahead
-    .filter((plan) => phaseOf(plan) === 'live' && plan.myStatus !== 'out')
-    .sort((a, b) => Number(!!b.startTime) - Number(!!a.startTime) || (b.startTime ?? '').localeCompare(a.startTime ?? ''));
-  const natural =
-    live[0] ??
-    [...ahead.filter((plan) => phaseOf(plan) === 'later'), ...future]
-      .filter((plan) => plan.myStatus !== 'out')
-      .sort(soonestFirst)[0] ??
-    null;
-  const front = plans.find((plan) => plan.id === chosen) ?? natural;
   const toGo = ahead.filter((plan) => plan.myStatus !== 'out').length;
 
-  // When the clock moves the natural plan on (one ended, one started), a plan
-  // you had opened by hand lets go too; so does one that left the list.
-  const naturalId = natural?.id ?? null;
+  // A chosen plan that left the list lets go.
   useEffect(() => {
-    setChosen(null);
-  }, [naturalId]);
-  useEffect(() => {
-    if (chosen && !plans.some((plan) => plan.id === chosen)) setChosen(null);
-  }, [chosen, plans]);
+    if (chosen && !plans.some((plan) => plan.id === chosen) && !others.some((one) => one.event.id === chosen)) {
+      setChosen(null);
+    }
+  }, [chosen, plans, others]);
 
-  // Tapping the natural plan's row brings it back; any other opens that one.
-  function toggle(plan: MyEvent) {
-    setChosen(plan.id === naturalId ? null : plan.id);
+  // First tap chooses (or grows the live one); the second opens it.
+  function tap(plan: MyEvent) {
+    if (chosen === plan.id) onOpen(plan);
+    else setChosen(plan.id);
   }
 
-  function kicker(plan: MyEvent, phase: DayPhase) {
-    const time = plan.startTime;
-    const next = plan.id === naturalId ? 'NEXT · ' : '';
-    if (phase === 'live') return plan.endTime ? `ON NOW · TILL ${plan.endTime}` : 'ON NOW';
-    if (phase === 'past') return time ? `EARLIER · ${time}` : 'EARLIER TODAY';
-    if (plan.date > todayKey) return `${next}${dayWord(plan.date, now)}${time ? ` · ${time}` : ''}`;
-    if (!time) return `${next}TODAY`;
-    const { startsAt } = eventWindow(plan.date, plan.startTime, plan.endTime);
-    const mins = Math.max(1, Math.round((startsAt.getTime() - now.getTime()) / 60000));
-    return `${next}${time} · IN ${mins < 60 ? `${mins} MIN` : `${Math.round(mins / 60)}H`}`;
+  function answerOf(plan: MyEvent): Answer | null {
+    if (plan.myStatus) return plan.myStatus;
+    return maybes.has(plan.id) ? 'maybe' : null;
   }
 
-  function people(plan: MyEvent, phase: DayPhase): string | null {
-    const here = phase === 'live' ? hereCount(plan.id) : 0;
-    if (here > 0) return `${here} here now`;
+  function answer(plan: MyEvent, choice: Answer) {
+    setMaybes((was) => {
+      const next = new Set(was);
+      if (choice === 'maybe') next.add(plan.id);
+      else next.delete(plan.id);
+      return next;
+    });
+    const other = otherById.get(plan.id);
+    if (other) {
+      // Another parea's plan has nothing to clear: Maybe stays here only.
+      if (choice !== 'maybe') onAnswerOther?.(plan, choice);
+      return;
+    }
+    const status = toStatus(choice);
+    if (status === (plan.myStatus ?? null)) return;
+    onRsvp(plan, status);
+  }
+
+  // "You, Nikos, Marina +1".
+  function people(plan: MyEvent): string | null {
     const names = [
       ...plan.going.filter((person) => person.id === userId).map(() => 'You'),
       ...plan.going.filter((person) => person.id !== userId).map((person) => firstName(person.name)),
     ].filter(Boolean);
     if (names.length === 0) return null;
-    const rest = names.length - 2;
-    return `${names.slice(0, 2).join(', ')}${rest > 0 ? ` +${rest}` : ''} ${phase === 'past' ? 'went' : 'in'}`;
+    const rest = names.length - 3;
+    return `${names.slice(0, 3).join(', ')}${rest > 0 ? ` +${rest}` : ''}`;
   }
 
-  function body(plan: MyEvent, phase: DayPhase, showTime: boolean) {
-    if (plan.id === front?.id) {
+  function ticket(plan: MyEvent, phase: DayPhase, showTime: boolean) {
+    const other = otherById.get(plan.id);
+    const place = shortPlace(plan.placeLabel ?? plan.location);
+    const isIn = plan.myStatus === 'in';
+    const passed = plan.myStatus === 'out';
+    const count = plan.going.length;
+
+    if (phase === 'past') {
+      const sub = [people(plan), place].filter(Boolean).join(', ') || plan.groupName;
       return (
-        <Reveal key={`${plan.id}-ticket`} style={styles.ticketWrap}>
-          <LineTicket
-            event={plan}
-            phase={phase}
-            kicker={kicker(plan, phase)}
-            people={people(plan, phase)}
-            checkedIn={isCheckedIn(plan.id)}
-            onOpen={() => onOpen(plan)}
-            onIn={() => onRsvp(plan, 'in')}
-            onPass={() => {
-              // Passing on the plan you opened folds it back to the natural one.
-              if (chosen === plan.id) setChosen(null);
-              onRsvp(plan, 'out');
-            }}
-            onClear={() => onRsvp(plan, null)}
-            onCheckIn={() => onCheckIn(plan)}
-            onAddPhoto={() => onAddPhoto(plan)}
-          />
-        </Reveal>
+        <PlanTicket
+          state="past"
+          title={plan.title}
+          sub={sub}
+          pill={{ label: isIn ? 'went' : 'missed', tone: 'quiet' }}
+          onPress={() => onOpen(plan)}
+          accessibilityLabel={`${plan.title}, ${sub}, ${isIn ? 'you went' : 'over'}. Open the plan`}
+        />
       );
     }
+
+    if (phase === 'live' && !other) {
+      const here = hereCount(plan.id);
+      const grown = chosen === plan.id;
+      const checkedIn = isCheckedIn(plan.id);
+      const short = [place, here > 0 ? `${here} here` : count > 0 ? `${count} in` : null].filter(Boolean).join(', ') || plan.groupName;
+      const long = [place, people(plan)].filter(Boolean).join('. ') || plan.groupName;
+      return (
+        <PlanTicket
+          state="live"
+          grown={grown}
+          title={plan.title}
+          sub={short}
+          long={long}
+          onPress={() => tap(plan)}
+          accessibilityLabel={`${plan.title}, on now, ${grown ? long : short}`}
+          accessibilityHint={grown ? 'Opens the plan' : 'Shows who is there'}
+          extra={
+            <>
+              {count > 0 || here > 0 ? (
+                <View style={styles.here}>
+                  <AttendeeStack people={plan.going} size={24} max={3} />
+                  <Text style={styles.hereText}>{here > 0 ? `${here} here` : `${count} in`}</Text>
+                </View>
+              ) : null}
+              {isIn ? (
+                <TicketActions
+                  actions={[
+                    {
+                      label: checkedIn ? "You're here" : "I'm here",
+                      icon: checkedIn ? 'checkmark' : 'location-outline',
+                      strong: !checkedIn,
+                      disabled: checkedIn,
+                      onPress: () => onCheckIn(plan),
+                    },
+                    { label: 'Photo', icon: 'camera-outline', strong: checkedIn, onPress: () => onAddPhoto(plan) },
+                  ]}
+                />
+              ) : (
+                <View style={styles.liveAnswer}>
+                  <AnswerSeg tone="sheet" value={answerOf(plan)} onChange={(choice) => answer(plan, choice)} label={`Your answer to ${plan.title}`} />
+                </View>
+              )}
+            </>
+          }
+        />
+      );
+    }
+
+    const sub = other
+      ? [plan.groupName, other.note, showTime ? plan.startTime : null].filter(Boolean).join(', ')
+      : [showTime ? plan.startTime : null, plan.groupName, place].filter(Boolean).join(', ');
+    let pill: TicketPill | null;
+    if (other || plan.myStatus === undefined) pill = { label: 'Answer', tone: 'ask' };
+    else if (passed) pill = { label: 'Passed', tone: 'quiet' };
+    else pill = { label: count > 1 ? `${count} in` : "You're in", tone: 'done', icon: 'checkmark' };
+    const isChosen = chosen === plan.id;
+    const status = other || plan.myStatus === undefined ? 'needs your answer' : passed ? 'you passed' : "you're in";
+
     return (
-      <Reveal key={`${plan.id}-row`}>
-        <LineRow plan={plan} phase={phase} showTime={showTime} onPress={() => toggle(plan)} />
-      </Reveal>
+      <PlanTicket
+        state={isChosen ? 'chosen' : 'plain'}
+        title={plan.title}
+        sub={sub}
+        pill={pill}
+        answer={{ value: answerOf(plan), onChange: (choice) => answer(plan, choice), disabled: other?.saving }}
+        onPress={() => tap(plan)}
+        accessibilityLabel={`${plan.title}, ${sub}, ${status}`}
+        accessibilityHint={isChosen ? 'Opens the plan' : 'Shows your answer'}
+      />
     );
   }
 
-  function otherRow(one: OtherPlan, showTime: boolean) {
-    return (
-      <Reveal key={`${one.event.id}-other`}>
-        <OtherRow
-          one={one}
-          showTime={showTime}
-          onOpen={() => onOpen(one.event)}
-          onAnswer={(status) => onAnswerOther?.(one.event, status)}
-        />
-      </Reveal>
-    );
+  function nodeKind(plan: MyEvent, phase: DayPhase): 'later' | 'live' | 'selected' {
+    if (phase === 'live' && !otherById.has(plan.id)) return 'live';
+    return chosen === plan.id ? 'selected' : 'later';
   }
 
   const rows: ReactNode[] = [];
   const isFirst = () => rows.length === 0;
 
-  // The coming days, furthest stretch on top, each headed by a hollow diamond.
+  // The coming days, furthest stretch on top, each headed by a small ticket.
   for (const stretch of stretches([...futureRows].reverse(), now)) {
     const asks = stretch.plans.filter((plan) => plan.myStatus === undefined && !otherById.has(plan.id)).length;
     rows.push(
-      <TimelineRow key={`s-${stretch.label}`} first={isFirst()} node={<GroupNode hollow />}>
+      <TimelineRow key={`s-${stretch.label}`} first={isFirst()} node={<GroupNode />}>
         <GroupTitle
           kicker={stretch.label}
           title={stretch.plans.length === 1 ? '1 plan' : `${stretch.plans.length} plans`}
@@ -194,34 +256,32 @@ export default function PlanLine({
     );
     stretch.plans.forEach((plan, i) => {
       const sameDayAbove = i > 0 && stretch.plans[i - 1].date === plan.date;
-      const other = otherById.get(plan.id);
-      const ask = plan.myStatus === undefined && !other;
+      const kind = nodeKind(plan, 'later');
       rows.push(
         <TimelineRow
           key={plan.id}
           node={
             sameDayAbove ? (
-              <TimeNode time={plan.startTime} kind={ask ? 'ask' : 'later'} />
+              <TimeNode time={plan.startTime} kind={kind} />
             ) : (
-              <DateNode date={plan.date} kind={ask ? 'ask' : 'future'} />
+              <DateNode date={plan.date} kind={kind === 'selected' ? 'selected' : 'future'} />
             )
           }
         >
-          {other ? otherRow(other, true) : body(plan, 'later', true)}
+          {ticket(plan, 'later', true)}
         </TimelineRow>,
       );
     });
   }
 
   // Today, latest on top, down to NOW.
+  rows.push(<View key="today-mark" ref={todayRef} collapsable={false} onLayout={() => onTodayLayout?.()} />);
   if (aheadRows.length > 0) {
     for (const plan of [...aheadRows].sort(latestFirst)) {
       const phase = phaseOf(plan);
-      const other = otherById.get(plan.id);
-      const kind = phase === 'live' ? 'live' : plan.myStatus === undefined && !other ? 'ask' : 'later';
       rows.push(
-        <TimelineRow key={plan.id} first={isFirst()} node={<TimeNode time={plan.startTime} kind={kind} />}>
-          {other ? otherRow(other, false) : body(plan, phase, false)}
+        <TimelineRow key={plan.id} first={isFirst()} node={<TimeNode time={plan.startTime} kind={nodeKind(plan, phase)} />}>
+          {ticket(plan, phase, false)}
         </TimelineRow>,
       );
     }
@@ -249,7 +309,7 @@ export default function PlanLine({
       <View ref={nowRef} collapsable={false} onLayout={() => onNowLayout?.()}>
         <TimelineRow solid node={<TodayNode note={toGo > 0 ? `${toGo} to go` : undefined} />}>
           <View style={styles.now} accessible accessibilityLabel={`Now, ${clock(now)}`}>
-            <Text style={styles.nowText}>NOW · {clock(now)}</Text>
+            <Text style={styles.nowText}>{clock(now)}</Text>
             <View style={styles.nowRule} />
           </View>
           {error ? (
@@ -262,116 +322,9 @@ export default function PlanLine({
 
       {[...over].sort(latestFirst).map((plan) => (
         <TimelineRow key={plan.id} solid node={<TimeNode time={plan.startTime} kind="over" />}>
-          {body(plan, 'past', false)}
+          {ticket(plan, 'past', false)}
         </TimelineRow>
       ))}
-    </View>
-  );
-}
-
-function LineRow({
-  plan,
-  phase,
-  showTime,
-  onPress,
-}: {
-  plan: MyEvent;
-  phase: DayPhase;
-  showTime: boolean;
-  onPress: () => void;
-}) {
-  const past = phase === 'past';
-  const live = phase === 'live';
-  const isIn = plan.myStatus === 'in';
-  const passed = plan.myStatus === 'out';
-  const ask = plan.myStatus === undefined && !past;
-  const count = plan.going.length;
-
-  let right: ReactNode;
-  if (live && !passed) right = <Text style={styles.live}>ON NOW</Text>;
-  else if (past) right = <Text style={styles.meta}>{isIn ? 'went' : 'missed'}</Text>;
-  else if (ask) right = <Text style={styles.answer}>ANSWER</Text>;
-  else if (passed) right = <Text style={styles.meta}>passed</Text>;
-  else right = count > 0 ? <Text style={styles.meta}>{count} in</Text> : null;
-
-  const status = live ? 'on now' : past ? (isIn ? 'you went' : 'over') : ask ? 'needs your answer' : passed ? 'you passed' : "you're in";
-  const sub = [showTime ? plan.startTime : null, plan.groupName, shortPlace(plan.placeLabel ?? plan.location)]
-    .filter(Boolean)
-    .join(' · ');
-
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${plan.title}, ${sub}, ${status}. Show it`}
-      style={({ pressed }) => [styles.row, past && styles.rowPast, pressed && styles.rowPressed]}
-    >
-      <View style={styles.rowText}>
-        <Text style={[styles.title, passed && styles.titlePassed]} numberOfLines={1}>
-          {plan.title}
-        </Text>
-        <Text style={styles.sub} numberOfLines={1}>
-          {sub}
-        </Text>
-      </View>
-      {right}
-    </Pressable>
-  );
-}
-
-// Another parea's plan: who brought it here, and I'm in / Pass right on the
-// row, since it never becomes the ticket. Tapping the rest opens it.
-function OtherRow({
-  one,
-  showTime,
-  onOpen,
-  onAnswer,
-}: {
-  one: OtherPlan;
-  showTime: boolean;
-  onOpen: () => void;
-  onAnswer: (status: RsvpStatus) => void;
-}) {
-  const plan = one.event;
-  const sub = [one.note, showTime ? plan.startTime : null, plan.groupName].filter(Boolean).join(' · ');
-
-  return (
-    <View style={[styles.row, styles.rowOther]}>
-      <Pressable
-        onPress={onOpen}
-        accessibilityRole="button"
-        accessibilityLabel={`${plan.title}, ${sub}. Show it`}
-        style={({ pressed }) => [styles.rowText, styles.otherText, pressed && styles.pressed]}
-      >
-        <Text style={styles.title} numberOfLines={1}>
-          {plan.title}
-        </Text>
-        <Text style={styles.sub} numberOfLines={1}>
-          {sub}
-        </Text>
-      </Pressable>
-      <Pressable
-        onPress={() => onAnswer('in')}
-        disabled={one.saving}
-        accessibilityRole="button"
-        accessibilityLabel={`I'm in, ${plan.title}`}
-        accessibilityState={{ disabled: one.saving }}
-        hitSlop={4}
-        style={({ pressed }) => [styles.chip, styles.chipIn, one.saving && styles.disabled, pressed && styles.chipPressed]}
-      >
-        <Text style={[styles.chipText, styles.chipInText]}>I'm in</Text>
-      </Pressable>
-      <Pressable
-        onPress={() => onAnswer('out')}
-        disabled={one.saving}
-        accessibilityRole="button"
-        accessibilityLabel={`Pass, ${plan.title}`}
-        accessibilityState={{ disabled: one.saving }}
-        hitSlop={4}
-        style={({ pressed }) => [styles.chip, one.saving && styles.disabled, pressed && styles.chipPressed]}
-      >
-        <Text style={styles.chipText}>Pass</Text>
-      </Pressable>
     </View>
   );
 }
@@ -455,58 +408,14 @@ function clock(d: Date) {
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
-  ticketWrap: { marginTop: 2, marginBottom: space.xs },
 
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    minHeight: 50,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginBottom: space.xs,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
-  rowPast: { opacity: 0.55, borderStyle: 'dashed', backgroundColor: 'transparent' },
-  rowPressed: { backgroundColor: colors.surface },
-  rowText: { flex: 1, minWidth: 0 },
-  rowOther: { gap: 6, paddingRight: 8, borderStyle: 'dashed', borderColor: colors.borderStrong },
-  otherText: { alignSelf: 'stretch', justifyContent: 'center' },
-  chip: {
-    height: 32,
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceAlt,
-  },
-  chipIn: { backgroundColor: colors.primary },
-  chipPressed: { transform: [{ scale: 0.95 }] },
-  chipText: { color: colors.text, ...typo.display, fontSize: textSize.small },
-  chipInText: { color: colors.onInk },
-  disabled: { opacity: 0.5 },
-  title: { color: colors.text, ...typo.bold, fontSize: textSize.base },
-  titlePassed: { color: colors.textSoft, textDecorationLine: 'line-through' },
-  sub: { color: colors.textSoft, ...typo.medium, fontSize: textSize.caption },
-  meta: { color: colors.textSoft, ...typo.semi, fontSize: textSize.small },
-  live: { color: colors.danger, ...typo.mono, fontSize: textSize.micro, letterSpacing: 1 },
-  answer: {
-    overflow: 'hidden',
-    color: '#8A5300',
-    backgroundColor: '#FFF3D6',
-    ...typo.mono,
-    fontSize: textSize.micro,
-    letterSpacing: 1,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-  },
+  here: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: space.xs },
+  hereText: { color: colors.textSoft, ...typo.medium, fontSize: 12.5 },
+  liveAnswer: { marginTop: 12 },
 
-  now: { flexDirection: 'row', alignItems: 'center', gap: space.xs, height: 26 },
-  nowText: { color: colors.danger, ...typo.mono, fontSize: textSize.micro, letterSpacing: 1.2 },
-  nowRule: { flex: 1, height: 1.5, backgroundColor: colors.danger, opacity: 0.5 },
+  now: { flexDirection: 'row', alignItems: 'center', gap: space.xs, height: 30, paddingTop: 2 },
+  nowText: { color: sunInk, ...typo.mono, fontWeight: '600', fontSize: textSize.small },
+  nowRule: { flex: 1, height: 1.5, backgroundColor: sun },
 
   empty: {
     flexDirection: 'row',
@@ -519,7 +428,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: '#B9C6F3',
+    borderColor: colors.accentSoft,
   },
   emptyText: { flex: 1, color: colors.textSoft, ...typo.semi, fontSize: textSize.body },
   emptyButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: space.sm },

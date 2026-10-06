@@ -7,7 +7,7 @@ import { mentionParts } from './mentions';
 import type { Person } from '../../lib/people';
 import type { ChatReactions } from './reactions';
 import { REACTION_ICONS, REACTION_NAMES } from '../general/reactionIcons';
-import { colors, paper, typo, shadow, solidFor, space, tint } from '../../theme';
+import { colors, paper, typo, shadow, space, tint } from '../../theme';
 import { GroupMonogram } from './GroupPicker';
 import { formatDateTime, keyOf, parseDateKey, timeLabel } from '../../lib/datetime';
 
@@ -45,8 +45,9 @@ type MessageBubbleProps = {
   imageWidth?: number;
   imageHeight?: number;
   onOpenImage?: () => void;
-  // A plan suggested to the parea (PlanCard), shown in place of the text.
-  planCard?: ReactNode;
+  // A card in place of the text and without a bubble: a vote, a question, a
+  // suggested plan, someone on their way. Long press still opens the menu.
+  card?: ReactNode;
   // The message being answered in the composer.
   highlighted?: boolean;
 };
@@ -77,7 +78,7 @@ export default function MessageBubble({
   imageWidth = 0,
   imageHeight = 0,
   onOpenImage,
-  planCard,
+  card,
   highlighted = false,
 }: MessageBubbleProps) {
   const body = useMemo(
@@ -186,6 +187,7 @@ export default function MessageBubble({
 
   const bubblePress = !deleted && ((status === 'failed' && onRetry) || onLongPress);
   const failed = status === 'failed';
+  const asCard = !!card && !deleted;
 
   const shape = mine
     ? {
@@ -209,11 +211,27 @@ export default function MessageBubble({
     mine ? styles.bubbleMine : styles.bubbleOther,
     status === 'pending' && styles.bubblePending,
     highlighted && (hasPhoto ? styles.highlightPhoto : styles.highlight),
+    highlighted && mine && styles.highlightMine,
     shape,
   ];
 
   let bubble: ReactNode;
-  if (deleted) {
+  if (asCard) {
+    // Not a button itself: the card's own buttons stay reachable. The menu is a
+    // long press anywhere else on the card.
+    bubble = (
+      <Pressable
+        onLongPress={onLongPress}
+        disabled={!onLongPress}
+        accessible={false}
+        style={function ({ pressed }) {
+          return [status === 'pending' && styles.bubblePending, pressed && styles.cardPressed];
+        }}
+      >
+        {card}
+      </Pressable>
+    );
+  } else if (deleted) {
     bubble = (
       <View style={[styles.bubble, styles.bubbleDeleted, shape]} accessibilityLabel="Message deleted">
         <Text style={styles.deletedText}>Message deleted</Text>
@@ -258,7 +276,7 @@ export default function MessageBubble({
       <View style={[styles.column, asCard && styles.columnCard, mine ? styles.columnMine : styles.columnOther]}>
         {!mine && isFirst && senderName ? (
           <Text style={styles.sender} numberOfLines={1}>
-            <Text style={{ color: solidFor(senderName) }}>{senderName}</Text>
+            <Text style={styles.senderName}>{senderName}</Text>
             <Text style={styles.senderTime}> · {timeLabel(createdAt)}</Text>
           </Text>
         ) : null}
@@ -399,6 +417,8 @@ const styles = StyleSheet.create({
   bubblePending: { opacity: 0.55 },
   // The message you are answering: a blue ring, the bubble's size unchanged.
   highlight: { borderWidth: 2, borderColor: paper.accent, paddingHorizontal: 11, paddingVertical: 7 },
+  // On your own blue bubble the ring is ink, so it still shows.
+  highlightMine: { borderColor: paper.ink },
   highlightPhoto: { borderWidth: 2, borderColor: paper.accent, padding: 2 },
   bubbleDeleted: {
     backgroundColor: 'transparent',
@@ -414,6 +434,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   pressed: { opacity: 0.85 },
+  cardPressed: { opacity: 0.92 },
 
   failedRow: { flexDirection: 'row', alignItems: 'center', maxWidth: '100%' },
   failedBubble: { flexShrink: 1 },
@@ -467,15 +488,9 @@ const styles = StyleSheet.create({
   chipCountMine: { color: RED_TEXT },
   chipOther: { color: paper.inkSoft, marginLeft: 2 },
 
-  sender: {
-    marginBottom: 3,
-    marginLeft: 2,
-    ...typo.mono,
-    fontSize: 11,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  senderTime: { color: paper.inkSoft },
+  sender: { marginBottom: 3, marginLeft: 4, fontSize: 11.5 },
+  senderName: { color: paper.accentInk, ...typo.semi },
+  senderTime: { color: paper.inkFaint, ...typo.mono },
   text: { color: paper.ink, ...typo.regular, fontSize: 16, lineHeight: 22 },
   textMine: { color: paper.onMine },
 

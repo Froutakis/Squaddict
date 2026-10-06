@@ -320,7 +320,8 @@ export async function getEventPhotos(eventId: string): Promise<EventPhoto[]> {
     return (data as EventPhotoRow[]).map(toEventPhoto);
 }
 
-export type EventCover = EventPhoto & { latestAt: string };
+// photoIds and count ride along for the calendar: the rows are loaded anyway.
+export type EventCover = EventPhoto & { latestAt: string; count: number; photoIds: string[] };
 
 // The first photo of each night, plus when its newest photo was added.
 export async function getEventCovers(eventIds: string[]): Promise<Record<string, EventCover>> {
@@ -336,8 +337,11 @@ export async function getEventCovers(eventIds: string[]): Promise<Record<string,
     const covers: Record<string, EventCover> = {};
     for (const row of data as EventPhotoRow[]) {
         const cover = covers[row.event_id];
-        if (cover) cover.latestAt = row.created_at;
-        else covers[row.event_id] = { ...toEventPhoto(row), latestAt: row.created_at };
+        if (cover) {
+            cover.latestAt = row.created_at;
+            cover.count += 1;
+            cover.photoIds.push(row.id);
+        } else covers[row.event_id] = { ...toEventPhoto(row), latestAt: row.created_at, count: 1, photoIds: [row.id] };
     }
     return covers;
 }

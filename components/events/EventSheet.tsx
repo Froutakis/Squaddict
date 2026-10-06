@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Attendee, RsvpStatus } from '../../services/serviceEvents';
 import { clearRsvp, deleteEvent, getAttendees, setRsvp } from '../../services/serviceEvents';
-import { colors, solidFor, typo, radius, space, textSize } from '../../theme';
-import { formatDateTime, keyOf } from '../../lib/datetime';
+import { colors, scrim, solidFor, typo, radius, space, textSize } from '../../theme';
+import { formatDateTime, isHappeningNow, keyOf } from '../../lib/datetime';
 import { placeLines } from '../../lib/place';
 import { ticketCode } from '../../lib/ticket';
 import AttendeeSheet from './AttendeeSheet';
@@ -19,6 +18,8 @@ import { pickActing } from '../../lib/acting';
 import { errorText } from '../../lib/postgres';
 import AttendeeStack from './Attendee';
 import { friendsLine } from './EventCard';
+import AnswerSeg, { toStatus, type Answer } from '../general/AnswerSeg';
+import { OnNow } from '../home/PlanTicket';
 
 export type SheetEvent = {
   id: string;
@@ -28,6 +29,7 @@ export type SheetEvent = {
   title: string;
   date: string;
   startTime?: string;
+  endTime?: string;
   location?: string;
   description?: string;
   placeLabel?: string;
@@ -68,6 +70,8 @@ export default function EventSheet({
   const [mates, setMates] = useState<Set<string>>(new Set());
   const [suggesting, setSuggesting] = useState(false);
   const [suggestNote, setSuggestNote] = useState<string | null>(null);
+  // Maybe is not saved (only in and out are); it is remembered while the sheet is open.
+  const [maybeFor, setMaybeFor] = useState<string | null>(null);
 
   const place = placeLines(event?.location, event?.placeLabel);
 
@@ -188,6 +192,36 @@ export default function EventSheet({
     : [];
   const suggestTo = pickActing(canSuggestTo, actingId);
 
+  const live = event !== null && isHappeningNow(event.date, event.startTime, event.endTime);
+  const answerValue: Answer | null = myStatus ?? (event && maybeFor === event.id ? 'maybe' : null);
+  const hasMap = event?.lat !== undefined && event?.lng !== undefined;
+  const subtitle = event?.description?.trim() || (live && event ? `Hosted by ${event.groupName}` : null);
+
+  // The facts that are known, two to a row.
+  const facts: { label: string; value: string; mono?: boolean }[] = [];
+  if (event) {
+    facts.push({ label: 'When', value: formatDateTime(event.date, event.startTime), mono: true });
+    if (place.primary) facts.push({ label: 'Where', value: place.primary });
+    facts.push({ label: 'Going', value: going.length === 0 ? 'Nobody yet' : going.length === 1 ? '1 person' : `${going.length} people` });
+    if (fromPareas.length > 0) facts.push({ label: 'From your pareas', value: friendsLine(fromPareas) });
+  }
+
+  function answer(choice: Answer) {
+    setMaybeFor(choice === 'maybe' && event ? event.id : null);
+    const status = toStatus(choice);
+    if (status === (myStatus ?? null)) return;
+    handleRsvp(status);
+  }
+
+  function directions() {
+    if (!event) return;
+    const where = hasMap ? `${event.lat},${event.lng}` : place.primary ?? '';
+    if (!where) return;
+    Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(where)}`).catch(() => {
+      setError('Could not open the map.');
+    });
+  }
+
   return (
     <Modal
       visible={!!event}
@@ -209,14 +243,123 @@ export default function EventSheet({
 
         <View style={styles.sheet}>
           {event ? (
-            <>
-              {event.lat !== undefined && event.lng !== undefined ? (
+            <ScrollView
+              style={styles.bodyScroll}
+              contentContainerStyle={styles.body}
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+            >
+              <Pressable
+                onPress={function () {
+                  if (!saving) onClose();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Close the plan"
+                hitSlop={10}
+                style={styles.grabWrap}
+              >
+                <View style={styles.grabber} />
+              </Pressable>
+
+              <View style={styles.topRow}>
+                {live ? (
+                  <OnNow big />
+                ) : (
+                  <Text style={styles.groupName} numberOfLines={1}>{event.groupName}</Text>
+                )}
+                <View style={styles.spacer} />
+                <Text style={styles.kind}>{event.isPublic ? 'Public plan' : 'Plan'}</Text>
+                <Text style={styles.code}>№ {ticketCode(event.id)}</Text>
+              </View>
+
+              <Text style={styles.title} numberOfLines={3}>{event.title}</Text>
+              {subtitle ? <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text> : null}
+
+              <View style={styles.facts}>
+                {facts.map((fact) => (
+                  <View key={fact.label} style={styles.fact} accessible accessibilityLabel={`${fact.label}: ${fact.value}`}>
+                    <Text style={styles.factLabel}>{fact.label}</Text>
+                    <Text style={[styles.factValue, fact.mono && styles.factMono]} numberOfLines={2}>{fact.value}</Text>
+                  </View>
+                ))}
+              </View>
+              {place.secondary ? <Text style={styles.whereSub} numberOfLines={2}>{place.secondary}</Text> : null}
+
+              <View style={styles.answer}>
+                <AnswerSeg tone="sheet" value={answerValue} onChange={answer} disabled={saving} />
+              </View>
+
+              <Pressable
+                onPress={() => setRoster(true)}
+                accessibilityRole="button"
+                accessibilityLabel="See who is coming"
+                style={({ pressed }) => [styles.who, pressed && styles.pressed]}
+              >
+                {going.length > 0 ? <AttendeeStack people={going} size={24} max={3} /> : null}
+                <Text style={styles.whoText} numberOfLines={1}>
+                  {going.length === 0
+                    ? 'Nobody in yet'
+                    : fromPareas.length > 0
+                      ? `${fromPareas.length} from your pareas going`
+                      : `${going.length} going`}
+                </Text>
+                <Ionicons name="chevron-forward" size={15} color={colors.textFaint} />
+              </Pressable>
+
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+
+              <View style={styles.acts}>
+                {hasMap || place.primary ? (
+                  <Pressable
+                    onPress={directions}
+                    accessibilityRole="button"
+                    accessibilityLabel="Directions"
+                    accessibilityHint="Opens the place in your map app"
+                    style={({ pressed }) => [styles.btn, styles.btnSoft, pressed && styles.btnPressed]}
+                  >
+                    <Ionicons name="navigate-outline" size={17} color={colors.text} />
+                    <Text style={styles.btnSoftText}>Directions</Text>
+                  </Pressable>
+                ) : null}
+                {suggestTo ? (
+                  <Pressable
+                    onPress={() => handleSuggest(suggestTo)}
+                    disabled={suggesting}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Suggest to ${suggestTo.name}`}
+                    accessibilityHint="Posts this plan in the parea's chat. Everyone answers on their own"
+                    accessibilityState={{ disabled: suggesting }}
+                    style={({ pressed }) => [styles.btn, styles.btnAccent, (pressed || suggesting) && styles.btnPressed]}
+                  >
+                    <Ionicons name="paper-plane-outline" size={17} color={colors.onInk} />
+                    <Text style={styles.btnAccentText} numberOfLines={1}>
+                      {suggesting ? 'Suggesting…' : 'Suggest'}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    onPress={() => setRoster(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Who's going"
+                    style={({ pressed }) => [styles.btn, styles.btnAccent, pressed && styles.btnPressed]}
+                  >
+                    <Ionicons name="people-outline" size={17} color={colors.onInk} />
+                    <Text style={styles.btnAccentText} numberOfLines={1}>Who's going</Text>
+                  </Pressable>
+                )}
+              </View>
+              {suggestNote ? (
+                <Text style={styles.suggestNote} accessibilityLiveRegion="polite">{suggestNote}</Text>
+              ) : null}
+
+              {hasMap ? (
+                <View style={styles.mapCard}>
                   <Map
                     pins={[
                       {
                         id: event.id,
-                        lat: event.lat,
-                        lng: event.lng,
+                        lat: event.lat!,
+                        lng: event.lng!,
                         label: place.primary || event.title,
                       },
                       ...livePeople.map((person) => ({
@@ -233,212 +376,73 @@ export default function EventSheet({
                     spanKm={0.9}
                     style={styles.canvas}
                   />
+                </View>
               ) : null}
 
-              <View style={styles.header}>
-                <LinearGradient
-                  colors={['rgba(8,16,28,0.86)', 'rgba(8,16,28,0.62)', 'rgba(8,16,28,0)']}
-                  locations={[0, 0.65, 1]}
-                  style={StyleSheet.absoluteFill}
-                  pointerEvents="none"
-                />
-                <View style={styles.grabber} />
-
-                <View style={styles.topRow}>
-                  <View style={styles.groupPill}>
-                    <View style={styles.groupDot} />
-                    <Text style={styles.groupName} numberOfLines={1}>{event.groupName}</Text>
-                  </View>
-                  <View style={styles.spacer} />
-                  <Text style={styles.code}>№ {ticketCode(event.id)}</Text>
-
-                  <Pressable
-                    onPress={onClose}
-                    disabled={saving}
-                    accessibilityRole="button"
-                    accessibilityLabel="Close"
-                    style={({ pressed }) => [styles.round, pressed && styles.pressed]}
-                  >
-                    <Ionicons name="close" size={18} color="#FFFFFF" />
-                  </Pressable>
+              {started && event.groupId ? (
+                <View style={styles.photos}>
+                  <EventPhotos
+                    key={event.id}
+                    eventId={event.id}
+                    groupId={event.groupId}
+                    currentUserId={currentUserId}
+                    canAdd={myStatus === 'in'}
+                    shareable={event.isPublic === true}
+                    onChanged={onPhotosChanged}
+                  />
                 </View>
+              ) : null}
 
-                <Text style={styles.title} numberOfLines={3}>{event.title}</Text>
-                <Text style={styles.when}>{formatDateTime(event.date, event.startTime)}</Text>
-                {place.primary ? (
-                  <Text style={styles.where} numberOfLines={1}>{place.primary}</Text>
-                ) : null}
-                {place.secondary ? (
-                  <Text style={styles.whereSub} numberOfLines={2}>{place.secondary}</Text>
-                ) : null}
-                <View style={styles.actions}>
-                  <Pressable
-                    onPress={() => handleRsvp(myStatus === 'in' ? null : 'in')}
-                    disabled={saving}
-                    accessibilityRole="button"
-                    accessibilityLabel="I'm in"
-                    accessibilityState={{ selected: myStatus === 'in', disabled: saving }}
-                    style={({ pressed }) => [
-                      styles.round,
-                      styles.roundBig,
-                      myStatus === 'in' && styles.roundUp,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Ionicons
-                      name={myStatus === 'in' ? 'thumbs-up' : 'thumbs-up-outline'}
-                      size={20}
-                      color="#FFFFFF"
-                    />
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => handleRsvp(myStatus === 'out' ? null : 'out')}
-                    disabled={saving}
-                    accessibilityRole="button"
-                    accessibilityLabel="Pass"
-                    accessibilityState={{ selected: myStatus === 'out', disabled: saving }}
-                    style={({ pressed }) => [
-                      styles.round,
-                      styles.roundBig,
-                      myStatus === 'out' && styles.roundDown,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Ionicons
-                      name={myStatus === 'out' ? 'thumbs-down' : 'thumbs-down-outline'}
-                      size={20}
-                      color="#FFFFFF"
-                    />
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => setRoster(true)}
-                    accessibilityRole="button"
-                    accessibilityLabel="See who is coming"
-                    style={({ pressed }) => [styles.round, styles.roundBig, pressed && styles.pressed]}
-                  >
-                    <Ionicons name="people-outline" size={20} color="#FFFFFF" />
-                    {going.length > 0 ? (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{going.length}</Text>
-                      </View>
-                    ) : null}
-                  </Pressable>
-                </View>
-              </View>
-
-              <View style={styles.gap} pointerEvents="none" />
-
-              {/* The part under the map scrolls when it is taller than the room left,
-                  so photos and Edit/Delete are never cut off on a short phone. */}
-              <ScrollView
-                style={styles.bodyScroll}
-                contentContainerStyle={styles.body}
-                bounces={false}
-                showsVerticalScrollIndicator={false}
-              >
-                {event.description ? (
-                  <Text style={styles.description}>{event.description}</Text>
-                ) : null}
-
-                {error ? <Text style={styles.error}>{error}</Text> : null}
-
-                {fromPareas.length > 0 ? (
-                  <View style={styles.squads} accessible accessibilityLabel={`From your pareas: ${friendsLine(fromPareas)}`}>
-                    <Text style={styles.squadsTitle}>FROM YOUR PAREAS</Text>
-                    <View style={styles.squadsRow}>
-                      <AttendeeStack people={fromPareas} size={22} max={4} />
-                      <Text style={styles.squadName} numberOfLines={2}>{friendsLine(fromPareas)}</Text>
-                    </View>
+              {isOwner ? (
+                confirming ? (
+                  <View style={styles.confirmRow}>
+                    <Pressable
+                      onPress={() => setConfirming(false)}
+                      disabled={saving}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cancel"
+                      style={({ pressed }) => [styles.confirmBtn, styles.cancelBtn, pressed && styles.pressed]}
+                    >
+                      <Text style={styles.cancelText}>Cancel</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={handleDelete}
+                      disabled={saving}
+                      accessibilityRole="button"
+                      accessibilityLabel="Confirm delete"
+                      style={({ pressed }) => [styles.confirmBtn, styles.dangerBtn, pressed && styles.pressed]}
+                    >
+                      <Text style={styles.dangerText}>{saving ? 'Deleting…' : 'Yes, delete'}</Text>
+                    </Pressable>
                   </View>
-                ) : null}
-
-                {suggestTo ? (
-                  <Pressable
-                    onPress={() => handleSuggest(suggestTo)}
-                    disabled={suggesting}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Suggest to ${suggestTo.name}`}
-                    accessibilityHint="Posts this plan in the parea's chat. Everyone answers on their own"
-                    accessibilityState={{ disabled: suggesting }}
-                    style={({ pressed }) => [styles.suggest, (pressed || suggesting) && styles.pressed]}
-                  >
-                    <Ionicons name="paper-plane-outline" size={17} color={colors.text} />
-                    <Text style={styles.suggestText} numberOfLines={1}>
-                      {suggesting ? 'Suggesting…' : `Suggest to ${suggestTo.name}`}
-                    </Text>
-                  </Pressable>
-                ) : null}
-                {suggestNote ? (
-                  <Text style={styles.suggestNote} accessibilityLiveRegion="polite">{suggestNote}</Text>
-                ) : null}
-
-                {started && event.groupId ? (
-                  <View style={styles.photos}>
-                    <EventPhotos
-                      key={event.id}
-                      eventId={event.id}
-                      groupId={event.groupId}
-                      currentUserId={currentUserId}
-                      canAdd={myStatus === 'in'}
-                      shareable={event.isPublic === true}
-                      onChanged={onPhotosChanged}
-                    />
-                  </View>
-                ) : null}
-
-                {isOwner ? (
-                  confirming ? (
-                    <View style={styles.confirmRow}>
+                ) : (
+                  <View style={styles.ownerRow}>
+                    {onEdit ? (
                       <Pressable
-                        onPress={() => setConfirming(false)}
+                        onPress={() => onEdit(event)}
                         disabled={saving}
                         accessibilityRole="button"
-                        accessibilityLabel="Cancel"
-                        style={({ pressed }) => [styles.confirmBtn, styles.cancelBtn, pressed && styles.pressed]}
-                      >
-                        <Text style={styles.cancelText}>Cancel</Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={handleDelete}
-                        disabled={saving}
-                        accessibilityRole="button"
-                        accessibilityLabel="Confirm delete"
-                        style={({ pressed }) => [styles.confirmBtn, styles.dangerBtn, pressed && styles.pressed]}
-                      >
-                        <Text style={styles.dangerText}>{saving ? 'Deleting…' : 'Yes, delete'}</Text>
-                      </Pressable>
-                    </View>
-                  ) : (
-                    <View style={styles.ownerRow}>
-                      {onEdit ? (
-                        <Pressable
-                          onPress={() => onEdit(event)}
-                          disabled={saving}
-                          accessibilityRole="button"
-                          accessibilityLabel="Edit event"
-                          style={({ pressed }) => [styles.ownerBtn, pressed && styles.pressed]}
-                        >
-                          <Ionicons name="create-outline" size={17} color={colors.textSoft} />
-                          <Text style={styles.editText}>Edit</Text>
-                        </Pressable>
-                      ) : null}
-                      <Pressable
-                        onPress={() => setConfirming(true)}
-                        disabled={saving}
-                        accessibilityRole="button"
-                        accessibilityLabel="Delete event"
+                        accessibilityLabel="Edit event"
                         style={({ pressed }) => [styles.ownerBtn, pressed && styles.pressed]}
                       >
-                        <Ionicons name="trash-outline" size={17} color={colors.danger} />
-                        <Text style={styles.deleteText}>Delete</Text>
+                        <Ionicons name="create-outline" size={17} color={colors.textSoft} />
+                        <Text style={styles.editText}>Edit</Text>
                       </Pressable>
-                    </View>
-                  )
-                ) : null}
-              </ScrollView>
-            </>
+                    ) : null}
+                    <Pressable
+                      onPress={() => setConfirming(true)}
+                      disabled={saving}
+                      accessibilityRole="button"
+                      accessibilityLabel="Delete event"
+                      style={({ pressed }) => [styles.ownerBtn, pressed && styles.pressed]}
+                    >
+                      <Ionicons name="trash-outline" size={17} color={colors.danger} />
+                      <Text style={styles.deleteText}>Delete</Text>
+                    </Pressable>
+                  </View>
+                )
+              ) : null}
+            </ScrollView>
           ) : null}
         </View>
       </View>
@@ -450,17 +454,63 @@ export default function EventSheet({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  backdrop: { flex: 1, backgroundColor: scrim.sheet },
   dismiss: { flex: 1 },
   sheet: {
-    height: '94%',
+    maxHeight: '92%',
     overflow: 'hidden',
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    backgroundColor: colors.bg,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    backgroundColor: colors.surface,
   },
+  bodyScroll: { flexGrow: 0, flexShrink: 1 },
+  body: {
+    paddingHorizontal: 20,
+    paddingTop: space.sm,
+    // Clear of the iPhone home indicator.
+    paddingBottom: 34,
+  },
+  grabWrap: { alignSelf: 'center', paddingVertical: 6, marginBottom: 8 },
+  grabber: { width: 40, height: 5, borderRadius: 3, backgroundColor: colors.border },
 
-  header: { paddingHorizontal: space.md, paddingTop: space.md, paddingBottom: space.xl },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 24 },
+  spacer: { flex: 1 },
+  groupName: { flexShrink: 1, color: colors.textSoft, ...typo.medium, fontSize: 13.5 },
+  kind: { color: colors.textSoft, ...typo.medium, fontSize: 13.5 },
+  code: { color: colors.textFaint, ...typo.mono, fontSize: 10, letterSpacing: 1 },
+  title: { marginTop: space.sm, color: colors.text, ...typo.display, fontSize: 24, lineHeight: 27, letterSpacing: -0.8 },
+  subtitle: { marginTop: 4, color: colors.textSoft, ...typo.medium, fontSize: 13.5, lineHeight: 19 },
+
+  facts: { marginTop: 14, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  fact: { flexGrow: 1, flexBasis: '45%', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.bg },
+  factLabel: { color: colors.textFaint, ...typo.medium, fontSize: 11.5 },
+  factValue: { marginTop: 1, color: colors.text, ...typo.semi, fontSize: 14.5 },
+  factMono: { ...typo.mono, fontWeight: '600' },
+  whereSub: { marginTop: 6, color: colors.textFaint, ...typo.medium, fontSize: textSize.small, lineHeight: 17 },
+
+  answer: { marginTop: space.md },
+  who: { marginTop: space.md, flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 32 },
+  whoText: { flex: 1, color: colors.textSoft, ...typo.medium, fontSize: 13.5 },
+
+  acts: { marginTop: space.md, flexDirection: 'row', gap: 8 },
+  btn: {
+    flex: 1,
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+  },
+  btnSoft: { backgroundColor: colors.sunk },
+  btnAccent: { backgroundColor: colors.primary },
+  btnPressed: { transform: [{ scale: 0.97 }], opacity: 0.9 },
+  btnSoftText: { color: colors.text, ...typo.semi, fontSize: 14.5 },
+  btnAccentText: { flexShrink: 1, color: colors.onInk, ...typo.semi, fontSize: 14.5 },
+  suggestNote: { marginTop: space.xs, color: colors.success, ...typo.medium, fontSize: textSize.small, textAlign: 'center' },
+
+  mapCard: { marginTop: space.md, height: 220, borderRadius: 14, overflow: 'hidden', backgroundColor: colors.bg },
   canvas: {
     position: 'absolute',
     top: 0,
@@ -469,128 +519,41 @@ const styles = StyleSheet.create({
     left: 0,
     height: undefined,
   },
-  gap: { flex: 1 },
-  actions: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
-  round: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.16)',
-  },
-  roundBig: { width: 42, height: 42 },
-  roundUp: { backgroundColor: colors.success },
-  roundDown: { backgroundColor: colors.danger },
-  badge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    minWidth: 16,
-    height: 16,
-    paddingHorizontal: 3,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-  },
-  badgeText: { color: '#FFFFFF', ...typo.semi, fontSize: 9.5 },
-  spacer: { flex: 1 },
-  grabber: {
-    width: 40,
-    height: 4,
-    alignSelf: 'center',
-    marginBottom: space.md,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-  },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  groupPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 1,
-    gap: space.xs,
-    paddingHorizontal: space.sm,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  groupDot: { width: 8, height: 8, borderRadius: radius.pill, backgroundColor: '#FFFFFF' },
-  groupName: { flexShrink: 1, color: '#FFFFFF', ...typo.semi, fontSize: textSize.caption },
-  code: { color: 'rgba(255,255,255,0.5)', ...typo.mono, fontSize: 10, letterSpacing: 1 },
-  title: {
-    marginTop: space.sm,
-    color: '#FFFFFF',
-    ...typo.display,
-    fontSize: textSize.display,
-    lineHeight: 34,
-    letterSpacing: -0.6,
-  },
-  when: { marginTop: space.xs, color: 'rgba(255,255,255,0.78)', ...typo.mono, fontSize: textSize.base },
-  where: { marginTop: 3, color: 'rgba(255,255,255,0.78)', ...typo.medium, fontSize: textSize.base },
-  whereSub: { color: 'rgba(255,255,255,0.5)', ...typo.medium, fontSize: textSize.small, lineHeight: 17 },
-
-  bodyScroll: { flexGrow: 0, flexShrink: 1 },
-  body: {
-    gap: space.sm,
-    paddingHorizontal: space.lg,
-    paddingTop: space.sm,
-    // Clear of the iPhone home indicator.
-    paddingBottom: space.xl,
-  },
   photos: {
+    marginTop: space.md,
     padding: space.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    borderRadius: 12,
+    backgroundColor: colors.bg,
   },
-  description: { color: colors.text, ...typo.medium, fontSize: textSize.base, lineHeight: 20 },
 
-  error: { color: colors.danger, ...typo.medium, fontSize: textSize.body },
+  error: { marginTop: space.sm, color: colors.danger, ...typo.medium, fontSize: textSize.body },
 
-  ownerRow: { flexDirection: 'row', gap: space.sm },
+  ownerRow: { marginTop: space.md, flexDirection: 'row', gap: space.sm },
   ownerBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.xs,
-    paddingVertical: space.sm,
-    borderRadius: radius.sm,
+    minHeight: 44,
+    borderRadius: radius.pill,
     borderWidth: 1.5,
     borderColor: colors.border,
   },
   pressed: { opacity: 0.7 },
   editText: { color: colors.textSoft, ...typo.semi, fontSize: textSize.base },
   deleteText: { color: colors.danger, ...typo.semi, fontSize: textSize.base },
-  confirmRow: { flexDirection: 'row', gap: space.sm },
+  confirmRow: { marginTop: space.md, flexDirection: 'row', gap: space.sm },
   confirmBtn: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: space.sm,
-    borderRadius: radius.sm,
+    minHeight: 44,
+    borderRadius: radius.pill,
     borderWidth: 1.5,
   },
   cancelBtn: { borderColor: colors.border, backgroundColor: colors.surface },
   cancelText: { color: colors.textSoft, ...typo.semi, fontSize: textSize.base },
   dangerBtn: { borderColor: colors.danger, backgroundColor: colors.danger },
   dangerText: { color: '#FFFFFF', ...typo.semi, fontSize: textSize.base },
-  squads: { gap: space.xs, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.surface },
-  squadsTitle: { color: colors.textFaint, ...typo.mono, fontSize: textSize.caption, letterSpacing: 1.2 },
-  squadsRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  squadName: { flexShrink: 1, color: colors.text, ...typo.semi, fontSize: textSize.small },
-  suggest: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: space.xs,
-    paddingHorizontal: space.md,
-    borderRadius: radius.pill,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  suggestText: { flexShrink: 1, color: colors.text, ...typo.semi, fontSize: textSize.base },
-  suggestNote: { color: colors.success, ...typo.medium, fontSize: textSize.small, textAlign: 'center' },
 });

@@ -1,3 +1,6 @@
+// Not routed any more: votes live in the parea's chat (its Votes tab and the
+// + tray). Kept for now because its "worth a vote" ideas (VoteIdeas,
+// serviceVoteIdeas) have not moved into the chat yet.
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import {

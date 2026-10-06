@@ -31,7 +31,9 @@ import { pastNights, topBy, weekStreak } from '../lib/stats';
 import { ticketCode } from '../lib/ticket';
 import { pickActing } from '../lib/acting';
 import { colors, layout, radius, space, textSize, typo } from '../theme';
+import TicketBackdrop from '../components/general/TicketBackdrop';
 import { FAB_INSET } from '../components/general/MenuFab';
+import type { VoteStart } from '../components/votes/NewVoteSheet';
 
 const AVATAR_SIZE = 76;
 
@@ -39,7 +41,7 @@ type YouScreenProps = {
   user: AuthUser;
   onPlan?: () => void;
   // Opens the Votes page (votes start only there).
-  onOpenVotes: (groupId?: string) => void;
+  onOpenVotes: (groupId?: string, start?: VoteStart) => void;
 };
 
 function sinceLabel(iso?: string) {
@@ -230,6 +232,7 @@ export default function YouScreen({ user, onPlan, onOpenVotes }: YouScreenProps)
 
   return (
     <SafeAreaView style={styles.screen}>
+      <TicketBackdrop />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={

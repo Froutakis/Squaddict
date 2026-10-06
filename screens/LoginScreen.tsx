@@ -1,12 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AuthField from '../components/general/AuthField';
 import Button from '../components/general/Button';
+import { AuthCard, AuthHero, AuthSwitch, authStyles } from '../components/general/AuthTicket';
 import { login } from '../services/serviceAuth';
-import { colors, typo, radius, space, tint } from '../theme';
 
 type LoginScreenProps = {
   onSwitchToRegister?: () => void;
@@ -26,6 +24,8 @@ export default function LoginScreen({ onSwitchToRegister }: LoginScreenProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Which field the error belongs under.
+  const [errorAt, setErrorAt] = useState<'email' | 'password'>('password');
 
   function updateField(setValue: (value: string) => void, value: string) {
     setValue(value);
@@ -35,6 +35,7 @@ export default function LoginScreen({ onSwitchToRegister }: LoginScreenProps) {
   async function handleLogin() {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !password) {
+      setErrorAt(cleanEmail ? 'password' : 'email');
       setError('Enter your email and password.');
       return;
     }
@@ -44,6 +45,7 @@ export default function LoginScreen({ onSwitchToRegister }: LoginScreenProps) {
     try {
       await login(cleanEmail, password);
     } catch (loginError) {
+      setErrorAt('password');
       setError(authErrorMessage(loginError));
     } finally {
       setLoading(false);
@@ -51,29 +53,29 @@ export default function LoginScreen({ onSwitchToRegister }: LoginScreenProps) {
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <StatusBar style="dark" />
-      <LinearGradient colors={['rgba(33,69,230,0.10)', 'rgba(237,240,245,0)']} style={styles.glow} pointerEvents="none" />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Squad<Text style={styles.accent}>dict</Text></Text>
-            <Text style={styles.subtitle}>Welcome back to your squad.</Text>
-          </View>
+    <SafeAreaView style={authStyles.screen}>
+      <StatusBar style="light" />
+      <KeyboardAvoidingView style={authStyles.grow} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={authStyles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <AuthHero
+            title="Welcome back."
+            lead="Your squad's plans are where you left them."
+            stub={{ kicker: 'Tonight', name: 'Ladadika', line: '22:00, 4 going' }}
+          />
 
-          <View style={styles.form}>
+          <AuthCard mode="signin" onSwitch={onSwitchToRegister} busy={loading}>
             <AuthField
               label="Email"
-              icon="mail-outline"
               value={email}
               onChangeText={(value) => updateField(setEmail, value)}
               placeholder="name@example.com"
               loading={loading}
+              email
+              error={error && errorAt === 'email' ? error : undefined}
             />
 
             <AuthField
               label="Password"
-              icon="lock-closed-outline"
               value={password}
               onChangeText={(value) => updateField(setPassword, value)}
               placeholder="Enter your password"
@@ -82,45 +84,18 @@ export default function LoginScreen({ onSwitchToRegister }: LoginScreenProps) {
               showPassword={showPassword}
               onTogglePassword={() => setShowPassword((value) => !value)}
               onSubmit={handleLogin}
+              error={error && errorAt === 'password' ? error : undefined}
             />
 
-            {error ? (
-              <View accessibilityRole="alert" style={styles.error}>
-                <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
+            <View style={authStyles.button}>
+              <Button title="Sign in" onPress={handleLogin} loading={loading} />
+            </View>
+          </AuthCard>
 
-            <Button title="Sign in" onPress={handleLogin} loading={loading} />
-
-            {onSwitchToRegister ? (
-              <View style={styles.footer}>
-                <Text style={styles.footerText}>Don't have an account? </Text>
-                <Pressable accessibilityRole="button" hitSlop={8} onPress={onSwitchToRegister} disabled={loading}>
-                  <Text style={styles.footerLink}>Sign up</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
+          <View style={authStyles.grow} />
+          <AuthSwitch text="Don't have an account?" action="Sign up" onPress={onSwitchToRegister} busy={loading} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  screen: { flex: 1, backgroundColor: colors.bg },
-  glow: { position: 'absolute', top: 0, left: 0, right: 0, height: 320 },
-  content: { flexGrow: 1, justifyContent: 'center', width: '100%', maxWidth: 500, alignSelf: 'center', paddingHorizontal: space.lg, paddingVertical: space.xl },
-  header: { alignItems: 'center', marginBottom: 36 },
-  title: { color: colors.text, ...typo.display, fontSize: 42, letterSpacing: -1.5 },
-  accent: { color: colors.accent, ...typo.display },
-  subtitle: { marginTop: space.xs, color: colors.textSoft, ...typo.medium, fontSize: 16, lineHeight: 24, textAlign: 'center' },
-  form: { gap: 20 },
-  error: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: radius.sm, backgroundColor: tint.danger },
-  errorText: { flex: 1, color: colors.danger, ...typo.medium, fontSize: 14 },
-  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-  footerText: { color: colors.textSoft, ...typo.medium, fontSize: 14 },
-  footerLink: { color: colors.accent, ...typo.semi, fontSize: 14 },
-});

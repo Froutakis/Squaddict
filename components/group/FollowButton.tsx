@@ -9,6 +9,7 @@ import { followButtonLabel } from '../../lib/follows';
 import { voteButtonLabel } from '../../lib/squadVote';
 import Monogram from '../general/Monogram';
 import { colors, paper, radius, space, textSize, typo } from '../../theme';
+import type { VoteStart } from '../votes/NewVoteSheet';
 
 type FollowButtonProps = {
   group: Group;
@@ -17,8 +18,9 @@ type FollowButtonProps = {
   block?: boolean;
   // Called when a vote moves or settles.
   onChanged?: () => void;
-  // Opens the acting squad's Votes page: a follow vote only starts there.
-  onOpenVotes: (groupId?: string) => void;
+  // Opens the acting squad's chat on its votes: a follow vote only starts
+  // there. With start, the follow (or unfollow) vote opens on this parea.
+  onOpenVotes: (groupId?: string, start?: VoteStart) => void;
 };
 
 // Following is the acting squad's call, not one member's: the button shows
@@ -82,8 +84,12 @@ export default function FollowButton({ group, userId, block = false, onChanged, 
 
   async function press() {
     if (!acting || following === null || saving) return;
-    if (!vote || vote.myVote === true) {
+    if (vote && vote.myVote === true) {
       onOpenVotes(acting.id);
+      return;
+    }
+    if (!vote) {
+      onOpenVotes(acting.id, { step: following ? 'unfollow' : 'follow', pick: { id: group.id, name: group.name } });
       return;
     }
 
@@ -123,7 +129,13 @@ export default function FollowButton({ group, userId, block = false, onChanged, 
         disabled={saving}
         accessibilityRole="button"
         accessibilityLabel={label}
-        accessibilityHint={vote && !waiting ? undefined : `Opens Votes in ${acting.name}`}
+        accessibilityHint={
+          vote && !waiting
+            ? undefined
+            : waiting
+              ? `Opens the votes in ${acting.name}'s chat`
+              : `Starts the vote in ${acting.name}'s chat`
+        }
         accessibilityState={{ disabled: saving }}
         style={({ pressed }) => [
           styles.button,

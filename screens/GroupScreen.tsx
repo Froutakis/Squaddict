@@ -37,6 +37,7 @@ import RsvpButtons from '../components/events/RsvpButtons';
 import { voteEventToSheet } from '../components/votes/VoteCard';
 import { FAB_CENTER_Y, FAB_INSET } from '../components/general/MenuFab';
 import { features } from '../lib/features';
+import type { VoteStart } from '../components/votes/NewVoteSheet';
 
 type Member = {
   id: string;
@@ -62,9 +63,10 @@ type GroupScreenProps = {
   onBack: () => void;
   onLeave?: () => void;
   onChange?: (group: Group) => void;
-  // Opens the Votes page of a squad (the acting one when no id is given).
-  // Inviting, following and the squad's name and photo all go through it.
-  onOpenVotes: (groupId?: string) => void;
+  // Opens the votes in a squad's chat (the acting one when no id is given),
+  // at start when given. Inviting, following and the squad's name and photo
+  // all go through a vote.
+  onOpenVotes: (groupId?: string, start?: VoteStart) => void;
   // What the top bar's back button says, e.g. "You".
   backLabel?: string;
 };
@@ -439,10 +441,10 @@ export default function GroupScreen({
                 ) : null}
 
                 <Pressable
-                  onPress={() => onOpenVotes(group.id)}
+                  onPress={() => onOpenVotes(group.id, { step: 'invite' })}
                   accessibilityRole="button"
                   accessibilityLabel="Invite people"
-                  accessibilityHint="Opens Votes: new members join through a vote"
+                  accessibilityHint="Starts an invite vote in the chat: new members join through a vote"
                   style={({ pressed }) => [styles.button, pressed && styles.pressed]}
                 >
                   <Text style={styles.buttonText} numberOfLines={1}>
@@ -507,10 +509,10 @@ export default function GroupScreen({
                   <View style={styles.invite}>
                     <Text style={styles.inviteText}>New members join through a vote.</Text>
                     <Pressable
-                      onPress={() => onOpenVotes(group.id)}
+                      onPress={() => onOpenVotes(group.id, { step: 'invite' })}
                       accessibilityRole="button"
                       accessibilityLabel="Invite someone"
-                      accessibilityHint="Opens Votes to start an invite vote"
+                      accessibilityHint="Starts an invite vote in the chat"
                       style={({ pressed }) => [styles.shareButton, pressed && styles.pressed]}
                     >
                       <Ionicons name="person-add-outline" size={16} color={paper.surface} />
