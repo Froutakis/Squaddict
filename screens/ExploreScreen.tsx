@@ -59,7 +59,7 @@ import ExploreHero, { HERO_HEIGHT } from '../components/explore/ExploreHero';
 import { ExploreApplied, ExploreTabs, ExploreTitleRow, ExploreTools, type ExploreTab } from '../components/explore/ExploreBar';
 import FilterSheet from '../components/explore/FilterSheet';
 import { getCrossings } from '../services/serviceCrossed';
-import { getCityNights, type FeedPhoto } from '../services/servicePhotoFeed';
+import { getNightsIWentTo, type FeedPhoto } from '../services/servicePhotoFeed';
 
 const RADII = [5, 10, 25, 50, 100];
 // Where the map looks before we know where you are: Thessaloniki.
@@ -441,7 +441,7 @@ export default function ExploreScreen({ userId, onOpenVotes }: ExploreScreenProp
       });
 
     setCityLoading(true);
-    getCityNights(center, radiusKm)
+    getNightsIWentTo()
       .then((found) => {
         if (!cancelled) setCityNights(found);
       })

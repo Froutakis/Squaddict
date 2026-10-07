@@ -131,28 +131,33 @@ async function toPosts(rows: any[], why: Map<string, Night>): Promise<FeedPhoto[
   });
 }
 
-// Public nights of every parea around a point, newest first: what Explore's
-// line shows below now. The last two months, only nights that kept photos.
-export async function getCityNights(center: { lat: number; lng: number } | null, radiusKm: number): Promise<FeedPhoto[]> {
+// Public nights you went to yourself, newest first: what Explore's line shows
+// below now, with the photos every parea there kept. The last two months,
+// only nights that kept photos.
+export async function getNightsIWentTo(): Promise<FeedPhoto[]> {
+  const user = await requireUser();
   const today = keyOf(new Date());
   const from = keyOf(new Date(Date.now() - CITY_DAYS * 24 * 60 * 60 * 1000));
 
-  let query = supabase
+  const { data: answers, error: answersError } = await supabase
+    .from("event_attendees")
+    .select("event_id")
+    .eq("user_id", user.id)
+    .eq("status", "in");
+  if (answersError) throw answersError;
+
+  const wentTo = ((answers ?? []) as any[]).map((row) => row.event_id as string);
+  if (wentTo.length === 0) return [];
+
+  const { data, error } = await supabase
     .from("events")
     .select(`*, groups!events_group_id_fkey(${GROUP_FIELDS})`)
+    .in("id", wentTo)
     .eq("is_public", true)
     .gte("date", from)
-    .lt("date", today);
-  if (center) {
-    const dLat = radiusKm / 111;
-    const dLng = radiusKm / (111 * Math.max(0.2, Math.cos((center.lat * Math.PI) / 180)));
-    query = query
-      .gte("lat", center.lat - dLat)
-      .lte("lat", center.lat + dLat)
-      .gte("lng", center.lng - dLng)
-      .lte("lng", center.lng + dLng);
-  }
-  const { data, error } = await query.order("date", { ascending: false }).limit(NIGHTS);
+    .lt("date", today)
+    .order("date", { ascending: false })
+    .limit(NIGHTS);
   if (error) throw error;
 
   const rows = (data ?? []) as any[];

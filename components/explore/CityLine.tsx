@@ -26,7 +26,8 @@ import { colors, onPhoto, radius, scrim, space, spot as spotInk, sun, sunInk, te
 
 // Explore as a line, the same idea as Home one step out: the city's line.
 // Above now, open public plans you can join (furthest on top); below, the
-// public nights of every parea around you. The rail shows whose night it is.
+// public nights you went to, with what every parea there kept. The rail
+// shows whose night it is.
 
 const PLANS_SHOWN = 15;
 const SPOT_MIN_PAREAS = 2;
@@ -449,8 +450,8 @@ export default function CityLine({
           <View key={group.label}>
             <TimelineRow solid node={<GroupNode />}>
               <GroupTitle
-                kicker={`${group.label} in the city`}
-                title={group.items.length === 1 ? '1 public night' : `${group.items.length} public nights`}
+                kicker={`${group.label} · you were there`}
+                title={group.items.length === 1 ? '1 night out' : `${group.items.length} nights out`}
                 meta={fires > 0 ? `${fires} ${fires === 1 ? 'fire' : 'fires'}` : undefined}
               />
               {g === 0 && spot && show === 'nights' ? (
@@ -517,14 +518,14 @@ export default function CityLine({
       {!nightsLoading && nights.length === 0 ? (
         <TimelineRow solid>
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>No public nights around here yet.</Text>
-            <Text style={styles.emptyHint}>When a parea shares a night, it lands on this line.</Text>
+            <Text style={styles.emptyText}>No nights out yet.</Text>
+            <Text style={styles.emptyHint}>Say you're in on a public plan. After the night, what every parea there kept lands on this line.</Text>
           </View>
         </TimelineRow>
       ) : null}
       {nights.length > 0 ? (
         <TimelineRow solid>
-          <Text style={styles.end}>That's the city's last two months.</Text>
+          <Text style={styles.end}>That's your last two months out.</Text>
         </TimelineRow>
       ) : null}
 
